@@ -1,0 +1,480 @@
+openapi: 3.0.3
+info:
+  title: Sales AI System API
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200': { description: OK }
+  /api/companies:
+    get:
+      summary: List companies
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Company list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyListResponse'
+    post:
+      summary: Create company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCompanyRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Company' }
+  /api/projects:
+    get:
+      summary: List crowdfunding projects
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ProjectStatus' }
+      responses:
+        '200':
+          description: Project list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectListResponse' }
+    post:
+      summary: Create crowdfunding project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProjectRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CrowdfundingProject' }
+  /api/leads:
+    get:
+      summary: List sales leads
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/LeadStatus' }
+        - name: priority
+          in: query
+          schema: { $ref: '#/components/schemas/LeadPriority' }
+      responses:
+        '200':
+          description: Lead list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LeadListResponse' }
+    post:
+      summary: Create lead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateLeadRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SalesLead' }
+  /api/leads/{leadId}/score:
+    post:
+      summary: Recalculate lead score
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      responses:
+        '200':
+          description: Score result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LeadScore' }
+  /api/mails:
+    get:
+      summary: List mails
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/EmailStatus' }
+      responses:
+        '200':
+          description: Mail list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/OutreachEmail' } }
+                  page: { type: integer }
+                  limit: { type: integer }
+                  total: { type: integer }
+  /api/mails/draft:
+    post:
+      summary: Create AI assisted mail draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateMailDraftRequest' }
+      responses:
+        '201':
+          description: Draft created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutreachEmail' }
+  /api/mails/{emailId}/request-review:
+    post:
+      summary: Request mail review
+      parameters:
+        - $ref: '#/components/parameters/EmailId'
+      responses:
+        '200':
+          description: Review requested
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutreachEmail' }
+  /api/mails/{emailId}/approve:
+    post:
+      summary: Approve mail draft
+      parameters:
+        - $ref: '#/components/parameters/EmailId'
+      responses:
+        '200':
+          description: Approved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutreachEmail' }
+  /api/mails/{emailId}/queue:
+    post:
+      summary: Queue approved mail for sending
+      parameters:
+        - $ref: '#/components/parameters/EmailId'
+      responses:
+        '200':
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutreachEmail' }
+  /api/mails/{emailId}/retry:
+    post:
+      summary: Retry failed mail
+      parameters:
+        - $ref: '#/components/parameters/EmailId'
+      responses:
+        '200':
+          description: Retry queued
+  /api/mails/{emailId}/cancel:
+    post:
+      summary: Cancel mail
+      parameters:
+        - $ref: '#/components/parameters/EmailId'
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutreachEmail' }
+  /api/mails/threads/{gmailThreadId}:
+    get:
+      summary: Get mail thread
+      parameters:
+        - name: gmailThreadId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Thread
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MailThreadResponse' }
+  /t/open/{emailId}.png:
+    get:
+      summary: Tracking pixel endpoint
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/EmailId'
+      responses:
+        '200': { description: 1x1 gif }
+  /t/click/{token}:
+    get:
+      summary: Tracking link redirect
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '302': { description: Redirect }
+  /api/ai/leads/{leadId}/generate-mail:
+    post:
+      summary: Generate mail draft by AI
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerateMailRequest' }
+      responses:
+        '201':
+          description: Generated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AiMailGenerationResponse' }
+  /api/ai/leads/{leadId}/email-draft:
+    post:
+      summary: Generate mail draft by AI
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerateMailRequest' }
+      responses:
+        '201':
+          description: Generated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AiMailGenerationResponse' }
+  /api/ai/replies/{replyId}/classify:
+    post:
+      summary: Classify reply by AI
+      parameters:
+        - name: replyId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Classified
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailReply' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    LeadId:
+      name: leadId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EmailId:
+      name: emailId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    ProjectStatus:
+      type: string
+      enum: [discovered, active, ended, suspended, unknown]
+    LeadStatus:
+      type: string
+      enum: [discovered, qualified, drafted, reviewing, approved, queued, contacted, replied, meeting_candidate, rejected, no_response, archived]
+    LeadPriority:
+      type: string
+      enum: [high, medium, low]
+    EmailStatus:
+      type: string
+      enum: [draft, in_review, approved, queued, sending, sent, failed, cancelled]
+    ReplyCategory:
+      type: string
+      enum: [interested, need_info, meeting_request, not_interested, unsubscribe, auto_reply, complaint, unknown]
+    Company:
+      type: object
+      required: [id, name, isBlocked, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        normalizedName: { type: string, nullable: true }
+        websiteUrl: { type: string, nullable: true }
+        inquiryUrl: { type: string, nullable: true }
+        industry: { type: string, nullable: true }
+        memo: { type: string, nullable: true }
+        isBlocked: { type: boolean }
+        blockedReason: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CreateCompanyRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        websiteUrl: { type: string, nullable: true }
+        inquiryUrl: { type: string, nullable: true }
+        industry: { type: string, nullable: true }
+        memo: { type: string, nullable: true }
+    CompanyListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Company' }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+    CrowdfundingProject:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        platformId: { type: string, format: uuid }
+        companyId: { type: string, format: uuid, nullable: true }
+        title: { type: string }
+        url: { type: string }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        amount: { type: integer }
+        supporterCount: { type: integer }
+        category: { type: string, nullable: true }
+        endDate: { type: string, format: date-time, nullable: true }
+    CreateProjectRequest:
+      type: object
+      required: [platformId, title, url]
+      properties:
+        platformId: { type: string, format: uuid }
+        companyId: { type: string, format: uuid, nullable: true }
+        title: { type: string }
+        url: { type: string }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        amount: { type: integer, default: 0 }
+        supporterCount: { type: integer, default: 0 }
+        category: { type: string, nullable: true }
+    ProjectListResponse:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/CrowdfundingProject' } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+    SalesLead:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        companyId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid, nullable: true }
+        status: { $ref: '#/components/schemas/LeadStatus' }
+        priority: { $ref: '#/components/schemas/LeadPriority' }
+        score: { type: integer }
+        reason: { type: string, nullable: true }
+        source: { type: string }
+        nextActionAt: { type: string, format: date-time, nullable: true }
+    CreateLeadRequest:
+      type: object
+      required: [companyId]
+      properties:
+        companyId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid, nullable: true }
+        source: { type: string, default: manual }
+        ownerMemo: { type: string, nullable: true }
+    LeadListResponse:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/SalesLead' } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+    LeadScore:
+      type: object
+      properties:
+        leadId: { type: string, format: uuid }
+        amountScore: { type: integer }
+        supporterScore: { type: integer }
+        urgencyScore: { type: integer }
+        fitScore: { type: integer }
+        activityScore: { type: integer }
+        totalScore: { type: integer }
+        reasonJson: { type: object, nullable: true }
+    CreateMailDraftRequest:
+      type: object
+      required: [leadId, templateKey]
+      properties:
+        leadId: { type: string, format: uuid }
+        templateKey: { type: string }
+        manualInstruction: { type: string, nullable: true }
+    OutreachEmail:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        leadId: { type: string, format: uuid, nullable: true }
+        companyId: { type: string, format: uuid }
+        contactId: { type: string, format: uuid, nullable: true }
+        status: { $ref: '#/components/schemas/EmailStatus' }
+        templateKey: { type: string, nullable: true }
+        subject: { type: string }
+        body: { type: string }
+        toEmail: { type: string, nullable: true }
+        scheduledAt: { type: string, format: date-time, nullable: true }
+        sentAt: { type: string, format: date-time, nullable: true }
+        retryCount: { type: integer }
+    GenerateMailRequest:
+      type: object
+      required: [templateKey]
+      properties:
+        templateKey: { type: string }
+        tone: { type: string, default: low_sales_pressure }
+    AiMailGenerationResponse:
+      type: object
+      properties:
+        email: { $ref: '#/components/schemas/OutreachEmail' }
+        aiGenerationId: { type: string, format: uuid }
+        factsUsed: { type: array, items: { type: string } }
+        assumptions: { type: array, items: { type: string } }
+        riskFlags: { type: array, items: { type: string } }
+    EmailReply:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        emailId: { type: string, format: uuid }
+        fromEmail: { type: string, nullable: true }
+        bodyText: { type: string, nullable: true }
+        category: { $ref: '#/components/schemas/ReplyCategory' }
+        confidence: { type: number }
+        summary: { type: string, nullable: true }
+        nextAction: { type: string, nullable: true }
+    MailThreadResponse:
+      type: object
+      properties:
+        gmailThreadId: { type: string }
+        emails: { type: array, items: { $ref: '#/components/schemas/OutreachEmail' } }
+        replies: { type: array, items: { $ref: '#/components/schemas/EmailReply' } }
+    ErrorResponse:
+      type: object
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string }

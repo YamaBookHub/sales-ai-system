@@ -1,0 +1,29 @@
+import { Body, Controller, Get, Header, Param, Post, Redirect } from '@nestjs/common';
+import { ok } from '../common/api-response';
+import { TrackingService } from './tracking.service';
+import { UnsubscribeDto } from './tracking.dto';
+
+const GIF_1X1 = Buffer.from('R0lGODlhAQABAPAAAP///wAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==', 'base64');
+
+@Controller()
+export class TrackingController {
+  constructor(private readonly tracking: TrackingService) {}
+
+  @Get('t/open/:emailId.png')
+  @Header('Content-Type', 'image/gif')
+  async trackOpen(@Param('emailId') emailId: string) {
+    await this.tracking.trackOpen(emailId);
+    return GIF_1X1;
+  }
+
+  @Get('t/click/:token')
+  @Redirect()
+  async trackClick(@Param('token') token: string) {
+    return { url: await this.tracking.resolveClick(token), statusCode: 302 };
+  }
+
+  @Post('api/unsubscribe')
+  async unsubscribe(@Body() dto: UnsubscribeDto) {
+    return ok(await this.tracking.unsubscribe(dto));
+  }
+}
