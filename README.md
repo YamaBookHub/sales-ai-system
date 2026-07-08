@@ -60,6 +60,35 @@ curl http://localhost:3000/api/companies
 curl http://localhost:3000/api/leads
 ```
 
+## 確認済み動作
+
+2026-07-09 時点で、ローカル環境にて以下を確認済みです。
+
+- `GET /health`
+- `GET /api/companies`
+- `GET /api/leads`
+- `POST /api/mails/draft`
+- `POST /api/mails/:id/request-review`
+- `POST /api/mails/:id/approve`
+- `POST /api/mails/:id/queue`
+- 未承認メールの `queue` が `409 Conflict` でブロックされること
+
+未承認queueブロック確認:
+
+```bash
+curl -X POST http://localhost:3000/api/mails/{draftMailId}/queue
+```
+
+期待結果:
+
+```json
+{
+  "message": "Only approved mail can be queued.",
+  "error": "Conflict",
+  "statusCode": 409
+}
+```
+
 ## 実装状況
 
 - Prisma schema validate済み
