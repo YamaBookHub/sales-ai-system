@@ -37,9 +37,34 @@ npm run build
 npm run start
 ```
 
+## ローカルDB
+
+Dockerが使える場合:
+
+```bash
+docker compose up -d
+npm run prisma:migrate
+npm run prisma:seed
+npm run start
+```
+
+Dockerを使わない場合は、PostgreSQLを用意して `.env` の `DATABASE_URL` を接続先に変更してください。
+
+DBなしでもアプリ自体は起動できますが、Company / Project / Lead / Mail などDBを使うAPIは接続先DBが必要です。
+
+## API疎通確認
+
+```bash
+curl http://localhost:3000/health
+curl http://localhost:3000/api/companies
+curl http://localhost:3000/api/leads
+```
+
 ## 実装状況
 
 - Prisma schema validate済み
+- 初期migration SQL生成済み
+- seedスクリプト追加済み
 - NestJS API基盤を追加
 - Company / Project / Lead / Mail / AI / Tracking の主要APIを実装開始
 - メール送信は未実装。承認済みメールだけキュー投入可能

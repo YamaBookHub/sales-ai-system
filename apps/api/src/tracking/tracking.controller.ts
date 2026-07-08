@@ -22,7 +22,7 @@ export class TrackingController {
     return { url: await this.tracking.resolveClick(token), statusCode: 302 };
   }
 
-  @Post('api/unsubscribe')
+  @Post('unsubscribe')
   async unsubscribe(@Body() dto: UnsubscribeDto) {
     return ok(await this.tracking.unsubscribe(dto));
   }
