@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AiModule } from './ai/ai.module';
 import { CompaniesModule } from './companies/companies.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthModule } from './health/health.module';
 import { LeadsModule } from './leads/leads.module';
 import { MailModule } from './mail/mail.module';
@@ -11,6 +12,7 @@ import { TrackingModule } from './tracking/tracking.module';
 @Module({
   imports: [
     PrismaModule,
+    DashboardModule,
     HealthModule,
     CompaniesModule,
     ProjectsModule,

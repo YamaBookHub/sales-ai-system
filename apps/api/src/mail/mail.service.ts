@@ -11,7 +11,13 @@ export class MailService {
     const skip = (page - 1) * limit;
     const where = status ? { status } : {};
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.outreachEmail.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      this.prisma.outreachEmail.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: { company: true, lead: { include: { project: true } } }
+      }),
       this.prisma.outreachEmail.count({ where })
     ]);
 

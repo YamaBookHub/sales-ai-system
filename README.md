@@ -52,6 +52,23 @@ Dockerを使わない場合は、PostgreSQLを用意して `.env` の `DATABASE_
 
 DBなしでもアプリ自体は起動できますが、Company / Project / Lead / Mail などDBを使うAPIは接続先DBが必要です。
 
+## ローカル営業画面
+
+API起動後にブラウザで開きます。
+
+```text
+http://localhost:3000/
+```
+
+この画面で以下を行えます。
+
+- CAMPFIRE URL取り込み
+- 営業リスト確認
+- AIメール下書き生成
+- 生成メール確認・編集
+- レビュー依頼、承認、キュー投入
+- 送信前チェックリスト確認
+
 ## API疎通確認
 
 ```bash

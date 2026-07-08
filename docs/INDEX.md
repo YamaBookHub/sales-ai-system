@@ -23,6 +23,7 @@
 | 14 | 14_DEPLOY.md | デプロイ | 補強済み |
 | 15 | 15_CODEX.md | Codex実装指示 | 補強済み |
 | 16 | 16_GITHUB_HANDOFF.md | GitHub反映手順 | 作成済み |
+| 17 | 17_IMPLEMENTATION_ROADMAP.md | 実装ロードマップ | 作成済み |
 
 ## 付属仕様
 - `../prisma/schema.prisma`
@@ -30,7 +31,7 @@
 - `../COMPLETENESS_REPORT.md`
 
 ## 次アクション
-1. GitHubへ反映
-2. `npx prisma validate`
-3. `npm run build` / `npm test`
-4. Codexに `docs/15_CODEX.md` を起点として実装指示
+1. Phase 1のローカル営業画面を完成させる
+2. 送信前チェックリストをDB化する
+3. 連絡先管理とSNS/ブランド分析を追加する
+4. 候補探索、RAG、送信後管理へ進む

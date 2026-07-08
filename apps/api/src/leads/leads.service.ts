@@ -11,7 +11,13 @@ export class LeadsService {
     const skip = (page - 1) * limit;
     const where = { ...(status ? { status } : {}), ...(priority ? { priority } : {}) };
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.salesLead.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      this.prisma.salesLead.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: { company: true, project: true, scores: { orderBy: { createdAt: 'desc' }, take: 1 } }
+      }),
       this.prisma.salesLead.count({ where })
     ]);
 

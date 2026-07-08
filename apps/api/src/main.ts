@@ -6,7 +6,7 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api', {
-    exclude: ['/health', '/t/open/:emailId.png', '/t/click/:token']
+    exclude: ['/', '/health', '/t/open/:emailId.png', '/t/click/:token']
   });
   app.useGlobalPipes(
     new ValidationPipe({
