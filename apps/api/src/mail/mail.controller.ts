@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { EmailStatus } from '@prisma/client';
 import { ok } from '../common/api-response';
-import { CreateMailDraftDto, UpdateMailDto } from './mail.dto';
+import { CreateMailDraftDto, UpdateMailChecklistDto, UpdateMailDto } from './mail.dto';
 import { MailService } from './mail.service';
 
 @Controller('mails')
@@ -21,6 +21,16 @@ export class MailController {
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateMailDto) {
     return ok(await this.mail.update(id, dto));
+  }
+
+  @Get(':id/checklist')
+  async getChecklist(@Param('id') id: string) {
+    return ok(await this.mail.getChecklist(id));
+  }
+
+  @Patch(':id/checklist')
+  async updateChecklist(@Param('id') id: string, @Body() dto: UpdateMailChecklistDto) {
+    return ok(await this.mail.updateChecklist(id, dto));
   }
 
   @Post(':id/request-review')

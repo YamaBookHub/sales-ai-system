@@ -1,7 +1,16 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { EmailEventType, EmailStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateMailDraftDto, UpdateMailDto } from './mail.dto';
+import { CreateMailDraftDto, UpdateMailChecklistDto, UpdateMailDto } from './mail.dto';
+
+const DEFAULT_CHECKLIST_ITEMS = [
+  { key: 'company_product_correct', label: '会社名・商品名が正しい' },
+  { key: 'no_other_company_left', label: '別会社名や別商品名が残っていない' },
+  { key: 'claims_not_overstated', label: '実績表現が言い過ぎではない' },
+  { key: 'not_too_pushy', label: '売り込み感が強すぎない' },
+  { key: 'cta_info_exchange', label: '15〜20分の情報交換CTAになっている' },
+  { key: 'contact_confirmed', label: '送信先・問い合わせ先を確認した' }
+];
 
 @Injectable()
 export class MailService {
@@ -58,7 +67,7 @@ export class MailService {
   }
 
   approve(id: string) {
-    return this.transition(id, 'approved', 'approved', { approvedAt: new Date() });
+    return this.approveWithChecklist(id);
   }
 
   async queue(id: string) {
@@ -68,6 +77,7 @@ export class MailService {
       throw new ConflictException('Only approved mail can be queued.');
     }
 
+    await this.assertChecklistComplete(id);
     return this.transition(id, 'queued', 'queued');
   }
 
@@ -92,6 +102,61 @@ export class MailService {
     return this.transition(id, 'cancelled', 'cancelled');
   }
 
+  async getChecklist(emailId: string) {
+    await this.get(emailId);
+    await this.ensureDefaultChecklist(emailId);
+    const items = await this.prisma.mailChecklistItem.findMany({
+      where: { emailId },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    return {
+      items,
+      complete: items.length > 0 && items.every((item) => item.checked)
+    };
+  }
+
+  async updateChecklist(emailId: string, dto: UpdateMailChecklistDto) {
+    await this.get(emailId);
+    const now = new Date();
+    const items = dto.items.length ? dto.items : DEFAULT_CHECKLIST_ITEMS.map((item) => ({ ...item, checked: false }));
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const item of items) {
+        await tx.mailChecklistItem.upsert({
+          where: { emailId_key: { emailId, key: item.key } },
+          update: {
+            label: item.label,
+            checked: item.checked,
+            checkedAt: item.checked ? now : null
+          },
+          create: {
+            emailId,
+            key: item.key,
+            label: item.label,
+            checked: item.checked,
+            checkedAt: item.checked ? now : null
+          }
+        });
+      }
+
+      await tx.emailEvent.create({
+        data: {
+          emailId,
+          type: 'reviewed',
+          payload: {
+            checklistUpdated: true,
+            complete: items.every((item) => item.checked),
+            checkedCount: items.filter((item) => item.checked).length,
+            totalCount: items.length
+          }
+        }
+      });
+    });
+
+    return this.getChecklist(emailId);
+  }
+
   async getThread(gmailThreadId: string) {
     const emails = await this.prisma.outreachEmail.findMany({ where: { gmailThreadId } });
     const replies = await this.prisma.emailReply.findMany({ where: { email: { gmailThreadId } } });
@@ -106,6 +171,33 @@ export class MailService {
     }
 
     return email;
+  }
+
+  private async approveWithChecklist(id: string) {
+    await this.assertChecklistComplete(id);
+    return this.transition(id, 'approved', 'approved', { approvedAt: new Date() });
+  }
+
+  private async assertChecklistComplete(emailId: string) {
+    const checklist = await this.getChecklist(emailId);
+    if (!checklist.complete) {
+      throw new ConflictException('送信前チェックリストが未完了です。全項目を確認してから承認してください。');
+    }
+  }
+
+  private async ensureDefaultChecklist(emailId: string) {
+    const count = await this.prisma.mailChecklistItem.count({ where: { emailId } });
+    if (count > 0) return;
+
+    await this.prisma.mailChecklistItem.createMany({
+      data: DEFAULT_CHECKLIST_ITEMS.map((item) => ({
+        emailId,
+        key: item.key,
+        label: item.label,
+        checked: false
+      })),
+      skipDuplicates: true
+    });
   }
 
   private transition(id: string, status: EmailStatus, eventType: EmailEventType, extra: Record<string, unknown> = {}) {

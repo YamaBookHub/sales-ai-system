@@ -196,6 +196,32 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OutreachEmail' }
+  /api/mails/{emailId}/checklist:
+    get:
+      summary: Get pre-send checklist for mail
+      parameters:
+        - $ref: '#/components/parameters/EmailId'
+      responses:
+        '200':
+          description: Checklist
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MailChecklistResponse' }
+    patch:
+      summary: Update pre-send checklist for mail
+      parameters:
+        - $ref: '#/components/parameters/EmailId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMailChecklistRequest' }
+      responses:
+        '200':
+          description: Checklist updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MailChecklistResponse' }
   /api/mails/{emailId}/approve:
     post:
       summary: Approve mail draft
@@ -528,6 +554,38 @@ components:
       properties:
         subject: { type: string }
         body: { type: string }
+    MailChecklistItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        emailId: { type: string, format: uuid }
+        key: { type: string }
+        label: { type: string }
+        checked: { type: boolean }
+        checkedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    UpdateMailChecklistItem:
+      type: object
+      required: [key, label, checked]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        checked: { type: boolean }
+    UpdateMailChecklistRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/UpdateMailChecklistItem' }
+    MailChecklistResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MailChecklistItem' }
+        complete: { type: boolean }
     GenerateMailRequest:
       type: object
       required: [templateKey]

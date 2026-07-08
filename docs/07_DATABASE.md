@@ -393,6 +393,35 @@ erDiagram
 
 ---
 
+## 5.9.1 MailChecklistItem
+
+送信前チェックリストをメールごとに保存する。
+
+| カラム | 型 | 必須 | 説明 |
+|---|---|---:|---|
+| id | String | yes | UUID |
+| emailId | String | yes | OutreachEmail FK |
+| key | String | yes | チェック項目キー |
+| label | String | yes | 画面表示ラベル |
+| checked | Boolean | yes | チェック済みか |
+| checkedAt | DateTime? | no | チェック日時 |
+| createdAt | DateTime | yes | 作成日時 |
+| updatedAt | DateTime | yes | 更新日時 |
+
+制約:
+
+- `emailId + key` は unique
+- `emailId` に index
+- `checked` に index
+
+運用:
+
+- 初回取得時にデフォルト項目を作成する。
+- チェック更新時は `EmailEvent` に `reviewed` イベントとして履歴を残す。
+- `approve` と `queue` は全項目完了していない場合、409で止める。
+
+---
+
 ## 5.10 EmailReply
 
 受信返信。

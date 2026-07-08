@@ -302,12 +302,30 @@ model OutreachEmail {
   links         TrackedLink[]
   attachments   MailAttachment[]
   aiGenerations AiGeneration[]
+  checklistItems MailChecklistItem[]
 
   @@index([status])
   @@index([leadId])
   @@index([companyId])
   @@index([gmailThreadId])
   @@index([scheduledAt])
+}
+
+model MailChecklistItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  emailId   String   @db.Uuid
+  key       String
+  label     String
+  checked   Boolean  @default(false)
+  checkedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  email OutreachEmail @relation(fields: [emailId], references: [id])
+
+  @@unique([emailId, key])
+  @@index([emailId])
+  @@index([checked])
 }
 
 model EmailEvent {

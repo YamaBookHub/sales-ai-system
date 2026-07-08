@@ -199,14 +199,10 @@ export class DashboardController {
           <h2>送信前チェック</h2>
         </div>
         <div class="body">
-          <ul class="checklist">
-            <li><label><input type="checkbox" />会社名・商品名が正しい</label></li>
-            <li><label><input type="checkbox" />別会社名や別商品名が残っていない</label></li>
-            <li><label><input type="checkbox" />実績表現が言い過ぎではない</label></li>
-            <li><label><input type="checkbox" />売り込み感が強すぎない</label></li>
-            <li><label><input type="checkbox" />15〜20分の情報交換CTAになっている</label></li>
-            <li><label><input type="checkbox" />送信先・問い合わせ先を確認した</label></li>
+          <ul class="checklist" id="checklistRows">
+            <li class="muted">メールを選択してください</li>
           </ul>
+          <div id="checklistStatus" class="status muted" style="margin-top:12px"></div>
         </div>
       </section>
     </div>
@@ -291,7 +287,7 @@ export class DashboardController {
   </main>
 
   <script>
-    const state = { leads: [], mails: [], selectedLeadId: null, selectedMailId: null };
+    const state = { leads: [], mails: [], checklist: [], checklistComplete: false, selectedLeadId: null, selectedMailId: null };
 
     async function api(path, options = {}) {
       const response = await fetch(path, {
@@ -380,6 +376,49 @@ export class DashboardController {
       }
     }
 
+    async function loadChecklist() {
+      if (!state.selectedMailId) {
+        state.checklist = [];
+        state.checklistComplete = false;
+        renderChecklist();
+        return;
+      }
+      try {
+        const result = await api('/api/mails/' + state.selectedMailId + '/checklist');
+        state.checklist = result.items || [];
+        state.checklistComplete = Boolean(result.complete);
+        renderChecklist();
+        renderMails();
+      } catch (error) {
+        setStatus('checklistStatus', error.message, 'error');
+      }
+    }
+
+    async function toggleChecklist(key, checked) {
+      const item = state.checklist.find((entry) => entry.key === key);
+      if (!item || !state.selectedMailId) return;
+      item.checked = checked;
+      renderChecklist();
+      try {
+        const result = await api('/api/mails/' + state.selectedMailId + '/checklist', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            items: state.checklist.map((entry) => ({
+              key: entry.key,
+              label: entry.label,
+              checked: entry.checked
+            }))
+          })
+        });
+        state.checklist = result.items || [];
+        state.checklistComplete = Boolean(result.complete);
+        renderChecklist();
+        renderMails();
+      } catch (error) {
+        setStatus('checklistStatus', error.message, 'error');
+      }
+    }
+
     async function requestReview() {
       await transitionMail('request-review', 'レビュー依頼済み');
     }
@@ -437,6 +476,23 @@ export class DashboardController {
       updateMailButtons(selected);
     }
 
+    function renderChecklist() {
+      const container = document.getElementById('checklistRows');
+      if (!state.selectedMailId) {
+        container.innerHTML = '<li class="muted">メールを選択してください</li>';
+        setStatus('checklistStatus', '', '');
+        return;
+      }
+      const rows = state.checklist.map((item) => {
+        return '<li><label><input type="checkbox" data-key="' + escapeHtml(item.key) + '" ' + (item.checked ? 'checked' : '') + ' onchange="toggleChecklist(\\'' + item.key + '\\', this.checked)" />' + escapeHtml(item.label) + '</label></li>';
+      }).join('');
+      container.innerHTML = rows || '<li class="muted">チェック項目を読み込み中</li>';
+      const checkedCount = state.checklist.filter((item) => item.checked).length;
+      const totalCount = state.checklist.length;
+      const message = totalCount ? checkedCount + ' / ' + totalCount + ' 完了' : '';
+      setStatus('checklistStatus', message, state.checklistComplete ? 'ok' : 'warn');
+    }
+
     function selectLead(id) {
       state.selectedLeadId = id;
       renderLeads();
@@ -444,18 +500,22 @@ export class DashboardController {
 
     function selectMail(id) {
       state.selectedMailId = id;
+      state.checklist = [];
+      state.checklistComplete = false;
       const mail = state.mails.find((item) => item.id === id);
       if (!mail) return;
       document.getElementById('subject').value = mail.subject || '';
       document.getElementById('body').value = mail.body || '';
       renderMails();
+      renderChecklist();
+      void loadChecklist();
     }
 
     function updateMailButtons(mail) {
       document.getElementById('saveButton').disabled = !mail;
       document.getElementById('reviewButton').disabled = !mail || mail.status !== 'draft';
-      document.getElementById('approveButton').disabled = !mail || mail.status !== 'in_review';
-      document.getElementById('queueButton').disabled = !mail || mail.status !== 'approved';
+      document.getElementById('approveButton').disabled = !mail || mail.status !== 'in_review' || !state.checklistComplete;
+      document.getElementById('queueButton').disabled = !mail || mail.status !== 'approved' || !state.checklistComplete;
     }
 
     function formatDate(value) {
