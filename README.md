@@ -60,6 +60,14 @@ curl http://localhost:3000/api/companies
 curl http://localhost:3000/api/leads
 ```
 
+CAMPFIRE URL取り込み:
+
+```bash
+curl -X POST http://localhost:3000/api/projects/import/campfire \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://camp-fire.jp/projects/935270/view"}'
+```
+
 ## 確認済み動作
 
 2026-07-09 時点で、ローカル環境にて以下を確認済みです。
@@ -96,6 +104,7 @@ curl -X POST http://localhost:3000/api/mails/{draftMailId}/queue
 - seedスクリプト追加済み
 - NestJS API基盤を追加
 - Company / Project / Lead / Mail / AI / Tracking の主要APIを実装開始
+- CAMPFIRE URLから Company / CrowdfundingProject / SalesLead を作成するimport APIを追加
 - メール送信は未実装。承認済みメールだけキュー投入可能
 
 ## 主要ドキュメント

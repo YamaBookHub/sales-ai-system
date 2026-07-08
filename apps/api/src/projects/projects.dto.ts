@@ -33,3 +33,9 @@ export class CreateProjectDto {
   @IsString()
   category?: string;
 }
+
+export class ImportCampfireProjectDto {
+  @IsString()
+  @MinLength(1)
+  url!: string;
+}
