@@ -68,6 +68,16 @@ curl -X POST http://localhost:3000/api/projects/import/campfire \
   -d '{"url":"https://camp-fire.jp/projects/935270/view"}'
 ```
 
+AIメール下書き生成:
+
+```bash
+curl -X POST http://localhost:3000/api/ai/leads/{leadId}/email-draft \
+  -H "Content-Type: application/json" \
+  -d '{"templateKey":"normal","tone":"low_sales_pressure"}'
+```
+
+`.env` の `OPENAI_API_KEY` が未設定、またはOpenAI APIの残高がない場合はメール生成は止まります。生成されたメールは下書き保存のみで、自動送信はされません。
+
 ## 確認済み動作
 
 2026-07-09 時点で、ローカル環境にて以下を確認済みです。
@@ -105,6 +115,7 @@ curl -X POST http://localhost:3000/api/mails/{draftMailId}/queue
 - NestJS API基盤を追加
 - Company / Project / Lead / Mail / AI / Tracking の主要APIを実装開始
 - CAMPFIRE URLから Company / CrowdfundingProject / SalesLead を作成するimport APIを追加
+- OpenAI APIによるAIメール下書き生成を追加
 - メール送信は未実装。承認済みメールだけキュー投入可能
 
 ## 主要ドキュメント

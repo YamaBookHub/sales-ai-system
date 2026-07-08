@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GenerateMailDto } from './ai.dto';
+import { OpenAiClientService } from './openai-client.service';
 
 @Injectable()
 export class AiService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly openAi: OpenAiClientService
+  ) {}
 
   async generateMailDraft(leadId: string, dto: GenerateMailDto) {
     const lead = await this.prisma.salesLead.findUnique({
@@ -16,28 +20,19 @@ export class AiService {
       throw new NotFoundException('Lead not found');
     }
 
-    const factsUsed = [
-      lead.company.name,
-      lead.project?.title,
-      lead.project?.category
-    ].filter((value): value is string => Boolean(value));
-    const subject = 'クラウドファンディング支援に関する情報交換のお願い';
-    const body = [
-      `${lead.company.name}`,
-      '',
-      'ご担当者様',
-      '',
-      'お世話になっております。',
-      'クラウドファンディング支援およびSNSマーケティング支援をしている、',
-      '株式会社第弐ヴォヌールの山本と申します。',
-      '',
-      '貴社の取り組みを拝見し、クラウドファンディング支援・SNSマーケティング支援の面でお役に立てる可能性を感じ、ご連絡いたしました。',
-      '',
-      'もしご関心がございましたら、',
-      'まずは15〜20分ほど、情報交換のお時間をいただけますと幸いです。',
-      '',
-      'ご検討のほど、よろしくお願いいたします。'
-    ].join('\n');
+    const aiInput = {
+      templateKey: dto.templateKey,
+      tone: dto.tone,
+      companyName: lead.company.name,
+      projectTitle: lead.project?.title,
+      projectUrl: lead.project?.url,
+      projectCategory: lead.project?.category,
+      projectDescription: lead.project?.description,
+      projectAmount: lead.project?.amount,
+      supporterCount: lead.project?.supporterCount,
+      leadReason: lead.reason
+    };
+    const draft = await this.openAi.createSalesMailDraft(aiInput);
 
     const result = await this.prisma.$transaction(async (tx) => {
       const email = await tx.outreachEmail.create({
@@ -45,8 +40,8 @@ export class AiService {
           leadId: lead.id,
           companyId: lead.companyId,
           templateKey: dto.templateKey,
-          subject,
-          body,
+          subject: draft.subject,
+          body: draft.body,
           status: 'draft',
           events: { create: { type: 'generated' } }
         }
@@ -57,10 +52,20 @@ export class AiService {
           emailId: email.id,
           type: 'email_draft',
           provider: 'openai',
-          model: process.env.OPENAI_MODEL ?? 'gpt-4.1-mini',
-          promptVersion: 'v1',
-          inputJson: { leadId, templateKey: dto.templateKey, tone: dto.tone },
-          outputJson: { subject, body, factsUsed }
+          model: draft.model,
+          promptVersion: 'v2_openai_sales_mail',
+          inputJson: { leadId, ...aiInput },
+          outputJson: {
+            subject: draft.subject,
+            body: draft.body,
+            factsUsed: draft.factsUsed,
+            assumptions: draft.assumptions,
+            riskFlags: draft.riskFlags
+          },
+          latencyMs: draft.latencyMs,
+          tokenInput: draft.usage.inputTokens,
+          tokenOutput: draft.usage.outputTokens,
+          costUsd: draft.usage.costUsd
         }
       });
 
@@ -70,9 +75,9 @@ export class AiService {
     return {
       email: result.email,
       aiGenerationId: result.aiGeneration.id,
-      factsUsed,
-      assumptions: ['MVP placeholder generation. TODO: connect OpenAI client wrapper.'],
-      riskFlags: []
+      factsUsed: draft.factsUsed,
+      assumptions: draft.assumptions,
+      riskFlags: draft.riskFlags
     };
   }
 
