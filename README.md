@@ -24,3 +24,10 @@ CAMPFIREなどのプロジェクトURLをもとに、営業先分析、営業切
 
 まずはMVPとして、ローカル実行・低コスト・人間確認前提で進めます。
 
+## 主要ドキュメント
+
+- `docs/00_CHARTER.md`: 開発憲章、原則、判断基準
+- `docs/05_UI.md`: 画面設計
+- `docs/06_API.md`: API設計
+- `docs/08_DOMAIN.md`: ドメイン設計
+- `docs/13_CODEX.md`: Codex実装仕様
