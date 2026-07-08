@@ -8,7 +8,8 @@ UI、API、Domain Service、Repository、Adapter、Workerを分離する。Contr
 ## 2. 全体構成
 ```mermaid
 flowchart LR
-  UI[Next.js] --> API[NestJS API]
+  UI[Web UI] --> API[NestJS API]
+  Local[Local Sales Dashboard] --> API
   API --> S[Domain Services]
   S --> R[Repositories]
   R --> DB[(PostgreSQL)]
@@ -18,6 +19,8 @@ flowchart LR
   W --> AI[AI Adapter]
   Track[Tracking Endpoint] --> DB
 ```
+
+MVP Phase 1では `Local Sales Dashboard` をNestJS API内のHTML画面として提供する。将来、業務画面が増えた段階で `apps/web` のNext.js UIへ分離する。
 
 ## 3. レイヤ責務
 | Layer | 責務 |
@@ -32,12 +35,15 @@ flowchart LR
 ```text
 apps/web/features/{dashboard,leads,mail,replies,tasks}
 apps/api/src/modules/{companies,projects,leads,mail,ai,tracking,tasks,audit}
+apps/api/src/dashboard
 apps/api/src/workers/{mail-send,reply-sync,ai-generation}
 packages/shared/src
 prisma/schema.prisma
 openapi/openapi.yaml
 docs/
 ```
+
+現状の実装ではNestJS標準構成に合わせ、`apps/api/src/{companies,projects,leads,mail,ai,tracking,dashboard}` に分ける。
 
 ## 5. 状態遷移
 Leadは `discovered -> qualified -> drafted -> reviewing -> approved -> queued -> contacted -> replied` を基本とする。Mailは `draft -> in_review -> approved -> queued -> sending -> sent` を基本とする。

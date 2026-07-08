@@ -7,6 +7,17 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /:
+    get:
+      summary: Local sales dashboard HTML
+      security: []
+      responses:
+        '200':
+          description: Local dashboard
+          content:
+            text/html:
+              schema:
+                type: string
   /health:
     get:
       summary: Health check
@@ -140,7 +151,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  items: { type: array, items: { $ref: '#/components/schemas/OutreachEmail' } }
+                  items: { type: array, items: { $ref: '#/components/schemas/OutreachEmailWithRelations' } }
                   page: { type: integer }
                   limit: { type: integer }
                   total: { type: integer }
@@ -166,6 +177,22 @@ paths:
       responses:
         '200':
           description: Review requested
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutreachEmail' }
+  /api/mails/{emailId}:
+    patch:
+      summary: Update mail subject and body
+      parameters:
+        - $ref: '#/components/parameters/EmailId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMailRequest' }
+      responses:
+        '200':
+          description: Updated
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OutreachEmail' }
@@ -437,7 +464,7 @@ components:
     LeadListResponse:
       type: object
       properties:
-        items: { type: array, items: { $ref: '#/components/schemas/SalesLead' } }
+        items: { type: array, items: { $ref: '#/components/schemas/SalesLeadWithRelations' } }
         page: { type: integer }
         limit: { type: integer }
         total: { type: integer }
@@ -474,6 +501,33 @@ components:
         scheduledAt: { type: string, format: date-time, nullable: true }
         sentAt: { type: string, format: date-time, nullable: true }
         retryCount: { type: integer }
+    OutreachEmailWithRelations:
+      allOf:
+        - $ref: '#/components/schemas/OutreachEmail'
+        - type: object
+          properties:
+            company: { $ref: '#/components/schemas/Company' }
+            lead:
+              allOf:
+                - $ref: '#/components/schemas/SalesLead'
+                - type: object
+                  properties:
+                    project: { $ref: '#/components/schemas/CrowdfundingProject' }
+    SalesLeadWithRelations:
+      allOf:
+        - $ref: '#/components/schemas/SalesLead'
+        - type: object
+          properties:
+            company: { $ref: '#/components/schemas/Company' }
+            project: { $ref: '#/components/schemas/CrowdfundingProject' }
+            scores:
+              type: array
+              items: { $ref: '#/components/schemas/LeadScore' }
+    UpdateMailRequest:
+      type: object
+      properties:
+        subject: { type: string }
+        body: { type: string }
     GenerateMailRequest:
       type: object
       required: [templateKey]
