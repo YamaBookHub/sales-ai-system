@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { EmailEventType, EmailStatus } from '@prisma/client';
+import { EmailEventType, EmailStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateMailDraftDto, UpdateMailChecklistDto, UpdateMailDto } from './mail.dto';
+import { CreateMailDraftDto, RejectMailDto, UpdateMailChecklistDto, UpdateMailDto } from './mail.dto';
 
 const DEFAULT_CHECKLIST_ITEMS = [
   { key: 'company_product_correct', label: '会社名・商品名が正しい' },
@@ -68,6 +68,19 @@ export class MailService {
 
   approve(id: string) {
     return this.approveWithChecklist(id);
+  }
+
+  async reject(id: string, dto: RejectMailDto) {
+    const email = await this.get(id);
+    if (!['draft', 'in_review', 'approved'].includes(email.status)) {
+      throw new ConflictException('Only draft, in_review or approved mail can be rejected.');
+    }
+
+    const reason = dto.reason?.trim() || 'rejected_by_reviewer';
+    return this.transition(id, 'rejected', 'rejected', {
+      failedReason: reason,
+      approvedAt: null
+    }, { reason });
   }
 
   async queue(id: string) {
@@ -200,13 +213,19 @@ export class MailService {
     });
   }
 
-  private transition(id: string, status: EmailStatus, eventType: EmailEventType, extra: Record<string, unknown> = {}) {
+  private transition(
+    id: string,
+    status: EmailStatus,
+    eventType: EmailEventType,
+    extra: Record<string, unknown> = {},
+    payload?: Prisma.InputJsonObject
+  ) {
     return this.prisma.outreachEmail.update({
       where: { id },
       data: {
         status,
         ...extra,
-        events: { create: { type: eventType } }
+        events: { create: { type: eventType, payload } }
       }
     });
   }

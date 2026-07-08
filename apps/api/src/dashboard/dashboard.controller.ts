@@ -240,6 +240,7 @@ export class DashboardController {
           <h2>メール確認</h2>
           <div class="toolbar">
             <button onclick="requestReview()" id="reviewButton" disabled>レビュー依頼</button>
+            <button onclick="rejectMail()" id="rejectButton" disabled>棄却</button>
             <button onclick="approveMail()" id="approveButton" disabled>承認</button>
             <button onclick="queueMail()" id="queueButton" disabled>キュー投入</button>
           </div>
@@ -427,6 +428,24 @@ export class DashboardController {
       await transitionMail('approve', '承認済み');
     }
 
+    async function rejectMail() {
+      if (!state.selectedMailId) return;
+      const reason = window.prompt('棄却理由を入力してください', '内容確認後に再作成');
+      if (reason === null) return;
+      setStatus('mailStatus', '棄却中', 'warn');
+      try {
+        await api('/api/mails/' + state.selectedMailId + '/reject', {
+          method: 'POST',
+          body: JSON.stringify({ reason })
+        });
+        setStatus('mailStatus', '棄却しました', 'ok');
+        await loadAll();
+        selectMail(state.selectedMailId);
+      } catch (error) {
+        setStatus('mailStatus', error.message, 'error');
+      }
+    }
+
     async function queueMail() {
       await transitionMail('queue', 'キュー投入済み');
     }
@@ -514,6 +533,7 @@ export class DashboardController {
     function updateMailButtons(mail) {
       document.getElementById('saveButton').disabled = !mail;
       document.getElementById('reviewButton').disabled = !mail || mail.status !== 'draft';
+      document.getElementById('rejectButton').disabled = !mail || !['draft', 'in_review', 'approved'].includes(mail.status);
       document.getElementById('approveButton').disabled = !mail || mail.status !== 'in_review' || !state.checklistComplete;
       document.getElementById('queueButton').disabled = !mail || mail.status !== 'approved' || !state.checklistComplete;
     }

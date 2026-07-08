@@ -233,6 +233,22 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OutreachEmail' }
+  /api/mails/{emailId}/reject:
+    post:
+      summary: Reject mail draft
+      parameters:
+        - $ref: '#/components/parameters/EmailId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RejectMailRequest' }
+      responses:
+        '200':
+          description: Rejected
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutreachEmail' }
   /api/mails/{emailId}/queue:
     post:
       summary: Queue approved mail for sending
@@ -379,7 +395,7 @@ components:
       enum: [high, medium, low]
     EmailStatus:
       type: string
-      enum: [draft, in_review, approved, queued, sending, sent, failed, cancelled]
+      enum: [draft, in_review, rejected, approved, queued, sending, sent, failed, cancelled]
     ReplyCategory:
       type: string
       enum: [interested, need_info, meeting_request, not_interested, unsubscribe, auto_reply, complaint, unknown]
@@ -579,6 +595,10 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/UpdateMailChecklistItem' }
+    RejectMailRequest:
+      type: object
+      properties:
+        reason: { type: string }
     MailChecklistResponse:
       type: object
       properties:

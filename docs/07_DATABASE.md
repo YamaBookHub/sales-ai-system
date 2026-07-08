@@ -130,6 +130,7 @@ erDiagram
 |---|---|
 | DRAFT | 下書き |
 | REVIEW_REQUIRED | 確認待ち |
+| REJECTED | 棄却 |
 | APPROVED | 送信承認済み |
 | SCHEDULED | 送信予約済み |
 | SENT | 送信済み |
@@ -142,6 +143,7 @@ erDiagram
 | 値 | 意味 |
 |---|---|
 | SENT | 送信 |
+| REJECTED | 棄却 |
 | OPENED | 開封 |
 | CLICKED | クリック |
 | REPLIED | 返信 |

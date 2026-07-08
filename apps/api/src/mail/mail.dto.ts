@@ -43,3 +43,9 @@ export class UpdateMailChecklistDto {
   @Type(() => UpdateMailChecklistItemDto)
   items!: UpdateMailChecklistItemDto[];
 }
+
+export class RejectMailDto {
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
