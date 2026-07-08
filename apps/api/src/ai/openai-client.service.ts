@@ -92,7 +92,7 @@ export class OpenAiClientService {
       throw new BadGatewayException('OpenAIからメール本文が返りませんでした。もう一度お試しください。');
     }
 
-    const parsed = this.parseDraftJson(content);
+    const parsed = this.normalizeDraft(this.parseDraftJson(content), input);
     const usage = {
       inputTokens: payload.usage?.prompt_tokens,
       outputTokens: payload.usage?.completion_tokens,
@@ -115,17 +115,34 @@ export class OpenAiClientService {
       'CAMPFIRE掲載プロジェクトの事実だけを使い、低圧で丁寧な営業メール下書きを作成してください。',
       '出力はJSONのみ。キーは subject, body, factsUsed, assumptions, riskFlags。',
       'subject/bodyは文字列、factsUsed/assumptions/riskFlagsは文字列配列。',
-      'メール本文の冒頭には必ず次の自己紹介をそのまま入れてください。',
+      'bodyは必ず次の順番で構成してください。順番を入れ替えないでください。',
+      '1. 会社名',
+      '2. 空行',
+      '3. ご担当者様',
+      '4. 空行',
+      '5. 固定自己紹介',
+      '6. プロジェクトを見た理由と親和性',
+      '7. 商品特徴と良いと思った点',
+      '8. SNSでの見せ方',
+      '9. 弊社支援範囲',
+      '10. 固定実績紹介',
+      '11. 情報交換依頼',
+      '12. 固定締め',
+      'メール本文の冒頭は必ず「会社名」「空行」「ご担当者様」「空行」から始めてください。',
+      '固定自己紹介は必ず次の3行をそのまま入れてください。',
       'お世話になっております。',
       'クラウドファンディング支援およびSNSマーケティング支援をしている、',
       '株式会社第弐ヴォヌールの山本と申します。',
-      '実績紹介には必ず次の表現をそのまま入れてください。',
+      '固定実績紹介は必ず次の3行をそのまま入れてください。',
       '実績としましても、',
       'SNS運用において1か月で総再生400万回超・フォロワー4,000人増加、',
       'クラウドファンディング領域では担当商品で3,500万円規模の売上がございます。',
       '締めには必ず「まずは15〜20分ほど、情報交換のお時間をいただけますと幸いです。」を入れてください。',
+      '本文の最後は必ず「ご検討のほど、よろしくお願いいたします。」で終えてください。',
+      '「実績としましても、」は本文後半に置き、自己紹介直後には置かないでください。',
       '送信済みのような表現、自動送信、断定的な成果保証、過度な売り込みは避けてください。',
       '特徴が不足する場合は推測で埋めず、自然な短文にしてください。',
+      'bodyは600〜900文字程度にしてください。',
       '通常版の件名は「クラウドファンディング支援に関する情報交換のお願い」。',
       'SNS動画・広告クリエイティブ強化版の件名は「SNS動画・広告クリエイティブ支援に関する情報交換のお願い」。'
     ].join('\n');
@@ -171,6 +188,48 @@ export class OpenAiClientService {
       assumptions: parsed.assumptions,
       riskFlags: parsed.riskFlags
     };
+  }
+
+  private normalizeDraft(
+    draft: {
+      subject: string;
+      body: string;
+      factsUsed: string[];
+      assumptions: string[];
+      riskFlags: string[];
+    },
+    input: SalesMailDraftInput
+  ) {
+    const bodyParts = draft.body.split(/\n+/).map((part) => part.trim()).filter(Boolean);
+    const bodyText = bodyParts.join('\n');
+    const expectedHeader = `${input.companyName}\n\nご担当者様`;
+    const startsWithCompany = bodyText.startsWith(input.companyName);
+    const hasRecipient = bodyText.includes('ご担当者様');
+    const closing = 'ご検討のほど、よろしくお願いいたします。';
+    let body = draft.body.trim();
+
+    if (!startsWithCompany) {
+      body = `${expectedHeader}\n\n${body}`;
+    } else if (!hasRecipient) {
+      body = body.replace(input.companyName, expectedHeader);
+    }
+
+    if (!body.endsWith(closing)) {
+      body = `${body}\n\n${closing}`;
+    }
+
+    return {
+      ...draft,
+      subject: this.expectedSubject(input.templateKey),
+      body: body.trim()
+    };
+  }
+
+  private expectedSubject(templateKey: string) {
+    const normalizedKey = templateKey.toLowerCase();
+    return ['creative', 'sns', 'video', 'ad'].some((key) => normalizedKey.includes(key))
+      ? 'SNS動画・広告クリエイティブ支援に関する情報交換のお願い'
+      : 'クラウドファンディング支援に関する情報交換のお願い';
   }
 
   private isDraftShape(value: unknown): value is {
