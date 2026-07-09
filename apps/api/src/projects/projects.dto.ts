@@ -50,10 +50,6 @@ export class SearchCampfireProjectsDto {
   category?: string;
 
   @IsOptional()
-  @IsString()
-  categoryLabel?: string;
-
-  @IsOptional()
   @IsInt()
   amountMin?: number;
 
@@ -68,14 +64,6 @@ export class SearchCampfireProjectsDto {
   @IsOptional()
   @IsInt()
   supporterMax?: number;
-
-  @IsOptional()
-  @IsInt()
-  profileProjectMin?: number;
-
-  @IsOptional()
-  @IsInt()
-  profileProjectMax?: number;
 
   @IsOptional()
   @IsInt()

@@ -420,16 +420,6 @@ export class DashboardController {
                 <option value="50">取得上限 50件</option>
                 <option value="100">取得上限 100件</option>
               </select>
-              <select id="campfireSearchProfileProjectRange">
-                <option value="">過去プロジェクト すべて</option>
-                <option value=":99">過去プロジェクト 100件未満</option>
-                <option value="0:0">初回のみ</option>
-                <option value="1:3">1〜3件</option>
-                <option value="4:9">4〜9件</option>
-                <option value="10:29">10〜29件</option>
-                <option value="30:99">30〜99件</option>
-                <option value="100:">100件以上</option>
-              </select>
               <div class="toolbar">
                 <button class="primary" onclick="searchCampfireCandidates()">候補を検索</button>
                 <button onclick="clearCampfireSearch()">クリア</button>
@@ -505,15 +495,6 @@ export class DashboardController {
               <option value="100:300">100〜300人</option>
               <option value="300:500">300〜500人</option>
               <option value="500:">500人以上</option>
-            </select>
-            <select id="campfireDisplayProfileProjectRange" onchange="renderCampfireCandidates()">
-              <option value="">過去プロジェクト すべて</option>
-              <option value="0:0">初回のみ</option>
-              <option value="1:3">1〜3件</option>
-              <option value="4:9">4〜9件</option>
-              <option value="10:29">10〜29件</option>
-              <option value="30:99">30〜99件</option>
-              <option value="100:">100件以上</option>
             </select>
           </div>
           <div id="campfireCandidates">
@@ -694,9 +675,7 @@ export class DashboardController {
     }
 
     async function searchCampfireCandidates() {
-      const profileProjectRange = rangeFieldValue('campfireSearchProfileProjectRange');
-      const hasProfileProjectSearch = profileProjectRange.min !== null || profileProjectRange.max !== null;
-      setStatus('campfireSearchStatusText', hasProfileProjectSearch ? '検索中（過去件数確認あり）' : '検索中', 'warn');
+      setStatus('campfireSearchStatusText', '検索中', 'warn');
       document.getElementById('campfireCandidateCount').textContent = '検索中';
       try {
         const result = await api('/api/projects/search/campfire', {
@@ -704,9 +683,6 @@ export class DashboardController {
           body: JSON.stringify(compactPayload({
             keyword: fieldValue('campfireSearchKeyword'),
             category: fieldValue('campfireSearchCategory'),
-            categoryLabel: selectedOptionText('campfireSearchCategory'),
-            profileProjectMin: profileProjectRange.min,
-            profileProjectMax: profileProjectRange.max,
             limit: numberFieldValue('campfireFetchLimit') || 10
           }))
         });
@@ -728,12 +704,10 @@ export class DashboardController {
         document.getElementById(id).value = '';
       });
       document.getElementById('campfireFetchLimit').value = '10';
-      document.getElementById('campfireSearchProfileProjectRange').value = '';
       document.getElementById('campfireResultLimit').value = '10';
       document.getElementById('campfireDisplayStatus').value = '';
       document.getElementById('campfireDisplayAmountRange').value = '';
       document.getElementById('campfireDisplaySupporterRange').value = '';
-      document.getElementById('campfireDisplayProfileProjectRange').value = '';
       state.campfireCandidates = [];
       renderCampfireCandidates();
       setStatus('campfireSearchStatusText', '', '');
@@ -935,7 +909,6 @@ export class DashboardController {
               '<span>支援額 ' + formatCurrency(item.amount) + '</span>' +
               '<span>支援者 ' + formatNumber(item.supporterCount) + '人</span>' +
               '<span>残り ' + (item.daysLeft === null ? '-' : escapeHtml(item.daysLeft + '日')) + '</span>' +
-              '<span>過去 ' + (item.profileProjectCount === null ? '-' : escapeHtml(item.profileProjectCount + '件')) + '</span>' +
             '</div>' +
           '</div>' +
           '<button class="primary" onclick="importCampfireCandidate(' + originalIndex + ')">取り込む</button>' +
@@ -947,16 +920,12 @@ export class DashboardController {
     function matchesCampfireDisplayFilters(item) {
       const amountRange = rangeFieldValue('campfireDisplayAmountRange');
       const supporterRange = rangeFieldValue('campfireDisplaySupporterRange');
-      const profileProjectRange = rangeFieldValue('campfireDisplayProfileProjectRange');
       const status = fieldValue('campfireDisplayStatus');
 
       if (amountRange.min !== null && item.amount < amountRange.min) return false;
       if (amountRange.max !== null && item.amount > amountRange.max) return false;
       if (supporterRange.min !== null && item.supporterCount < supporterRange.min) return false;
       if (supporterRange.max !== null && item.supporterCount > supporterRange.max) return false;
-      if ((profileProjectRange.min !== null || profileProjectRange.max !== null) && item.profileProjectCount === null) return false;
-      if (profileProjectRange.min !== null && item.profileProjectCount < profileProjectRange.min) return false;
-      if (profileProjectRange.max !== null && item.profileProjectCount > profileProjectRange.max) return false;
       if (status === 'active' && !item.isActive) return false;
       if (status === 'endingSoon' && (item.daysLeft === null || item.daysLeft > 7)) return false;
       return true;
@@ -1309,11 +1278,6 @@ export class DashboardController {
 
     function fieldValue(id) {
       return document.getElementById(id)?.value.trim() || '';
-    }
-
-    function selectedOptionText(id) {
-      const select = document.getElementById(id);
-      return select?.value ? (select.selectedOptions?.[0]?.textContent || '').trim() : '';
     }
 
     function dateTimeValue(id) {

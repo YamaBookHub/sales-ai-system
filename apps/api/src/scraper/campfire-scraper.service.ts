@@ -32,13 +32,10 @@ export type ScrapedCampfireProject = {
 export type CampfireSearchInput = {
   keyword?: string;
   category?: string;
-  categoryLabel?: string;
   amountMin?: number;
   amountMax?: number;
   supporterMin?: number;
   supporterMax?: number;
-  profileProjectMin?: number;
-  profileProjectMax?: number;
   limit?: number;
   status?: string;
 };
@@ -110,17 +107,8 @@ export class CampfireScraperService {
       });
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const resultLimit = normalizeSearchLimit(input.limit);
-      const needsProfileFilter = hasProfileProjectFilter(input);
-      const needsCategoryCheck = hasSelectedCategory(input);
-      const searchLimit = needsProfileFilter ? Math.min(Math.max(resultLimit * 3, 30), 100) : resultLimit;
-      const items = await collectSearchResults(page, searchLimit);
-      const enrichedItems = needsProfileFilter
-        ? await collectMatchingProfileProjectResults(page, items, input, resultLimit)
-        : needsCategoryCheck
-          ? await enrichWithProjectCategories(page, items)
-          : items;
-      const filteredItems = enrichedItems.filter((item) => matchesSelectedCategory(item, input)).slice(0, resultLimit);
-      return { items: filteredItems, total: filteredItems.length };
+      const items = await collectSearchResults(page, resultLimit);
+      return { items, total: items.length };
     } finally {
       await browser.close();
     }
@@ -291,90 +279,8 @@ async function clickNextSearchResults(page: Page) {
   return false;
 }
 
-function matchesSearchInput(item: CampfireSearchResult, input: CampfireSearchInput) {
-  const category = normalizeCampfireCategoryUrl(input.category) || normalizePresetCategory(input.category) ? '' : normalizeText(input.category);
-  const haystack = normalizeText([item.title, item.summary, item.category, item.url].join(' '));
-
-  if (category && !haystack.includes(category)) return false;
-  if (typeof input.amountMin === 'number' && item.amount < input.amountMin) return false;
-  if (typeof input.amountMax === 'number' && item.amount > input.amountMax) return false;
-  if (typeof input.supporterMin === 'number' && item.supporterCount < input.supporterMin) return false;
-  if (typeof input.supporterMax === 'number' && item.supporterCount > input.supporterMax) return false;
-  if (input.status === 'active' && !item.isActive) return false;
-  if (input.status === 'endingSoon' && (item.daysLeft === null || item.daysLeft > 7)) return false;
-  return true;
-}
-
-function hasProfileProjectFilter(input: CampfireSearchInput) {
-  return typeof input.profileProjectMin === 'number' || typeof input.profileProjectMax === 'number';
-}
-
 function normalizeSearchLimit(limit?: number) {
   return SEARCH_RESULT_LIMITS.includes(Number(limit)) ? Number(limit) : DEFAULT_SEARCH_RESULT_LIMIT;
-}
-
-async function enrichWithProjectCategories(page: Page, items: CampfireSearchResult[]) {
-  const enriched: CampfireSearchResult[] = [];
-  for (const item of items) {
-    enriched.push(await enrichWithProjectCategory(page, item));
-  }
-  return enriched;
-}
-
-async function collectMatchingProfileProjectResults(
-  page: Page,
-  items: CampfireSearchResult[],
-  input: CampfireSearchInput,
-  limit: number
-) {
-  const matched: CampfireSearchResult[] = [];
-  for (const item of items) {
-    const enriched = await enrichWithProfileProjectCount(page, item);
-    if (!matchesSelectedCategory(enriched, input)) continue;
-    if (!matchesProfileProjectRange(enriched, input)) continue;
-    matched.push(enriched);
-    if (matched.length >= limit) break;
-  }
-  return matched;
-}
-
-async function enrichWithProfileProjectCount(page: Page, item: CampfireSearchResult) {
-  try {
-    await openPageFast(page, item.url);
-    const html = await page.content();
-    const fallbackText = (await page.locator('body').innerText({ timeout: 2500 })).replace(/\s+/g, ' ').trim();
-    const fallbackCount = extractProfileProjectCount(fallbackText);
-    return {
-      ...item,
-      category: extractProjectCategory(fallbackText),
-      profileProjectCount: await fetchProfileProjectCount(page, html, fallbackCount, true)
-    };
-  } catch {
-    return item;
-  }
-}
-
-async function enrichWithProjectCategory(page: Page, item: CampfireSearchResult) {
-  try {
-    await openPageFast(page, item.url);
-    const text = (await page.locator('body').innerText({ timeout: 2000 })).replace(/\s+/g, ' ').trim();
-    return { ...item, category: extractProjectCategory(text) };
-  } catch {
-    return item;
-  }
-}
-
-function matchesSelectedCategory(item: CampfireSearchResult, input: CampfireSearchInput) {
-  const selectedCategory = normalizeCategoryLabel(input.categoryLabel || normalizePresetCategory(input.category));
-  if (!selectedCategory) return true;
-
-  const actualCategory = normalizeCategoryLabel(item.category);
-  if (!actualCategory) return false;
-  return actualCategory === selectedCategory || actualCategory.includes(selectedCategory) || selectedCategory.includes(actualCategory);
-}
-
-function hasSelectedCategory(input: CampfireSearchInput) {
-  return Boolean(normalizeCategoryLabel(input.categoryLabel || normalizePresetCategory(input.category)));
 }
 
 async function fetchProfileProjectCount(
@@ -395,26 +301,6 @@ async function fetchProfileProjectCount(
   } catch {
     return strictProfileLookup ? null : fallbackCount;
   }
-}
-
-function matchesProfileProjectRange(item: CampfireSearchResult, input: CampfireSearchInput) {
-  if (!hasProfileProjectFilter(input)) return true;
-  if (item.profileProjectCount === null) return false;
-  if (typeof input.profileProjectMin === 'number' && item.profileProjectCount < input.profileProjectMin) return false;
-  if (typeof input.profileProjectMax === 'number' && item.profileProjectCount > input.profileProjectMax) return false;
-  return true;
-}
-
-function extractProjectCategory(text: string) {
-  const patterns = [
-    /カテゴリ[ー]?\s*[:：]?\s*([ぁ-んァ-ン一-龥A-Za-z0-9・ー\s]{2,30})/g,
-    /カテゴリー\s*[:：]?\s*([ぁ-んァ-ン一-龥A-Za-z0-9・ー\s]{2,30})/g
-  ];
-  return clean(findFirst(text, patterns)).replace(/\s+/g, '');
-}
-
-function normalizeCategoryLabel(value?: string) {
-  return normalizeText(value).replace(/カテゴリを取得中|カテゴリ|カテゴリー|すべて|全て/g, '');
 }
 
 function normalizeText(value: string | undefined) {
