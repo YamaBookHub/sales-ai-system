@@ -704,6 +704,7 @@ export class DashboardController {
           body: JSON.stringify(compactPayload({
             keyword: fieldValue('campfireSearchKeyword'),
             category: fieldValue('campfireSearchCategory'),
+            categoryLabel: selectedOptionText('campfireSearchCategory'),
             profileProjectMin: profileProjectRange.min,
             profileProjectMax: profileProjectRange.max,
             limit: numberFieldValue('campfireFetchLimit') || 10
@@ -1308,6 +1309,11 @@ export class DashboardController {
 
     function fieldValue(id) {
       return document.getElementById(id)?.value.trim() || '';
+    }
+
+    function selectedOptionText(id) {
+      const select = document.getElementById(id);
+      return select?.value ? (select.selectedOptions?.[0]?.textContent || '').trim() : '';
     }
 
     function dateTimeValue(id) {

@@ -32,6 +32,7 @@ export type ScrapedCampfireProject = {
 export type CampfireSearchInput = {
   keyword?: string;
   category?: string;
+  categoryLabel?: string;
   amountMin?: number;
   amountMax?: number;
   supporterMin?: number;
@@ -115,7 +116,8 @@ export class CampfireScraperService {
       const enrichedItems = needsProfileFilter
         ? await collectMatchingProfileProjectResults(page, items, input, resultLimit)
         : await enrichWithProfileProjectCounts(page, items);
-      return { items: enrichedItems, total: enrichedItems.length };
+      const filteredItems = enrichedItems.filter((item) => matchesSelectedCategory(item, input)).slice(0, resultLimit);
+      return { items: filteredItems, total: filteredItems.length };
     } finally {
       await browser.close();
     }
@@ -325,6 +327,7 @@ async function collectMatchingProfileProjectResults(
   const matched: CampfireSearchResult[] = [];
   for (const item of items) {
     const enriched = await enrichWithProfileProjectCount(page, item);
+    if (!matchesSelectedCategory(enriched, input)) continue;
     if (!matchesProfileProjectRange(enriched, input)) continue;
     matched.push(enriched);
     if (matched.length >= limit) break;
@@ -338,10 +341,23 @@ async function enrichWithProfileProjectCount(page: Page, item: CampfireSearchRes
     const html = await page.content();
     const fallbackText = (await page.locator('body').innerText({ timeout: 2500 })).replace(/\s+/g, ' ').trim();
     const fallbackCount = extractProfileProjectCount(fallbackText);
-    return { ...item, profileProjectCount: await fetchProfileProjectCount(page, html, fallbackCount, true) };
+    return {
+      ...item,
+      category: extractProjectCategory(fallbackText),
+      profileProjectCount: await fetchProfileProjectCount(page, html, fallbackCount, true)
+    };
   } catch {
     return item;
   }
+}
+
+function matchesSelectedCategory(item: CampfireSearchResult, input: CampfireSearchInput) {
+  const selectedCategory = normalizeCategoryLabel(input.categoryLabel || normalizePresetCategory(input.category));
+  if (!selectedCategory) return true;
+
+  const actualCategory = normalizeCategoryLabel(item.category);
+  if (!actualCategory) return false;
+  return actualCategory === selectedCategory || actualCategory.includes(selectedCategory) || selectedCategory.includes(actualCategory);
 }
 
 async function fetchProfileProjectCount(
@@ -370,6 +386,18 @@ function matchesProfileProjectRange(item: CampfireSearchResult, input: CampfireS
   if (typeof input.profileProjectMin === 'number' && item.profileProjectCount < input.profileProjectMin) return false;
   if (typeof input.profileProjectMax === 'number' && item.profileProjectCount > input.profileProjectMax) return false;
   return true;
+}
+
+function extractProjectCategory(text: string) {
+  const patterns = [
+    /カテゴリ[ー]?\s*[:：]?\s*([ぁ-んァ-ン一-龥A-Za-z0-9・ー\s]{2,30})/g,
+    /カテゴリー\s*[:：]?\s*([ぁ-んァ-ン一-龥A-Za-z0-9・ー\s]{2,30})/g
+  ];
+  return clean(findFirst(text, patterns)).replace(/\s+/g, '');
+}
+
+function normalizeCategoryLabel(value?: string) {
+  return normalizeText(value).replace(/カテゴリを取得中|カテゴリ|カテゴリー|すべて|全て/g, '');
 }
 
 function normalizeText(value: string | undefined) {

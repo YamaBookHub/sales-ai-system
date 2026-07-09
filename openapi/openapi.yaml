@@ -556,6 +556,9 @@ components:
         category:
           type: string
           description: 検索用カテゴリvalue。CAMPFIREカテゴリURL、preset:カテゴリ名、旧形式のカテゴリ名を受け付ける。
+        categoryLabel:
+          type: string
+          description: 画面で選択されたカテゴリ表示名。取得後のカテゴリ照合に使う。
         profileProjectMin:
           type: integer
           minimum: 0

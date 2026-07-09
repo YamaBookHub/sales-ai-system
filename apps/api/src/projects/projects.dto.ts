@@ -50,6 +50,10 @@ export class SearchCampfireProjectsDto {
   category?: string;
 
   @IsOptional()
+  @IsString()
+  categoryLabel?: string;
+
+  @IsOptional()
   @IsInt()
   amountMin?: number;
 
