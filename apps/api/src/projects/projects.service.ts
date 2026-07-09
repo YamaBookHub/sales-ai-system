@@ -65,14 +65,24 @@ export class ProjectsService {
         }
       });
       const company =
-        existingCompany ??
-        (await tx.company.create({
-          data: {
-            name: companyName,
-            normalizedName: normalizeCompanyName(companyName),
-            memo: scraped.executorName ? `CAMPFIRE executor: ${scraped.executorName}` : undefined
-          }
-        }));
+        existingCompany
+          ? await tx.company.update({
+              where: { id: existingCompany.id },
+              data: compact({
+                websiteUrl: existingCompany.websiteUrl || scraped.websiteUrl || undefined,
+                inquiryUrl: existingCompany.inquiryUrl || scraped.inquiryUrl || undefined,
+                memo: existingCompany.memo || (scraped.executorName ? `CAMPFIRE executor: ${scraped.executorName}` : undefined)
+              })
+            })
+          : await tx.company.create({
+              data: {
+                name: companyName,
+                normalizedName: normalizeCompanyName(companyName),
+                websiteUrl: scraped.websiteUrl || undefined,
+                inquiryUrl: scraped.inquiryUrl || undefined,
+                memo: scraped.executorName ? `CAMPFIRE executor: ${scraped.executorName}` : undefined
+              }
+            });
       const project = await tx.crowdfundingProject.upsert({
         where: { url: scraped.projectUrl },
         update: {
@@ -98,6 +108,14 @@ export class ProjectsService {
           scrapedAt: new Date()
         }
       });
+      const existingLead = await tx.salesLead.findUnique({
+        where: {
+          companyId_projectId: {
+            companyId: company.id,
+            projectId: project.id
+          }
+        }
+      });
       const lead = await tx.salesLead.upsert({
         where: {
           companyId_projectId: {
@@ -107,7 +125,13 @@ export class ProjectsService {
         },
         update: {
           source: 'campfire_import',
-          reason: buildImportReason(scraped)
+          reason: buildImportReason(scraped),
+          contactFormUrl: existingLead?.contactFormUrl || scraped.inquiryUrl || undefined,
+          brandWebsiteUrl: existingLead?.brandWebsiteUrl || scraped.websiteUrl || undefined,
+          instagramUrl: existingLead?.instagramUrl || scraped.instagramUrl || undefined,
+          tiktokUrl: existingLead?.tiktokUrl || scraped.tiktokUrl || undefined,
+          xUrl: existingLead?.xUrl || scraped.xUrl || undefined,
+          contactMemo: existingLead?.contactMemo || buildAutoUrlMemo(scraped)
         },
         create: {
           companyId: company.id,
@@ -115,7 +139,13 @@ export class ProjectsService {
           source: 'campfire_import',
           status: 'qualified',
           priority: 'medium',
-          reason: buildImportReason(scraped)
+          reason: buildImportReason(scraped),
+          contactFormUrl: scraped.inquiryUrl || undefined,
+          brandWebsiteUrl: scraped.websiteUrl || undefined,
+          instagramUrl: scraped.instagramUrl || undefined,
+          tiktokUrl: scraped.tiktokUrl || undefined,
+          xUrl: scraped.xUrl || undefined,
+          contactMemo: buildAutoUrlMemo(scraped)
         }
       });
 
@@ -134,7 +164,13 @@ export class ProjectsService {
         achievementRate: scraped.achievementRate,
         daysLeft: scraped.daysLeft,
         features: scraped.features,
-        profileUrl: scraped.profileUrl
+        profileUrl: scraped.profileUrl,
+        websiteUrl: scraped.websiteUrl,
+        inquiryUrl: scraped.inquiryUrl,
+        instagramUrl: scraped.instagramUrl,
+        tiktokUrl: scraped.tiktokUrl,
+        xUrl: scraped.xUrl,
+        externalUrls: scraped.externalUrls
       }
     };
   }
@@ -152,4 +188,13 @@ function normalizeCompanyName(value: string) {
 function buildImportReason(scraped: { achievementRate: string; daysLeft: string; features: string[] }) {
   const values = [scraped.achievementRate && `達成率: ${scraped.achievementRate}`, scraped.daysLeft && `残り日数: ${scraped.daysLeft}`, scraped.features[0] && `特徴: ${scraped.features[0]}`].filter(Boolean);
   return values.join(' / ') || 'CAMPFIRE import';
+}
+
+function buildAutoUrlMemo(scraped: { externalUrls: string[] }) {
+  if (!scraped.externalUrls.length) return undefined;
+  return `CAMPFIREページから自動取得したURL: ${scraped.externalUrls.slice(0, 8).join(' / ')}`;
+}
+
+function compact<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== '')) as Partial<T>;
 }

@@ -18,6 +18,12 @@ export type ScrapedCampfireProject = {
   category: string;
   features: string[];
   profileUrl: string;
+  websiteUrl: string;
+  inquiryUrl: string;
+  instagramUrl: string;
+  tiktokUrl: string;
+  xUrl: string;
+  externalUrls: string[];
 };
 
 @Injectable()
@@ -84,6 +90,8 @@ function extractProject(html: string, projectUrl: string): ScrapedCampfireProjec
       $('main').text().slice(0, 1800)
   );
   const profileName = clean($('a[href*="/profile/"]').first().text());
+  const urls = extractExternalUrls($, projectUrl);
+  const classifiedUrls = classifyUrls(urls);
 
   return {
     projectUrl,
@@ -108,8 +116,65 @@ function extractProject(html: string, projectUrl: string): ScrapedCampfireProjec
         $('a[href*="/profile/"]').first().attr('href') ||
         '',
       CAMPFIRE_ORIGIN
-    )
+    ),
+    websiteUrl: classifiedUrls.websiteUrl,
+    inquiryUrl: classifiedUrls.inquiryUrl,
+    instagramUrl: classifiedUrls.instagramUrl,
+    tiktokUrl: classifiedUrls.tiktokUrl,
+    xUrl: classifiedUrls.xUrl,
+    externalUrls: urls
   };
+}
+
+function extractExternalUrls($: cheerio.CheerioAPI, projectUrl: string) {
+  const projectHost = new URL(projectUrl).hostname;
+  const urls = $('a[href]')
+    .toArray()
+    .map((element) => absolutize($(element).attr('href') || '', CAMPFIRE_ORIGIN))
+    .filter((url) => {
+      if (!url) return false;
+      const parsed = new URL(url);
+      if (parsed.hostname === projectHost || parsed.hostname.endsWith('.camp-fire.jp')) return false;
+      if (['mailto:', 'tel:'].includes(parsed.protocol)) return false;
+      return ['http:', 'https:'].includes(parsed.protocol);
+    });
+
+  return uniqueBy(urls, (value) => normalizeUrlForUnique(value)).slice(0, 20);
+}
+
+function classifyUrls(urls: string[]) {
+  const instagramUrl = urls.find((url) => /(^|\.)instagram\.com$/i.test(new URL(url).hostname)) || '';
+  const tiktokUrl = urls.find((url) => /(^|\.)tiktok\.com$/i.test(new URL(url).hostname)) || '';
+  const xUrl =
+    urls.find((url) => {
+      const host = new URL(url).hostname.toLowerCase();
+      return host === 'x.com' || host === 'twitter.com' || host.endsWith('.twitter.com');
+    }) || '';
+  const inquiryUrl =
+    urls.find((url) => {
+      const normalized = url.toLowerCase();
+      return /contact|inquiry|toiawase|support|help|form|otoiawase/.test(normalized);
+    }) || '';
+  const websiteUrl =
+    urls.find((url) => {
+      const host = new URL(url).hostname.toLowerCase();
+      return ![
+        'instagram.com',
+        'www.instagram.com',
+        'tiktok.com',
+        'www.tiktok.com',
+        'x.com',
+        'twitter.com',
+        'www.twitter.com',
+        'facebook.com',
+        'www.facebook.com',
+        'youtube.com',
+        'www.youtube.com',
+        'youtu.be'
+      ].includes(host);
+    }) || '';
+
+  return { websiteUrl, inquiryUrl, instagramUrl, tiktokUrl, xUrl };
 }
 
 function extractFeatureCandidates($: cheerio.CheerioAPI, description: string) {
@@ -172,6 +237,16 @@ function absolutize(href: string, origin: string) {
     return new URL(href, origin).toString();
   } catch {
     return '';
+  }
+}
+
+function normalizeUrlForUnique(value: string) {
+  try {
+    const url = new URL(value);
+    url.hash = '';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return value;
   }
 }
 

@@ -280,6 +280,24 @@ export class DashboardController {
       text-align: left;
       padding: 8px 10px;
     }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .tab-button {
+      background: #eef1f4;
+      border-color: #d7dee5;
+      color: #34424d;
+    }
+    .tab-button[data-active="true"] {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .tab-panel { display: none; }
+    .tab-panel[data-active="true"] { display: block; }
     a {
       color: var(--accent);
       text-decoration: none;
@@ -369,7 +387,13 @@ export class DashboardController {
     </div>
 
     <div class="right">
-      <section>
+      <div class="tabs" aria-label="機能タブ">
+        <button class="tab-button" data-tab-button="detail" data-active="true" onclick="switchTab('detail')">案件詳細</button>
+        <button class="tab-button" data-tab-button="ai" onclick="switchTab('ai')">AI分析</button>
+        <button class="tab-button" data-tab-button="mail" onclick="switchTab('mail')">メール確認</button>
+      </div>
+
+      <section class="tab-panel" data-tab-panel="detail" data-active="true">
         <div class="section-head">
           <h2>3. 案件詳細</h2>
           <div class="toolbar">
@@ -381,7 +405,7 @@ export class DashboardController {
         </div>
       </section>
 
-      <section>
+      <section class="tab-panel" data-tab-panel="ai">
         <div class="section-head">
           <h2>4. AI分析結果</h2>
         </div>
@@ -390,7 +414,7 @@ export class DashboardController {
         </div>
       </section>
 
-      <section>
+      <section class="tab-panel" data-tab-panel="mail">
         <div class="section-head">
           <h2>5. メール確認・承認</h2>
           <div class="toolbar">
@@ -521,6 +545,7 @@ export class DashboardController {
         await loadAll();
         await loadAiAnalysis();
         selectMail(state.selectedMailId);
+        switchTab('mail');
       } catch (error) {
         setStatus('mailStatus', error.message, 'error');
       }
@@ -839,6 +864,15 @@ export class DashboardController {
       renderLeadDetail();
       renderAiAnalysis();
       void loadAiAnalysis();
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('[data-tab-button]').forEach((button) => {
+        button.dataset.active = button.dataset.tabButton === tab ? 'true' : 'false';
+      });
+      document.querySelectorAll('[data-tab-panel]').forEach((panel) => {
+        panel.dataset.active = panel.dataset.tabPanel === tab ? 'true' : 'false';
+      });
     }
 
     async function saveLeadManagement() {
