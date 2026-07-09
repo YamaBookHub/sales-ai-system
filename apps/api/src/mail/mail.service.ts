@@ -66,6 +66,17 @@ export class MailService {
     return this.transition(id, 'in_review', 'reviewed');
   }
 
+  async requestReReview(id: string) {
+    const email = await this.get(id);
+    if (email.status !== 'rejected') {
+      throw new ConflictException('Only rejected mail can be requested for re-review.');
+    }
+
+    return this.transition(id, 'in_review', 'reviewed', {
+      failedReason: null
+    }, { reReview: true });
+  }
+
   approve(id: string) {
     return this.approveWithChecklist(id);
   }

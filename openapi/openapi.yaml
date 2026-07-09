@@ -180,6 +180,17 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OutreachEmail' }
+  /api/mails/{emailId}/request-rereview:
+    post:
+      summary: Request mail re-review after rejection
+      parameters:
+        - $ref: '#/components/parameters/EmailId'
+      responses:
+        '200':
+          description: Re-review requested
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutreachEmail' }
   /api/mails/{emailId}:
     patch:
       summary: Update mail subject and body

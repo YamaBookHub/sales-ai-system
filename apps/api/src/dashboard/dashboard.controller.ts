@@ -106,6 +106,16 @@ export class DashboardController {
     .status.ok { color: var(--ok); }
     .status.warn { color: var(--warn); }
     .status.error { color: var(--danger); }
+    .notice {
+      border: 1px solid #f0d4aa;
+      border-left: 4px solid var(--warn);
+      background: #fff8ee;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    .notice strong { display: block; margin-bottom: 4px; }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -314,6 +324,7 @@ export class DashboardController {
           <h2>メール確認</h2>
           <div class="toolbar">
             <button onclick="requestReview()" id="reviewButton" disabled>レビュー依頼</button>
+            <button onclick="requestReReview()" id="reReviewButton" disabled>再レビュー依頼</button>
             <button onclick="rejectMail()" id="rejectButton" disabled>棄却</button>
             <button onclick="approveMail()" id="approveButton" disabled>承認</button>
             <button onclick="queueMail()" id="queueButton" disabled>キュー投入</button>
@@ -321,6 +332,7 @@ export class DashboardController {
         </div>
         <div class="body split">
           <div>
+            <div id="rejectReasonBox"></div>
             <div class="row">
               <label for="subject">件名</label>
               <input id="subject" />
@@ -516,6 +528,10 @@ export class DashboardController {
       await transitionMail('request-review', 'レビュー依頼済み');
     }
 
+    async function requestReReview() {
+      await transitionMail('request-rereview', '再レビュー依頼済み');
+    }
+
     async function approveMail() {
       await transitionMail('approve', '承認済み');
     }
@@ -663,7 +679,17 @@ export class DashboardController {
       document.getElementById('mailRows').innerHTML = rows || '<tr><td colspan="3" class="muted">まだメールがありません</td></tr>';
       const selected = state.mails.find((mail) => mail.id === state.selectedMailId);
       document.getElementById('selectedMail').textContent = selected ? labelMailStatus(selected.status) : '未選択';
+      renderRejectReason(selected);
       updateMailButtons(selected);
+    }
+
+    function renderRejectReason(mail) {
+      const container = document.getElementById('rejectReasonBox');
+      if (!mail || mail.status !== 'rejected') {
+        container.innerHTML = '';
+        return;
+      }
+      container.innerHTML = '<div class="notice"><strong>棄却理由</strong>' + escapeHtml(mail.failedReason || '理由未入力') + '<div class="muted" style="margin-top:6px">本文を修正して保存したあと、再レビュー依頼を押してください。</div></div>';
     }
 
     function renderChecklist() {
@@ -714,6 +740,7 @@ export class DashboardController {
     function updateMailButtons(mail) {
       document.getElementById('saveButton').disabled = !mail;
       document.getElementById('reviewButton').disabled = !mail || mail.status !== 'draft';
+      document.getElementById('reReviewButton').disabled = !mail || mail.status !== 'rejected';
       document.getElementById('rejectButton').disabled = !mail || !['draft', 'in_review', 'approved'].includes(mail.status);
       document.getElementById('approveButton').disabled = !mail || mail.status !== 'in_review' || !state.checklistComplete;
       document.getElementById('queueButton').disabled = !mail || mail.status !== 'approved' || !state.checklistComplete;

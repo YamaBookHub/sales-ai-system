@@ -38,6 +38,11 @@ export class MailController {
     return ok(await this.mail.requestReview(id));
   }
 
+  @Post(':id/request-rereview')
+  async requestReReview(@Param('id') id: string) {
+    return ok(await this.mail.requestReReview(id));
+  }
+
   @Post(':id/approve')
   async approve(@Param('id') id: string) {
     return ok(await this.mail.approve(id));
