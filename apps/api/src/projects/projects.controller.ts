@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ProjectStatus } from '@prisma/client';
 import { ok } from '../common/api-response';
-import { CreateProjectDto, ImportCampfireProjectDto } from './projects.dto';
+import { CreateProjectDto, ImportCampfireProjectDto, SearchCampfireProjectsDto } from './projects.dto';
 import { ProjectsService } from './projects.service';
 
 @Controller('projects')
@@ -21,5 +21,10 @@ export class ProjectsController {
   @Post('import/campfire')
   async importCampfire(@Body() dto: ImportCampfireProjectDto) {
     return ok(await this.projects.importCampfire(dto));
+  }
+
+  @Post('search/campfire')
+  async searchCampfire(@Body() dto: SearchCampfireProjectsDto) {
+    return ok(await this.projects.searchCampfire(dto));
   }
 }

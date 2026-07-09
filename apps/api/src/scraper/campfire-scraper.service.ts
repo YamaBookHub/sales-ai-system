@@ -27,8 +27,46 @@ export type ScrapedCampfireProject = {
   externalUrls: string[];
 };
 
+export type CampfireSearchInput = {
+  keyword?: string;
+  category?: string;
+  amountMin?: number;
+  amountMax?: number;
+  supporterMin?: number;
+  supporterMax?: number;
+  status?: string;
+};
+
+export type CampfireSearchResult = {
+  title: string;
+  url: string;
+  amount: number;
+  supporterCount: number;
+  category: string;
+  daysLeft: number | null;
+  isActive: boolean;
+  summary: string;
+};
+
 @Injectable()
 export class CampfireScraperService {
+  async search(input: CampfireSearchInput): Promise<{ items: CampfireSearchResult[]; total: number }> {
+    const browser = await chromium.launch({ headless: true });
+
+    try {
+      const page = await browser.newPage({
+        userAgent:
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36'
+      });
+      await openPage(page, buildCampfireSearchUrl(input.keyword));
+      const html = await page.content();
+      const items = extractSearchResults(html).filter((item) => matchesSearchInput(item, input)).slice(0, 30);
+      return { items, total: items.length };
+    } finally {
+      await browser.close();
+    }
+  }
+
   async scrape(inputUrl: string): Promise<ScrapedCampfireProject> {
     const url = validateCampfireUrl(inputUrl);
     const browser = await chromium.launch({ headless: true });
@@ -51,6 +89,67 @@ export class CampfireScraperService {
       await browser.close();
     }
   }
+}
+
+function buildCampfireSearchUrl(keyword?: string) {
+  const url = new URL('/projects/search', CAMPFIRE_ORIGIN);
+  if (keyword?.trim()) {
+    url.searchParams.set('word', keyword.trim());
+  }
+  return url.toString();
+}
+
+function extractSearchResults(html: string): CampfireSearchResult[] {
+  const $ = cheerio.load(html);
+  const links = $('a[href*="/projects/"][href*="/view"]')
+    .toArray()
+    .map((element) => {
+      const url = absolutize($(element).attr('href') || '', CAMPFIRE_ORIGIN);
+      const card = $(element).closest('article, li, div');
+      const cardText = clean(card.text() || $(element).text());
+      const title = clean($(element).find('h2,h3').first().text() || $(element).text()).slice(0, 140);
+      const amount = parseInteger(findFirst(cardText, [/([0-9,]+)\s*円/g]));
+      const supporterCount = parseInteger(findFirst(cardText, [/([0-9,]+)\s*人/g]));
+      const daysLeftText = findFirst(cardText, [/残り\s*([0-9]+)\s*日/g, /あと\s*([0-9]+)\s*日/g]);
+      const daysLeft = daysLeftText ? parseInteger(daysLeftText) : null;
+      const isActive = !/(終了|募集終了|SUCCESS|失敗)/i.test(cardText);
+
+      return {
+        title: title || extractTitleFromUrl(url),
+        url,
+        amount,
+        supporterCount,
+        category: '',
+        daysLeft,
+        isActive,
+        summary: cardText.slice(0, 180)
+      };
+    })
+    .filter((item) => item.url && item.title);
+
+  return uniqueBy(links, (item) => normalizeUrlForUnique(item.url));
+}
+
+function matchesSearchInput(item: CampfireSearchResult, input: CampfireSearchInput) {
+  const category = normalizeText(input.category);
+  const haystack = normalizeText([item.title, item.summary, item.category, item.url].join(' '));
+
+  if (category && !haystack.includes(category)) return false;
+  if (typeof input.amountMin === 'number' && item.amount < input.amountMin) return false;
+  if (typeof input.amountMax === 'number' && item.amount > input.amountMax) return false;
+  if (typeof input.supporterMin === 'number' && item.supporterCount < input.supporterMin) return false;
+  if (typeof input.supporterMax === 'number' && item.supporterCount > input.supporterMax) return false;
+  if (input.status === 'active' && !item.isActive) return false;
+  if (input.status === 'endingSoon' && (item.daysLeft === null || item.daysLeft > 7)) return false;
+  return true;
+}
+
+function normalizeText(value: string | undefined) {
+  return (value || '').toLowerCase().replace(/\s+/g, '');
+}
+
+function extractTitleFromUrl(value: string) {
+  return value.match(/projects\/([0-9]+)/)?.[1] ? `CAMPFIRE project ${value.match(/projects\/([0-9]+)/)?.[1]}` : value;
 }
 
 async function openPage(page: Page, url: string) {

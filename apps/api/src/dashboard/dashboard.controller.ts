@@ -298,15 +298,13 @@ export class DashboardController {
     }
     .tab-panel { display: none; }
     .tab-panel[data-active="true"] { display: block; }
-    .filters {
+    .search-panel {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
-      padding: 12px;
-      border-bottom: 1px solid var(--line);
-      background: #fbfcfd;
+      margin-top: 14px;
     }
-    .filters .toolbar { grid-column: 1 / -1; }
+    .search-panel .toolbar { grid-column: 1 / -1; }
     a {
       color: var(--accent);
       text-decoration: none;
@@ -364,6 +362,28 @@ export class DashboardController {
             <button class="primary" onclick="importCampfire()">取り込む</button>
             <span id="importStatus" class="status"></span>
           </div>
+          <div class="row" style="margin-top:16px">
+            <label>CAMPFIRE候補検索</label>
+            <div class="search-panel">
+              <input id="campfireSearchKeyword" placeholder="キーワード・商品名" />
+              <input id="campfireSearchCategory" placeholder="カテゴリ" />
+              <input id="campfireAmountMin" type="number" min="0" step="10000" placeholder="支援額 下限" />
+              <input id="campfireAmountMax" type="number" min="0" step="10000" placeholder="支援額 上限" />
+              <input id="campfireSupporterMin" type="number" min="0" step="1" placeholder="サポーター 下限" />
+              <input id="campfireSupporterMax" type="number" min="0" step="1" placeholder="サポーター 上限" />
+              <div class="toolbar">
+                <select id="campfireSearchStatus">
+                  <option value="">すべて</option>
+                  <option value="active">現在公開中</option>
+                  <option value="endingSoon">終了間近</option>
+                </select>
+                <button class="primary" onclick="searchCampfireCandidates()">候補を検索</button>
+                <button onclick="clearCampfireSearch()">クリア</button>
+                <span id="campfireSearchStatusText" class="status"></span>
+              </div>
+            </div>
+          </div>
+          <div id="campfireCandidates"></div>
         </div>
       </section>
 
@@ -376,22 +396,6 @@ export class DashboardController {
               <option value="sns_video_ad">SNS動画・広告版</option>
             </select>
             <button class="primary" id="generateButton" onclick="generateMail()" disabled>メール生成</button>
-          </div>
-        </div>
-        <div class="filters">
-          <input id="leadSearch" placeholder="会社・案件・URLを検索" oninput="updateLeadFilter()" />
-          <input id="leadCategoryFilter" placeholder="カテゴリ" oninput="updateLeadFilter()" />
-          <input id="leadAmountMin" type="number" min="0" step="10000" placeholder="支援額 下限" oninput="updateLeadFilter()" />
-          <input id="leadAmountMax" type="number" min="0" step="10000" placeholder="支援額 上限" oninput="updateLeadFilter()" />
-          <input id="leadSupporterMin" type="number" min="0" step="1" placeholder="サポーター 下限" oninput="updateLeadFilter()" />
-          <input id="leadSupporterMax" type="number" min="0" step="1" placeholder="サポーター 上限" oninput="updateLeadFilter()" />
-          <div class="toolbar">
-            <select id="leadStatusFilter" onchange="updateLeadFilter()">
-              <option value="">すべて</option>
-              <option value="active">現在公開中</option>
-              <option value="endingSoon">終了間近</option>
-            </select>
-            <button onclick="clearLeadFilter()">クリア</button>
           </div>
         </div>
         <div class="body" style="padding:0">
@@ -509,7 +513,7 @@ export class DashboardController {
       checklistComplete: false,
       selectedLeadId: null,
       selectedMailId: null,
-      leadFilter: { keyword: '', category: '', amountMin: null, amountMax: null, supporterMin: null, supporterMax: null, status: '' }
+      campfireCandidates: []
     };
 
     async function api(path, options = {}) {
@@ -563,6 +567,46 @@ export class DashboardController {
       } catch (error) {
         setStatus('importStatus', error.message, 'error');
       }
+    }
+
+    async function searchCampfireCandidates() {
+      setStatus('campfireSearchStatusText', '検索中', 'warn');
+      try {
+        const result = await api('/api/projects/search/campfire', {
+          method: 'POST',
+          body: JSON.stringify(compactPayload({
+            keyword: fieldValue('campfireSearchKeyword'),
+            category: fieldValue('campfireSearchCategory'),
+            amountMin: numberFieldValue('campfireAmountMin'),
+            amountMax: numberFieldValue('campfireAmountMax'),
+            supporterMin: numberFieldValue('campfireSupporterMin'),
+            supporterMax: numberFieldValue('campfireSupporterMax'),
+            status: fieldValue('campfireSearchStatus')
+          }))
+        });
+        state.campfireCandidates = result.items || [];
+        renderCampfireCandidates();
+        setStatus('campfireSearchStatusText', state.campfireCandidates.length + '件', 'ok');
+      } catch (error) {
+        setStatus('campfireSearchStatusText', error.message, 'error');
+      }
+    }
+
+    function clearCampfireSearch() {
+      ['campfireSearchKeyword', 'campfireSearchCategory', 'campfireAmountMin', 'campfireAmountMax', 'campfireSupporterMin', 'campfireSupporterMax'].forEach((id) => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('campfireSearchStatus').value = '';
+      state.campfireCandidates = [];
+      renderCampfireCandidates();
+      setStatus('campfireSearchStatusText', '', '');
+    }
+
+    async function importCampfireCandidate(index) {
+      const candidate = state.campfireCandidates[index];
+      if (!candidate?.url) return;
+      document.getElementById('campfireUrl').value = candidate.url;
+      await importCampfire();
     }
 
     async function generateMail() {
@@ -709,8 +753,7 @@ export class DashboardController {
     }
 
     function renderLeads() {
-      const visibleLeads = state.leads.filter(leadMatchesFilter);
-      const rows = visibleLeads.map((lead) => {
+      const rows = state.leads.map((lead) => {
         const company = lead.company?.name || lead.companyId;
         const project = lead.project?.title || '案件名なし';
         return '<tr data-selected="' + (lead.id === state.selectedLeadId) + '" onclick="selectLead(\\'' + lead.id + '\\')">' +
@@ -721,71 +764,29 @@ export class DashboardController {
           '<td>' + escapeHtml(labelPriority(lead.priority)) + '</td>' +
         '</tr>';
       }).join('');
-      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="5" class="muted">条件に合うリードがありません</td></tr>';
+      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="5" class="muted">まだリードがありません</td></tr>';
       document.getElementById('generateButton').disabled = !state.selectedLeadId;
       const selected = state.leads.find((lead) => lead.id === state.selectedLeadId);
       document.getElementById('selectedLead').textContent = selected ? (selected.company?.name || selected.id) : '未選択';
     }
 
-    function updateLeadFilter() {
-      state.leadFilter = {
-        keyword: fieldValue('leadSearch'),
-        category: fieldValue('leadCategoryFilter'),
-        amountMin: numberFieldValue('leadAmountMin'),
-        amountMax: numberFieldValue('leadAmountMax'),
-        supporterMin: numberFieldValue('leadSupporterMin'),
-        supporterMax: numberFieldValue('leadSupporterMax'),
-        status: fieldValue('leadStatusFilter')
-      };
-      renderLeads();
-    }
-
-    function clearLeadFilter() {
-      document.getElementById('leadSearch').value = '';
-      document.getElementById('leadCategoryFilter').value = '';
-      document.getElementById('leadAmountMin').value = '';
-      document.getElementById('leadAmountMax').value = '';
-      document.getElementById('leadSupporterMin').value = '';
-      document.getElementById('leadSupporterMax').value = '';
-      document.getElementById('leadStatusFilter').value = '';
-      updateLeadFilter();
-    }
-
-    function leadMatchesFilter(lead) {
-      const keyword = normalizeSearchText(state.leadFilter.keyword);
-      const category = normalizeSearchText(state.leadFilter.category);
-      const project = lead.project || {};
-      const haystack = normalizeSearchText([
-        lead.company?.name,
-        project.title,
-        project.url,
-        project.category,
-        lead.reason
-      ].filter(Boolean).join(' '));
-
-      if (keyword && !haystack.includes(keyword)) return false;
-      if (category && !normalizeSearchText(project.category || '').includes(category)) return false;
-      if (state.leadFilter.amountMin !== null && Number(project.amount || 0) < state.leadFilter.amountMin) return false;
-      if (state.leadFilter.amountMax !== null && Number(project.amount || 0) > state.leadFilter.amountMax) return false;
-      if (state.leadFilter.supporterMin !== null && Number(project.supporterCount || 0) < state.leadFilter.supporterMin) return false;
-      if (state.leadFilter.supporterMax !== null && Number(project.supporterCount || 0) > state.leadFilter.supporterMax) return false;
-      if (state.leadFilter.status === 'active' && project.status !== 'active') return false;
-      if (state.leadFilter.status === 'endingSoon' && !isEndingSoon(lead)) return false;
-      return true;
-    }
-
-    function isEndingSoon(lead) {
-      if (lead.project?.endDate) {
-        const days = Math.ceil((new Date(lead.project.endDate).getTime() - Date.now()) / 86400000);
-        return days >= 0 && days <= 7;
+    function renderCampfireCandidates() {
+      const container = document.getElementById('campfireCandidates');
+      if (!state.campfireCandidates.length) {
+        container.innerHTML = '';
+        return;
       }
-      const reason = lead.reason || '';
-      const match = reason.match(/残り日数: ?([0-9]+)/);
-      return match ? Number(match[1]) <= 7 : false;
-    }
-
-    function normalizeSearchText(value) {
-      return String(value || '').toLowerCase().replace(/\\s+/g, '');
+      const rows = state.campfireCandidates.map((item, index) => {
+        return '<tr>' +
+          '<td><div class="clip">' + escapeHtml(item.title) + '</div><div class="muted clip">' + escapeHtml(item.url) + '</div></td>' +
+          '<td>' + formatCurrency(item.amount) + '</td>' +
+          '<td>' + formatNumber(item.supporterCount) + '人</td>' +
+          '<td>' + (item.daysLeft === null ? '-' : escapeHtml(item.daysLeft + '日')) + '</td>' +
+          '<td><button onclick="importCampfireCandidate(' + index + ')">取り込む</button></td>' +
+        '</tr>';
+      }).join('');
+      container.innerHTML =
+        '<table style="margin-top:12px"><thead><tr><th>候補URL</th><th style="width:100px">支援額</th><th style="width:96px">支援者</th><th style="width:74px">残り</th><th style="width:86px"></th></tr></thead><tbody>' + rows + '</tbody></table>';
     }
 
     function numberFieldValue(id) {
@@ -1126,7 +1127,7 @@ export class DashboardController {
     }
 
     function compactPayload(payload) {
-      return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== ''));
+      return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== '' && value !== null && value !== undefined));
     }
 
     function toDateTimeLocal(value) {

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ProjectStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CampfireScraperService } from '../scraper/campfire-scraper.service';
-import { CreateProjectDto, ImportCampfireProjectDto } from './projects.dto';
+import { CreateProjectDto, ImportCampfireProjectDto, SearchCampfireProjectsDto } from './projects.dto';
 
 @Injectable()
 export class ProjectsService {
@@ -35,6 +35,10 @@ export class ProjectsService {
         category: dto.category
       }
     });
+  }
+
+  searchCampfire(dto: SearchCampfireProjectsDto) {
+    return this.campfireScraper.search(dto);
   }
 
   async importCampfire(dto: ImportCampfireProjectDto) {

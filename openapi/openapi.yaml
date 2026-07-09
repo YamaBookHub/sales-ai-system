@@ -92,6 +92,20 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ImportCampfireProjectResponse' }
+  /api/projects/search/campfire:
+    post:
+      summary: Search CAMPFIRE project URL candidates before importing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SearchCampfireProjectsRequest' }
+      responses:
+        '200':
+          description: CAMPFIRE project candidates
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CampfireSearchResponse' }
   /api/leads:
     get:
       summary: List sales leads
@@ -524,6 +538,48 @@ components:
         scraped:
           type: object
           additionalProperties: true
+    SearchCampfireProjectsRequest:
+      type: object
+      properties:
+        keyword:
+          type: string
+          description: 会社名、案件名、URL、商品名の曖昧検索キーワード
+        category:
+          type: string
+        amountMin:
+          type: integer
+          minimum: 0
+        amountMax:
+          type: integer
+          minimum: 0
+        supporterMin:
+          type: integer
+          minimum: 0
+        supporterMax:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum: [active, endingSoon]
+          description: activeは現在公開中、endingSoonは終了間近の候補を返す
+    CampfireSearchItem:
+      type: object
+      properties:
+        title: { type: string }
+        url: { type: string }
+        amount: { type: integer }
+        supporterCount: { type: integer }
+        category: { type: string }
+        daysLeft: { type: integer, nullable: true }
+        isActive: { type: boolean }
+        summary: { type: string }
+    CampfireSearchResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CampfireSearchItem' }
+        total: { type: integer }
     ProjectListResponse:
       type: object
       properties:

@@ -39,3 +39,33 @@ export class ImportCampfireProjectDto {
   @MinLength(1)
   url!: string;
 }
+
+export class SearchCampfireProjectsDto {
+  @IsOptional()
+  @IsString()
+  keyword?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsInt()
+  amountMin?: number;
+
+  @IsOptional()
+  @IsInt()
+  amountMax?: number;
+
+  @IsOptional()
+  @IsInt()
+  supporterMin?: number;
+
+  @IsOptional()
+  @IsInt()
+  supporterMax?: number;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+}
