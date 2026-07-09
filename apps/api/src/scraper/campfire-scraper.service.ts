@@ -36,6 +36,8 @@ export type CampfireSearchInput = {
   amountMax?: number;
   supporterMin?: number;
   supporterMax?: number;
+  profileProjectMin?: number;
+  profileProjectMax?: number;
   limit?: number;
   status?: string;
 };
@@ -107,8 +109,10 @@ export class CampfireScraperService {
       });
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const resultLimit = normalizeSearchLimit(input.limit);
-      const items = await collectSearchResults(page, resultLimit);
-      return { items, total: items.length };
+      const searchLimit = hasProfileProjectFilter(input) ? Math.min(Math.max(resultLimit * 3, 30), 100) : resultLimit;
+      const items = await collectSearchResults(page, searchLimit);
+      const filteredItems = items.filter((item) => matchesProfileProjectRange(item, input)).slice(0, resultLimit);
+      return { items: filteredItems, total: filteredItems.length };
     } finally {
       await browser.close();
     }
@@ -282,6 +286,18 @@ async function clickNextSearchResults(page: Page) {
 
 function normalizeSearchLimit(limit?: number) {
   return SEARCH_RESULT_LIMITS.includes(Number(limit)) ? Number(limit) : DEFAULT_SEARCH_RESULT_LIMIT;
+}
+
+function hasProfileProjectFilter(input: CampfireSearchInput) {
+  return typeof input.profileProjectMin === 'number' || typeof input.profileProjectMax === 'number';
+}
+
+function matchesProfileProjectRange(item: CampfireSearchResult, input: CampfireSearchInput) {
+  if (!hasProfileProjectFilter(input)) return true;
+  if (item.profileProjectCount === null) return false;
+  if (typeof input.profileProjectMin === 'number' && item.profileProjectCount < input.profileProjectMin) return false;
+  if (typeof input.profileProjectMax === 'number' && item.profileProjectCount > input.profileProjectMax) return false;
+  return true;
 }
 
 async function fetchProfileProjectCount(

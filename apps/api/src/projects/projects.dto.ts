@@ -67,6 +67,14 @@ export class SearchCampfireProjectsDto {
 
   @IsOptional()
   @IsInt()
+  profileProjectMin?: number;
+
+  @IsOptional()
+  @IsInt()
+  profileProjectMax?: number;
+
+  @IsOptional()
+  @IsInt()
   limit?: number;
 
   @IsOptional()

@@ -556,6 +556,14 @@ components:
         category:
           type: string
           description: 検索用カテゴリvalue。CAMPFIREカテゴリURL、preset:カテゴリ名、旧形式のカテゴリ名を受け付ける。
+        profileProjectMin:
+          type: integer
+          minimum: 0
+          description: 一覧上で取得できた過去プロジェクト数の下限。詳細ページは開かない。
+        profileProjectMax:
+          type: integer
+          minimum: 0
+          description: 一覧上で取得できた過去プロジェクト数の上限。詳細ページは開かない。
         limit:
           type: integer
           enum: [10, 50, 100]
