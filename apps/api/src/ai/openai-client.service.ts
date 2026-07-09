@@ -116,7 +116,11 @@ export class OpenAiClientService {
       '出力はJSONのみ。キーは subject, body, factsUsed, assumptions, riskFlags。',
       'subject/bodyは文字列、factsUsed/assumptions/riskFlagsは文字列配列。',
       'subjectは必ず「CAMPFIREでのプロジェクトを拝見しご連絡いたしました」にしてください。',
-      'bodyは必ず次の定型文の順番、改行、敬体を守ってください。見出しや箇条書きは入れないでください。',
+      'bodyは必ず次の定型文の順番、敬体を守ってください。見出しや箇条書きは入れないでください。',
+      '改行は読みやすい営業メールとして整えてください。1段落ごとに空行を1つだけ入れ、1文の途中に空行を入れないでください。',
+      '1段落は原則1〜2文にしてください。句点「。」で自然に区切り、読点「、」の直後で段落を分けないでください。',
+      '短い固定挨拶以外は、テンプレートの改行位置をそのままコピーせず、意味のまとまりごとに自然な段落にしてください。',
+      '「見せることで」の前後で「見せる」を重複させないでください。',
       '【企業名＋ご担当者】には、会社名がある場合は「会社名 ご担当者様」と入れてください。担当者名がない場合に担当者名を推測しないでください。',
       '【過去の商品の傾向】には、入力情報から言えるカテゴリ・商品傾向を1文で入れてください。過去商品が不明な場合は「暮らしや課題解決に役立つプロダクト」のように、断定しすぎない表現にしてください。',
       '【現在出品中の商品名】にはproject.titleを使ってください。',
@@ -127,33 +131,19 @@ export class OpenAiClientService {
       '【企業名＋ご担当者】',
       '',
       'お世話になっております。',
-      'クラウドファンディング支援およびSNSマーケティング支援をしている、',
-      '株式会社第弐ヴォヌールの山本と申します。',
+      'クラウドファンディング支援およびSNSマーケティング支援をしている、株式会社第弐ヴォヌールの山本と申します。',
       '',
-      'CAMPFIREにて御社のプロジェクトを拝見し、',
-      '【過去の商品の傾向】を継続的にクラウドファンディングで展開されている点に、',
+      'CAMPFIREにて御社のプロジェクトを拝見し、【過去の商品の傾向】を継続的にクラウドファンディングで展開されている点に、弊社のクラウドファンディング支援・SNSマーケティング支援との親和性を感じ、ご連絡いたしました。',
       '',
-      '弊社のクラウドファンディング支援・SNSマーケティング支援との親和性を感じ、',
-      'ご連絡いたしました。',
+      '特に、現在公開中の「【現在出品中の商品名】」は、【商品の機能や特徴】といった特徴があり、【ターゲット】にとって使用シーンをイメージしやすい商品だと感じました。',
       '',
-      '特に、現在公開中の「【現在出品中の商品名】」は、',
-      '【商品の機能や特徴】といった特徴があり、',
-      '【ターゲット】にとって使用シーンをイメージしやすい商品だと感じました。',
+      'こうした体感を伝えやすい商品は、【動画での具体的な見せ方のアイデア】を短尺動画で伝えることで、SNSでも関心を持っていただきやすいと考えております。',
       '',
-      'こうした体感を伝えやすい商品は、',
-      '【動画での具体的な見せ方のアイデア】を短尺動画で見せることで、',
-      'SNSでも関心を持っていただきやすいと考えております。',
+      '弊社では、クラウドファンディング支援をはじめ、SNSを活用した集客、販売導線の設計、ディスプレイ広告・SNS広告を活用した認知拡大まで、一貫してお手伝いしております。',
       '',
-      '弊社では、クラウドファンディング支援をはじめ、SNSを活用した集客、',
-      '販売導線の設計、ディスプレイ広告・SNS広告を活用した認知拡大まで、',
-      '一貫してお手伝いしております。',
+      '実績としましても、SNS運用において1か月で総再生400万回超・フォロワー4,000人増加、クラウドファンディング領域では担当商品で3,500万円規模の売上がございます。',
       '',
-      '実績としましても、',
-      'SNS運用において1か月で総再生400万回超・フォロワー4,000人増加、',
-      'クラウドファンディング領域では担当商品で3,500万円規模の売上がございます。',
-      '',
-      'もしご関心がございましたら、',
-      'まずは15〜20分ほど、情報交換のお時間をいただけますと幸いです。',
+      'もしご関心がございましたら、まずは15〜20分ほど、情報交換のお時間をいただけますと幸いです。',
       '',
       'ご検討のほど、よろしくお願いいたします。',
       '送信済みのような表現、自動送信、断定的な成果保証、過度な売り込みは避けてください。',
@@ -213,13 +203,14 @@ export class OpenAiClientService {
     },
     input: SalesMailDraftInput
   ) {
-    const bodyParts = draft.body.split(/\n+/).map((part) => part.trim()).filter(Boolean);
+    const formattedBody = this.formatMailBody(draft.body);
+    const bodyParts = formattedBody.split(/\n+/).map((part) => part.trim()).filter(Boolean);
     const bodyText = bodyParts.join('\n');
     const expectedHeader = `${input.companyName} ご担当者様`;
     const startsWithCompany = bodyText.startsWith(input.companyName);
     const hasRecipient = bodyText.includes('ご担当者様') || bodyText.includes('ご担当者 様');
     const closing = 'ご検討のほど、よろしくお願いいたします。';
-    let body = draft.body.trim();
+    let body = formattedBody;
 
     if (!startsWithCompany) {
       body = `${expectedHeader}\n\n${body}`;
@@ -234,8 +225,64 @@ export class OpenAiClientService {
     return {
       ...draft,
       subject: this.expectedSubject(),
-      body: body.trim()
+      body: this.formatMailBody(body)
     };
+  }
+
+  private formatMailBody(value: string) {
+    const lines = value
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (!lines.length) return '';
+
+    const paragraphs: string[] = [];
+    let current = '';
+
+    for (const line of lines) {
+      if (!current) {
+        current = line;
+        continue;
+      }
+
+      if (this.shouldStartNewParagraph(current, line)) {
+        paragraphs.push(current);
+        current = line;
+      } else {
+        current = this.joinJapaneseLines(current, line);
+      }
+    }
+
+    if (current) {
+      paragraphs.push(current);
+    }
+
+    return paragraphs
+      .map((paragraph) => paragraph.replace(/見せる短尺動画で見せる/g, '短尺動画で伝える').trim())
+      .join('\n\n')
+      .replace(/、\n\n/g, '、')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  private shouldStartNewParagraph(previous: string, next: string) {
+    if (previous.endsWith('様')) return true;
+    if (next === 'お世話になっております。') return true;
+    if (previous === 'お世話になっております。') return false;
+    if (next.startsWith('CAMPFIREにて')) return true;
+    if (next.startsWith('特に、')) return true;
+    if (next.startsWith('こうした')) return true;
+    if (next.startsWith('弊社では、')) return true;
+    if (next.startsWith('実績としましても')) return true;
+    if (next.startsWith('もしご関心がございましたら')) return true;
+    if (next.startsWith('ご検討のほど')) return true;
+    return previous.endsWith('。') && next.length > 28;
+  }
+
+  private joinJapaneseLines(previous: string, next: string) {
+    return `${previous}${next}`;
   }
 
   private expectedSubject() {
