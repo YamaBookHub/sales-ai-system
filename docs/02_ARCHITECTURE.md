@@ -46,7 +46,7 @@ docs/
 現状の実装ではNestJS標準構成に合わせ、`apps/api/src/{companies,projects,leads,mail,ai,tracking,dashboard}` に分ける。
 
 ## 5. 状態遷移
-Leadは `discovered -> qualified -> drafted -> reviewing -> approved -> queued -> contacted -> replied` を基本とする。Mailは `draft -> in_review -> approved -> queued -> sending -> sent` を基本とし、レビューで不採用の場合は `draft/in_review/approved -> rejected` に遷移する。棄却後に本文を修正した場合は `rejected -> in_review` で再レビューに戻せる。
+Leadは `discovered -> qualified -> drafted -> reviewing -> approved -> queued -> contacted -> replied` を基本とする。Mailは `draft -> in_review -> approved -> queued -> sending -> sent` を基本とし、レビュー依頼後に不採用の場合は `in_review/approved -> rejected` に遷移する。棄却後に本文を修正した場合は `rejected -> in_review` で再レビューに戻せる。
 
 
 ---

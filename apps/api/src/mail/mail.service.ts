@@ -83,8 +83,8 @@ export class MailService {
 
   async reject(id: string, dto: RejectMailDto) {
     const email = await this.get(id);
-    if (!['draft', 'in_review', 'approved'].includes(email.status)) {
-      throw new ConflictException('Only draft, in_review or approved mail can be rejected.');
+    if (!['in_review', 'approved'].includes(email.status)) {
+      throw new ConflictException('Only in_review or approved mail can be rejected.');
     }
 
     const reason = dto.reason?.trim() || 'rejected_by_reviewer';

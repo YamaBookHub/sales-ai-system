@@ -191,20 +191,42 @@ export class DashboardController {
     }
     .checklist {
       display: grid;
-      gap: 8px;
+      gap: 10px;
       padding: 0;
       margin: 0;
       list-style: none;
     }
     .checklist label {
       display: grid;
-      grid-template-columns: 18px 1fr;
-      gap: 8px;
-      align-items: start;
+      grid-template-columns: 24px 1fr;
+      gap: 10px;
+      align-items: center;
+      min-height: 46px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fafbfc;
+      padding: 10px 12px;
       color: var(--text);
       font-size: 13px;
+      line-height: 1.5;
+      cursor: pointer;
+      user-select: none;
     }
-    .checklist input { width: 16px; margin-top: 2px; }
+    .checklist label:hover {
+      border-color: #b8c7d1;
+      background: #f4f8f7;
+    }
+    .checklist label:has(input:checked) {
+      border-color: #9fc9c1;
+      background: #eef8f6;
+    }
+    .checklist input {
+      width: 20px;
+      height: 20px;
+      margin: 0;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
     .split {
       display: grid;
       grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
@@ -797,7 +819,7 @@ export class DashboardController {
       document.getElementById('saveButton').disabled = !mail;
       document.getElementById('reviewButton').disabled = !mail || mail.status !== 'draft';
       document.getElementById('reReviewButton').disabled = !mail || mail.status !== 'rejected';
-      document.getElementById('rejectButton').disabled = !mail || !['draft', 'in_review', 'approved'].includes(mail.status);
+      document.getElementById('rejectButton').disabled = !mail || !['in_review', 'approved'].includes(mail.status);
       document.getElementById('approveButton').disabled = !mail || mail.status !== 'in_review' || !state.checklistComplete;
       document.getElementById('queueButton').disabled = !mail || mail.status !== 'approved' || !state.checklistComplete;
     }
