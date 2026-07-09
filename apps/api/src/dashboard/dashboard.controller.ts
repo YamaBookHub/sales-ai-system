@@ -562,9 +562,9 @@ export class DashboardController {
         return '<tr data-selected="' + (lead.id === state.selectedLeadId) + '" onclick="selectLead(\\'' + lead.id + '\\')">' +
           '<td><div class="clip">' + escapeHtml(company) + '</div></td>' +
           '<td><div class="clip">' + escapeHtml(project) + '</div><div class="muted clip">' + escapeHtml(lead.reason || '') + '</div></td>' +
-          '<td><span class="badge">' + escapeHtml(lead.status) + '</span></td>' +
+          '<td><span class="badge">' + escapeHtml(labelLeadStatus(lead.status)) + '</span></td>' +
           '<td>' + Number(lead.score || 0) + '</td>' +
-          '<td>' + escapeHtml(lead.priority) + '</td>' +
+          '<td>' + escapeHtml(labelPriority(lead.priority)) + '</td>' +
         '</tr>';
       }).join('');
       document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="5" class="muted">まだリードがありません</td></tr>';
@@ -629,8 +629,8 @@ export class DashboardController {
           detailItem('カテゴリ', project.category || '未取得') +
           detailItem('支援額', formatCurrency(project.amount)) +
           detailItem('支援者数', formatNumber(project.supporterCount) + '人') +
-          detailItem('Lead状態', lead.status) +
-          detailItem('優先度', lead.priority) +
+          detailItem('Lead状態', labelLeadStatus(lead.status)) +
+          detailItem('優先度', labelPriority(lead.priority)) +
           detailItem('スコア', String(Number(lead.score || 0))) +
           detailItem('作成日', formatDate(lead.createdAt)) +
         '</div>' +
@@ -656,13 +656,13 @@ export class DashboardController {
       const rows = state.mails.map((mail) => {
         return '<tr data-selected="' + (mail.id === state.selectedMailId) + '" onclick="selectMail(\\'' + mail.id + '\\')">' +
           '<td><div class="clip">' + escapeHtml(mail.subject) + '</div><div class="muted clip">' + escapeHtml(mail.company?.name || '') + '</div></td>' +
-          '<td><span class="badge">' + escapeHtml(mail.status) + '</span></td>' +
+          '<td><span class="badge">' + escapeHtml(labelMailStatus(mail.status)) + '</span></td>' +
           '<td>' + formatDate(mail.createdAt) + '</td>' +
         '</tr>';
       }).join('');
       document.getElementById('mailRows').innerHTML = rows || '<tr><td colspan="3" class="muted">まだメールがありません</td></tr>';
       const selected = state.mails.find((mail) => mail.id === state.selectedMailId);
-      document.getElementById('selectedMail').textContent = selected ? selected.status : '未選択';
+      document.getElementById('selectedMail').textContent = selected ? labelMailStatus(selected.status) : '未選択';
       updateMailButtons(selected);
     }
 
@@ -722,6 +722,45 @@ export class DashboardController {
     function formatDate(value) {
       if (!value) return '';
       return new Date(value).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function labelMailStatus(status) {
+      return ({
+        draft: '下書き',
+        in_review: '確認待ち',
+        rejected: '棄却',
+        approved: '承認済み',
+        queued: '送信待ち',
+        sending: '送信中',
+        sent: '送信済み',
+        failed: '送信失敗',
+        cancelled: 'キャンセル'
+      })[status] || status || '未設定';
+    }
+
+    function labelLeadStatus(status) {
+      return ({
+        discovered: '発見',
+        qualified: '候補',
+        drafted: '下書き済み',
+        reviewing: '確認中',
+        approved: '承認済み',
+        queued: '送信待ち',
+        contacted: '連絡済み',
+        replied: '返信あり',
+        meeting_candidate: '商談候補',
+        rejected: '対象外',
+        no_response: '返信なし',
+        archived: 'アーカイブ'
+      })[status] || status || '未設定';
+    }
+
+    function labelPriority(priority) {
+      return ({
+        high: '高',
+        medium: '中',
+        low: '低'
+      })[priority] || priority || '未設定';
     }
 
     function formatNumber(value) {
