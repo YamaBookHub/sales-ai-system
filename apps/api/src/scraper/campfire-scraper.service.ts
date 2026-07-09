@@ -20,7 +20,7 @@ export type ScrapedCampfireProject = {
   category: string;
   features: string[];
   profileUrl: string;
-  profileProjectCount: number;
+  profileProjectCount: number | null;
   websiteUrl: string;
   inquiryUrl: string;
   instagramUrl: string;
@@ -109,11 +109,13 @@ export class CampfireScraperService {
       });
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const resultLimit = normalizeSearchLimit(input.limit);
-      const searchLimit = hasProfileProjectFilter(input) ? Math.min(Math.max(resultLimit * 3, 100), 300) : resultLimit;
+      const needsProfileFilter = hasProfileProjectFilter(input);
+      const searchLimit = needsProfileFilter ? Math.min(Math.max(resultLimit * 3, 30), 100) : resultLimit;
       const items = await collectSearchResults(page, searchLimit);
-      const enrichedItems = await enrichWithProfileProjectCounts(page, items);
-      const filteredItems = enrichedItems.filter((item) => matchesProfileProjectRange(item, input)).slice(0, resultLimit);
-      return { items: filteredItems, total: filteredItems.length };
+      const enrichedItems = needsProfileFilter
+        ? await collectMatchingProfileProjectResults(page, items, input, resultLimit)
+        : await enrichWithProfileProjectCounts(page, items);
+      return { items: enrichedItems, total: enrichedItems.length };
     } finally {
       await browser.close();
     }
@@ -309,27 +311,54 @@ function normalizeSearchLimit(limit?: number) {
 async function enrichWithProfileProjectCounts(page: Page, items: CampfireSearchResult[]) {
   const enriched: CampfireSearchResult[] = [];
   for (const item of items) {
-    try {
-      await openPageFast(page, item.url);
-      const html = await page.content();
-      const fallbackText = (await page.locator('body').innerText({ timeout: 2500 })).replace(/\s+/g, ' ').trim();
-      const fallbackCount = extractProfileProjectCount(fallbackText);
-      enriched.push({ ...item, profileProjectCount: await fetchProfileProjectCount(page, html, fallbackCount, true) });
-    } catch {
-      enriched.push(item);
-    }
+    enriched.push(await enrichWithProfileProjectCount(page, item));
   }
   return enriched;
 }
 
-async function fetchProfileProjectCount(page: Page, projectHtml: string, fallbackCount = 0, strictProfileLookup = false) {
+async function collectMatchingProfileProjectResults(
+  page: Page,
+  items: CampfireSearchResult[],
+  input: CampfireSearchInput,
+  limit: number
+) {
+  const matched: CampfireSearchResult[] = [];
+  for (const item of items) {
+    const enriched = await enrichWithProfileProjectCount(page, item);
+    if (!matchesProfileProjectRange(enriched, input)) continue;
+    matched.push(enriched);
+    if (matched.length >= limit) break;
+  }
+  return matched;
+}
+
+async function enrichWithProfileProjectCount(page: Page, item: CampfireSearchResult) {
+  try {
+    await openPageFast(page, item.url);
+    const html = await page.content();
+    const fallbackText = (await page.locator('body').innerText({ timeout: 2500 })).replace(/\s+/g, ' ').trim();
+    const fallbackCount = extractProfileProjectCount(fallbackText);
+    return { ...item, profileProjectCount: await fetchProfileProjectCount(page, html, fallbackCount, true) };
+  } catch {
+    return item;
+  }
+}
+
+async function fetchProfileProjectCount(
+  page: Page,
+  projectHtml: string,
+  fallbackCount: number | null = null,
+  strictProfileLookup = false
+) {
+  if (fallbackCount !== null) return fallbackCount;
+
   const profileUrl = extractProfileUrl(projectHtml);
   if (!profileUrl) return strictProfileLookup ? null : fallbackCount;
 
   try {
     await openPageFast(page, profileUrl);
     const profileText = (await page.locator('body').innerText({ timeout: 2500 })).replace(/\s+/g, ' ').trim();
-    return extractProfileProjectCount(profileText) || fallbackCount;
+    return extractProfileProjectCount(profileText) ?? fallbackCount;
   } catch {
     return strictProfileLookup ? null : fallbackCount;
   }
@@ -451,7 +480,8 @@ function extractProfileProjectCount(text: string) {
     /([0-9,]+)\s*projects?/gi
   ];
 
-  return parseInteger(findFirst(text, patterns));
+  const countText = findFirst(text, patterns);
+  return countText ? parseInteger(countText) : null;
 }
 
 function extractExternalUrls($: cheerio.CheerioAPI, projectUrl: string) {

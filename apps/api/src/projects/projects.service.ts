@@ -209,8 +209,8 @@ function buildAutoUrlMemo(scraped: { externalUrls: string[] }) {
   return notes.join('\n') || undefined;
 }
 
-function buildLargeProfileWarning(scraped: { profileProjectCount: number }) {
-  if (scraped.profileProjectCount < 100) return undefined;
+function buildLargeProfileWarning(scraped: { profileProjectCount: number | null }) {
+  if (scraped.profileProjectCount === null || scraped.profileProjectCount < 100) return undefined;
   return `注意: この実行者は過去プロジェクトが${scraped.profileProjectCount}件以上ある可能性があります。過去案件の詳細スクレイピングは重くなるため、必要な場合だけ手動確認してください。`;
 }
 
