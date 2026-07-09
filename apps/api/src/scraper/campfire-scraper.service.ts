@@ -111,11 +111,14 @@ export class CampfireScraperService {
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const resultLimit = normalizeSearchLimit(input.limit);
       const needsProfileFilter = hasProfileProjectFilter(input);
+      const needsCategoryCheck = hasSelectedCategory(input);
       const searchLimit = needsProfileFilter ? Math.min(Math.max(resultLimit * 3, 30), 100) : resultLimit;
       const items = await collectSearchResults(page, searchLimit);
       const enrichedItems = needsProfileFilter
         ? await collectMatchingProfileProjectResults(page, items, input, resultLimit)
-        : await enrichWithProfileProjectCounts(page, items);
+        : needsCategoryCheck
+          ? await enrichWithProjectCategories(page, items)
+          : items;
       const filteredItems = enrichedItems.filter((item) => matchesSelectedCategory(item, input)).slice(0, resultLimit);
       return { items: filteredItems, total: filteredItems.length };
     } finally {
@@ -310,10 +313,10 @@ function normalizeSearchLimit(limit?: number) {
   return SEARCH_RESULT_LIMITS.includes(Number(limit)) ? Number(limit) : DEFAULT_SEARCH_RESULT_LIMIT;
 }
 
-async function enrichWithProfileProjectCounts(page: Page, items: CampfireSearchResult[]) {
+async function enrichWithProjectCategories(page: Page, items: CampfireSearchResult[]) {
   const enriched: CampfireSearchResult[] = [];
   for (const item of items) {
-    enriched.push(await enrichWithProfileProjectCount(page, item));
+    enriched.push(await enrichWithProjectCategory(page, item));
   }
   return enriched;
 }
@@ -351,6 +354,16 @@ async function enrichWithProfileProjectCount(page: Page, item: CampfireSearchRes
   }
 }
 
+async function enrichWithProjectCategory(page: Page, item: CampfireSearchResult) {
+  try {
+    await openPageFast(page, item.url);
+    const text = (await page.locator('body').innerText({ timeout: 2000 })).replace(/\s+/g, ' ').trim();
+    return { ...item, category: extractProjectCategory(text) };
+  } catch {
+    return item;
+  }
+}
+
 function matchesSelectedCategory(item: CampfireSearchResult, input: CampfireSearchInput) {
   const selectedCategory = normalizeCategoryLabel(input.categoryLabel || normalizePresetCategory(input.category));
   if (!selectedCategory) return true;
@@ -358,6 +371,10 @@ function matchesSelectedCategory(item: CampfireSearchResult, input: CampfireSear
   const actualCategory = normalizeCategoryLabel(item.category);
   if (!actualCategory) return false;
   return actualCategory === selectedCategory || actualCategory.includes(selectedCategory) || selectedCategory.includes(actualCategory);
+}
+
+function hasSelectedCategory(input: CampfireSearchInput) {
+  return Boolean(normalizeCategoryLabel(input.categoryLabel || normalizePresetCategory(input.category)));
 }
 
 async function fetchProfileProjectCount(

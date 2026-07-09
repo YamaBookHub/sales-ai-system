@@ -421,8 +421,8 @@ export class DashboardController {
                 <option value="100">取得上限 100件</option>
               </select>
               <select id="campfireSearchProfileProjectRange">
-                <option value=":99">過去プロジェクト 100件未満</option>
                 <option value="">過去プロジェクト すべて</option>
+                <option value=":99">過去プロジェクト 100件未満</option>
                 <option value="0:0">初回のみ</option>
                 <option value="1:3">1〜3件</option>
                 <option value="4:9">4〜9件</option>
@@ -728,7 +728,7 @@ export class DashboardController {
         document.getElementById(id).value = '';
       });
       document.getElementById('campfireFetchLimit').value = '10';
-      document.getElementById('campfireSearchProfileProjectRange').value = ':99';
+      document.getElementById('campfireSearchProfileProjectRange').value = '';
       document.getElementById('campfireResultLimit').value = '10';
       document.getElementById('campfireDisplayStatus').value = '';
       document.getElementById('campfireDisplayAmountRange').value = '';
