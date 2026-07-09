@@ -496,6 +496,15 @@ export class DashboardController {
               <option value="300:500">300〜500人</option>
               <option value="500:">500人以上</option>
             </select>
+            <select id="campfireDisplayProfileProjectRange" onchange="renderCampfireCandidates()">
+              <option value="">過去プロジェクト すべて</option>
+              <option value="0:0">初回のみ</option>
+              <option value="1:3">1〜3件</option>
+              <option value="4:9">4〜9件</option>
+              <option value="10:29">10〜29件</option>
+              <option value="30:99">30〜99件</option>
+              <option value="100:">100件以上</option>
+            </select>
           </div>
           <div id="campfireCandidates">
             <div class="muted">左の検索欄で候補URLを探すと、ここに表示されます。</div>
@@ -708,6 +717,7 @@ export class DashboardController {
       document.getElementById('campfireDisplayStatus').value = '';
       document.getElementById('campfireDisplayAmountRange').value = '';
       document.getElementById('campfireDisplaySupporterRange').value = '';
+      document.getElementById('campfireDisplayProfileProjectRange').value = '';
       state.campfireCandidates = [];
       renderCampfireCandidates();
       setStatus('campfireSearchStatusText', '', '');
@@ -909,6 +919,7 @@ export class DashboardController {
               '<span>支援額 ' + formatCurrency(item.amount) + '</span>' +
               '<span>支援者 ' + formatNumber(item.supporterCount) + '人</span>' +
               '<span>残り ' + (item.daysLeft === null ? '-' : escapeHtml(item.daysLeft + '日')) + '</span>' +
+              '<span>過去 ' + (item.profileProjectCount === null ? '-' : escapeHtml(item.profileProjectCount + '件')) + '</span>' +
             '</div>' +
           '</div>' +
           '<button class="primary" onclick="importCampfireCandidate(' + originalIndex + ')">取り込む</button>' +
@@ -920,12 +931,16 @@ export class DashboardController {
     function matchesCampfireDisplayFilters(item) {
       const amountRange = rangeFieldValue('campfireDisplayAmountRange');
       const supporterRange = rangeFieldValue('campfireDisplaySupporterRange');
+      const profileProjectRange = rangeFieldValue('campfireDisplayProfileProjectRange');
       const status = fieldValue('campfireDisplayStatus');
 
       if (amountRange.min !== null && item.amount < amountRange.min) return false;
       if (amountRange.max !== null && item.amount > amountRange.max) return false;
       if (supporterRange.min !== null && item.supporterCount < supporterRange.min) return false;
       if (supporterRange.max !== null && item.supporterCount > supporterRange.max) return false;
+      if ((profileProjectRange.min !== null || profileProjectRange.max !== null) && item.profileProjectCount === null) return false;
+      if (profileProjectRange.min !== null && item.profileProjectCount < profileProjectRange.min) return false;
+      if (profileProjectRange.max !== null && item.profileProjectCount > profileProjectRange.max) return false;
       if (status === 'active' && !item.isActive) return false;
       if (status === 'endingSoon' && (item.daysLeft === null || item.daysLeft > 7)) return false;
       return true;

@@ -212,6 +212,7 @@ function extractSearchResults(html: string): CampfireSearchResult[] {
       const daysLeftText = findFirst(cardText, [/残り\s*([0-9]+)\s*日/g, /あと\s*([0-9]+)\s*日/g]);
       const daysLeft = daysLeftText ? parseInteger(daysLeftText) : null;
       const isActive = !/(終了|募集終了|SUCCESS|失敗)/i.test(cardText);
+      const profileProjectCount = extractProfileProjectCount(cardText);
 
       return {
         title: title || extractTitleFromUrl(url),
@@ -221,7 +222,7 @@ function extractSearchResults(html: string): CampfireSearchResult[] {
         category: '',
         daysLeft,
         isActive,
-        profileProjectCount: null,
+        profileProjectCount,
         summary: cardText.slice(0, 180)
       };
     })
