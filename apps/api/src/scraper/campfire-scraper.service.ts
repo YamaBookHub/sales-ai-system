@@ -127,6 +127,7 @@ export class CampfireScraperService {
       await openPage(page, url);
       const html = await page.content();
       const project = extractProject(html, url);
+      project.profileProjectCount = await fetchProfileProjectCount(page, html, project.profileProjectCount);
 
       if (!project.projectTitle) {
         throw new BadRequestException('CAMPFIREプロジェクト名を取得できませんでした。');
@@ -253,13 +254,28 @@ async function enrichWithProfileProjectCounts(page: Page, items: CampfireSearchR
   for (const item of items) {
     try {
       await openPage(page, item.url);
-      const bodyText = (await page.locator('body').innerText({ timeout: 5000 })).replace(/\s+/g, ' ').trim();
-      enriched.push({ ...item, profileProjectCount: extractProfileProjectCount(bodyText) });
+      const html = await page.content();
+      const fallbackText = (await page.locator('body').innerText({ timeout: 5000 })).replace(/\s+/g, ' ').trim();
+      const fallbackCount = extractProfileProjectCount(fallbackText);
+      enriched.push({ ...item, profileProjectCount: await fetchProfileProjectCount(page, html, fallbackCount) });
     } catch {
       enriched.push(item);
     }
   }
   return enriched;
+}
+
+async function fetchProfileProjectCount(page: Page, projectHtml: string, fallbackCount = 0) {
+  const profileUrl = extractProfileUrl(projectHtml);
+  if (!profileUrl) return fallbackCount;
+
+  try {
+    await openPage(page, profileUrl);
+    const profileText = (await page.locator('body').innerText({ timeout: 5000 })).replace(/\s+/g, ' ').trim();
+    return extractProfileProjectCount(profileText) || fallbackCount;
+  } catch {
+    return fallbackCount;
+  }
 }
 
 function matchesProfileProjectRange(item: CampfireSearchResult, input: CampfireSearchInput) {
@@ -318,6 +334,7 @@ function extractProject(html: string, projectUrl: string): ScrapedCampfireProjec
   const profileName = clean($('a[href*="/profile/"]').first().text());
   const urls = extractExternalUrls($, projectUrl);
   const classifiedUrls = classifyUrls(urls);
+  const profileUrl = extractProfileUrl(html);
   const profileProjectCount = extractProfileProjectCount(bodyText);
 
   return {
@@ -338,12 +355,7 @@ function extractProject(html: string, projectUrl: string): ScrapedCampfireProjec
     mainDescription: description,
     category: pickNearLabel(bodyText, ['カテゴリー', 'カテゴリ']) || '',
     features: extractFeatureCandidates($, description),
-    profileUrl: absolutize(
-      $('a[href*="/profile/"][href*="/projects"]').first().attr('href') ||
-        $('a[href*="/profile/"]').first().attr('href') ||
-        '',
-      CAMPFIRE_ORIGIN
-    ),
+    profileUrl,
     profileProjectCount,
     websiteUrl: classifiedUrls.websiteUrl,
     inquiryUrl: classifiedUrls.inquiryUrl,
@@ -354,8 +366,19 @@ function extractProject(html: string, projectUrl: string): ScrapedCampfireProjec
   };
 }
 
+function extractProfileUrl(html: string) {
+  const $ = cheerio.load(html);
+  return absolutize(
+    $('a[href*="/profile/"][href*="/projects"]').first().attr('href') ||
+      $('a[href*="/profile/"]').first().attr('href') ||
+      '',
+    CAMPFIRE_ORIGIN
+  );
+}
+
 function extractProfileProjectCount(text: string) {
   const patterns = [
+    /他に\s*([0-9,]+)\s*件のプロジェクトを掲載しています/g,
     /([0-9,]+)\s*件のプロジェクト/g,
     /プロジェクト\s*([0-9,]+)\s*件/g,
     /([0-9,]+)\s*projects?/gi
