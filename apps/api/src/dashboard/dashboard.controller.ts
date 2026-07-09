@@ -409,10 +409,24 @@ export class DashboardController {
               <select id="campfireSearchCategory">
                 <option value="">カテゴリを取得中</option>
               </select>
-              <input id="campfireAmountMin" type="number" min="0" step="10000" placeholder="支援額 下限" />
-              <input id="campfireAmountMax" type="number" min="0" step="10000" placeholder="支援額 上限" />
-              <input id="campfireSupporterMin" type="number" min="0" step="1" placeholder="サポーター 下限" />
-              <input id="campfireSupporterMax" type="number" min="0" step="1" placeholder="サポーター 上限" />
+              <select id="campfireAmountRange">
+                <option value="">支援額 すべて</option>
+                <option value="0:500000">50万円未満</option>
+                <option value="500000:1000000">50万〜100万円</option>
+                <option value="1000000:3000000">100万〜300万円</option>
+                <option value="3000000:5000000">300万〜500万円</option>
+                <option value="5000000:10000000">500万〜1,000万円</option>
+                <option value="10000000:">1,000万円以上</option>
+              </select>
+              <select id="campfireSupporterRange">
+                <option value="">サポーター すべて</option>
+                <option value="0:30">30人未満</option>
+                <option value="30:50">30〜50人</option>
+                <option value="50:100">50〜100人</option>
+                <option value="100:300">100〜300人</option>
+                <option value="300:500">300〜500人</option>
+                <option value="500:">500人以上</option>
+              </select>
               <div class="toolbar">
                 <select id="campfireSearchStatus">
                   <option value="">すべて</option>
@@ -642,15 +656,17 @@ export class DashboardController {
       setStatus('campfireSearchStatusText', '検索中', 'warn');
       document.getElementById('campfireCandidateCount').textContent = '検索中';
       try {
+        const amountRange = rangeFieldValue('campfireAmountRange');
+        const supporterRange = rangeFieldValue('campfireSupporterRange');
         const result = await api('/api/projects/search/campfire', {
           method: 'POST',
           body: JSON.stringify(compactPayload({
             keyword: fieldValue('campfireSearchKeyword'),
             category: fieldValue('campfireSearchCategory'),
-            amountMin: numberFieldValue('campfireAmountMin'),
-            amountMax: numberFieldValue('campfireAmountMax'),
-            supporterMin: numberFieldValue('campfireSupporterMin'),
-            supporterMax: numberFieldValue('campfireSupporterMax'),
+            amountMin: amountRange.min,
+            amountMax: amountRange.max,
+            supporterMin: supporterRange.min,
+            supporterMax: supporterRange.max,
             status: fieldValue('campfireSearchStatus')
           }))
         });
@@ -665,7 +681,7 @@ export class DashboardController {
     }
 
     function clearCampfireSearch() {
-      ['campfireSearchKeyword', 'campfireSearchCategory', 'campfireAmountMin', 'campfireAmountMax', 'campfireSupporterMin', 'campfireSupporterMax'].forEach((id) => {
+      ['campfireSearchKeyword', 'campfireSearchCategory', 'campfireAmountRange', 'campfireSupporterRange'].forEach((id) => {
         document.getElementById(id).value = '';
       });
       document.getElementById('campfireSearchStatus').value = '';
@@ -871,6 +887,17 @@ export class DashboardController {
       if (!value) return null;
       const number = Number(value);
       return Number.isFinite(number) ? number : null;
+    }
+
+    function rangeFieldValue(id) {
+      const value = fieldValue(id);
+      const [min, max] = value.split(':');
+      const minNumber = min === '' || min === undefined ? null : Number(min);
+      const maxNumber = max === '' || max === undefined ? null : Number(max);
+      return {
+        min: Number.isFinite(minNumber) ? minNumber : null,
+        max: Number.isFinite(maxNumber) ? maxNumber : null
+      };
     }
 
     function renderAiAnalysis() {
