@@ -469,8 +469,8 @@ initial:{companyId}:{salesLeadId}:{contactPersonId}:{templateKey}:{yyyyMMdd}
 | key | 件名 |
 |---|---|
 | initial_1 | `{{projectName}}のSNS活用についてのご相談` |
-| initial_2 | `{{platformName}}掲載プロジェクトを拝見してご連絡しました` |
-| initial_3 | `クラウドファンディング施策についての情報交換のお願い` |
+| initial_2 | `CAMPFIREでのプロジェクトを拝見しご連絡いたしました` |
+| initial_3 | `{{platformName}}掲載プロジェクトを拝見してご連絡しました` |
 | reminder_1 | `先日ご連絡した件について` |
 | meeting_1 | `お打ち合わせ候補日のご相談` |
 

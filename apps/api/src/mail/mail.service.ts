@@ -48,7 +48,7 @@ export class MailService {
         leadId: lead.id,
         companyId: lead.companyId,
         templateKey: dto.templateKey,
-        subject: 'クラウドファンディング支援に関する情報交換のお願い',
+        subject: 'CAMPFIREでのプロジェクトを拝見しご連絡いたしました',
         body: dto.manualInstruction ?? 'TODO: AI-generated draft body will be inserted here.',
         status: 'draft',
         events: { create: { type: 'created' } }
