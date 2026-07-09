@@ -268,34 +268,78 @@ async function collectSearchResultsMatchingProfileRange(page: Page, input: Campf
   let items: CampfireSearchResult[] = [];
   let matched: CampfireSearchResult[] = [];
   let unchangedCount = 0;
+  const checkedUrls = new Set<string>();
   const maxCandidates = Math.min(Math.max(limit * 10, 100), 300);
+  const detailPage = await page.context().newPage();
 
-  for (let attempt = 0; attempt < 20 && matched.length < limit && items.length < maxCandidates; attempt += 1) {
-    const beforeCount = items.length;
-    items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
-    matched = items.filter((item) => matchesProfileProjectRange(item, input)).slice(0, limit);
-
-    if (matched.length >= limit || items.length >= maxCandidates) break;
-
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
-    await page.waitForTimeout(900);
-    items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
-    matched = items.filter((item) => matchesProfileProjectRange(item, input)).slice(0, limit);
-
-    if (matched.length >= limit || items.length >= maxCandidates) break;
-
-    const clickedMore = await clickNextSearchResults(page);
-    if (clickedMore) {
-      await page.waitForTimeout(1200);
+  try {
+    for (let attempt = 0; attempt < 20 && matched.length < limit && items.length < maxCandidates; attempt += 1) {
+      const beforeCount = items.length;
       items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
-      matched = items.filter((item) => matchesProfileProjectRange(item, input)).slice(0, limit);
-    }
+      matched = await collectProfileMatchesFromCandidates(detailPage, items, input, checkedUrls, matched, limit);
 
-    unchangedCount = items.length === beforeCount ? unchangedCount + 1 : 0;
-    if (!clickedMore && unchangedCount >= 2) break;
+      if (matched.length >= limit || items.length >= maxCandidates) break;
+
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
+      await page.waitForTimeout(900);
+      items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+      matched = await collectProfileMatchesFromCandidates(detailPage, items, input, checkedUrls, matched, limit);
+
+      if (matched.length >= limit || items.length >= maxCandidates) break;
+
+      const clickedMore = await clickNextSearchResults(page);
+      if (clickedMore) {
+        await page.waitForTimeout(1200);
+        items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+        matched = await collectProfileMatchesFromCandidates(detailPage, items, input, checkedUrls, matched, limit);
+      }
+
+      unchangedCount = items.length === beforeCount ? unchangedCount + 1 : 0;
+      if (!clickedMore && unchangedCount >= 2) break;
+    }
+  } finally {
+    await detailPage.close().catch(() => undefined);
   }
 
   return matched;
+}
+
+async function collectProfileMatchesFromCandidates(
+  page: Page,
+  items: CampfireSearchResult[],
+  input: CampfireSearchInput,
+  checkedUrls: Set<string>,
+  matched: CampfireSearchResult[],
+  limit: number
+) {
+  const nextMatched = [...matched];
+  const matchedUrls = new Set(nextMatched.map((item) => normalizeUrlForUnique(item.url)));
+
+  for (const item of items) {
+    if (nextMatched.length >= limit) break;
+
+    const key = normalizeUrlForUnique(item.url);
+    if (checkedUrls.has(key) || matchedUrls.has(key)) continue;
+    checkedUrls.add(key);
+
+    const enriched = item.profileProjectCount === null ? await enrichWithProjectPageProfileCount(page, item) : item;
+    if (!matchesProfileProjectRange(enriched, input)) continue;
+
+    nextMatched.push(enriched);
+    matchedUrls.add(key);
+  }
+
+  return nextMatched;
+}
+
+async function enrichWithProjectPageProfileCount(page: Page, item: CampfireSearchResult) {
+  try {
+    await openPageFast(page, item.url);
+    const text = (await page.locator('body').innerText({ timeout: 2500 })).replace(/\s+/g, ' ').trim();
+    return { ...item, profileProjectCount: extractProfileProjectCount(text) };
+  } catch {
+    return item;
+  }
 }
 
 async function clickNextSearchResults(page: Page) {

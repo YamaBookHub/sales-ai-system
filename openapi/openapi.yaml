@@ -559,11 +559,11 @@ components:
         profileProjectMin:
           type: integer
           minimum: 0
-          description: 一覧上で取得できた過去プロジェクト数の下限。詳細ページは開かない。
+          description: CAMPFIRE検索結果ページ、または候補URLのプロジェクトページ上部で取得できた過去プロジェクト数の下限。本文解析やプロフィール深掘りは行わない。
         profileProjectMax:
           type: integer
           minimum: 0
-          description: 一覧上で取得できた過去プロジェクト数の上限。詳細ページは開かない。
+          description: CAMPFIRE検索結果ページ、または候補URLのプロジェクトページ上部で取得できた過去プロジェクト数の上限。本文解析やプロフィール深掘りは行わない。
         limit:
           type: integer
           enum: [10, 50, 100]
