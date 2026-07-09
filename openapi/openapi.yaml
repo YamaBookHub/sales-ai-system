@@ -555,7 +555,7 @@ components:
           description: 会社名、案件名、URL、商品名の曖昧検索キーワード
         category:
           type: string
-          description: CAMPFIREカテゴリURL。旧形式としてカテゴリ名も受け付ける。
+          description: 検索用カテゴリvalue。CAMPFIREカテゴリURL、preset:カテゴリ名、旧形式のカテゴリ名を受け付ける。
         amountMin:
           type: integer
           minimum: 0
@@ -583,7 +583,7 @@ components:
               label: { type: string }
               value:
                 type: string
-                description: CAMPFIREカテゴリURL
+                description: 検索用カテゴリvalue。CAMPFIREカテゴリURLまたはpreset:カテゴリ名。
     CampfireSearchItem:
       type: object
       properties:

@@ -53,6 +53,26 @@ export type CampfireCategoryOption = {
   value: string;
 };
 
+const PRESET_CAMPFIRE_CATEGORIES: CampfireCategoryOption[] = [
+  'プロダクト',
+  'テクノロジー・ガジェット',
+  'フード・飲食店',
+  'ファッション',
+  'ビューティー・ヘルスケア',
+  'アート・写真',
+  '音楽',
+  '映画・映像',
+  'ゲーム・サービス開発',
+  'まちづくり・地域活性化',
+  'ソーシャルグッド',
+  'スポーツ',
+  '出版・ジャーナリズム',
+  '教育',
+  'チャレンジ',
+  'アニメ・漫画',
+  'ビジネス・起業'
+].map((label) => ({ label, value: `preset:${label}` }));
+
 @Injectable()
 export class CampfireScraperService {
   async categories(): Promise<{ items: CampfireCategoryOption[] }> {
@@ -65,7 +85,9 @@ export class CampfireScraperService {
       });
       await openPage(page, buildCampfireSearchUrl());
       const html = await page.content();
-      return { items: extractCategoryOptions(html) };
+      return { items: mergeCategoryOptions(extractCategoryOptions(html)) };
+    } catch {
+      return { items: PRESET_CAMPFIRE_CATEGORIES };
     } finally {
       await browser.close();
     }
@@ -114,8 +136,9 @@ export class CampfireScraperService {
 
 function buildCampfireSearchUrl(keyword?: string, category?: string) {
   const url = normalizeCampfireCategoryUrl(category) || new URL('/projects/search', CAMPFIRE_ORIGIN);
-  if (keyword?.trim()) {
-    url.searchParams.set('word', keyword.trim());
+  const searchWords = [keyword?.trim(), normalizePresetCategory(category)].filter(Boolean).join(' ');
+  if (searchWords) {
+    url.searchParams.set('word', searchWords);
   }
   return url.toString();
 }
@@ -132,6 +155,10 @@ function extractCategoryOptions(html: string) {
     .filter((item): item is CampfireCategoryOption => Boolean(item));
 
   return uniqueBy([...fromOptions, ...fromLinks], (item) => normalizeUrlForUnique(item.value)).slice(0, 50);
+}
+
+function mergeCategoryOptions(scraped: CampfireCategoryOption[]) {
+  return uniqueBy([...scraped, ...PRESET_CAMPFIRE_CATEGORIES], (item) => normalizeText(item.label)).slice(0, 70);
 }
 
 function toCategoryOption(label: string, value: string): CampfireCategoryOption | null {
@@ -159,6 +186,11 @@ function normalizeCampfireCategoryUrl(value?: string) {
   if (!['camp-fire.jp', 'www.camp-fire.jp'].includes(url.hostname)) return null;
   if (!/categor/i.test(url.pathname + url.search)) return null;
   return url;
+}
+
+function normalizePresetCategory(value?: string) {
+  if (!value?.startsWith('preset:')) return '';
+  return value.replace(/^preset:/, '').trim();
 }
 
 function extractSearchResults(html: string): CampfireSearchResult[] {
@@ -193,7 +225,7 @@ function extractSearchResults(html: string): CampfireSearchResult[] {
 }
 
 function matchesSearchInput(item: CampfireSearchResult, input: CampfireSearchInput) {
-  const category = normalizeCampfireCategoryUrl(input.category) ? '' : normalizeText(input.category);
+  const category = normalizeCampfireCategoryUrl(input.category) || normalizePresetCategory(input.category) ? '' : normalizeText(input.category);
   const haystack = normalizeText([item.title, item.summary, item.category, item.url].join(' '));
 
   if (category && !haystack.includes(category)) return false;
