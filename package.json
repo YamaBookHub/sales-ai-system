@@ -10,6 +10,7 @@
     "prisma:validate": "prisma validate --schema prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma",
+    "db:repair-lead-fields": "docker compose exec -T postgres psql -U postgres -d sales_ai_system < prisma/migrations/20260709002000_lead_sales_management/migration.sql",
     "prisma:seed": "ts-node scripts/seed.ts"
   },
   "prisma": {
