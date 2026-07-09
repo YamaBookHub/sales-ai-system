@@ -298,6 +298,15 @@ export class DashboardController {
     }
     .tab-panel { display: none; }
     .tab-panel[data-active="true"] { display: block; }
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+    .filters .toolbar { grid-column: 1 / -1; }
     a {
       color: var(--accent);
       text-decoration: none;
@@ -367,6 +376,22 @@ export class DashboardController {
               <option value="sns_video_ad">SNS動画・広告版</option>
             </select>
             <button class="primary" id="generateButton" onclick="generateMail()" disabled>メール生成</button>
+          </div>
+        </div>
+        <div class="filters">
+          <input id="leadSearch" placeholder="会社・案件・URLを検索" oninput="updateLeadFilter()" />
+          <input id="leadCategoryFilter" placeholder="カテゴリ" oninput="updateLeadFilter()" />
+          <input id="leadAmountMin" type="number" min="0" step="10000" placeholder="支援額 下限" oninput="updateLeadFilter()" />
+          <input id="leadAmountMax" type="number" min="0" step="10000" placeholder="支援額 上限" oninput="updateLeadFilter()" />
+          <input id="leadSupporterMin" type="number" min="0" step="1" placeholder="サポーター 下限" oninput="updateLeadFilter()" />
+          <input id="leadSupporterMax" type="number" min="0" step="1" placeholder="サポーター 上限" oninput="updateLeadFilter()" />
+          <div class="toolbar">
+            <select id="leadStatusFilter" onchange="updateLeadFilter()">
+              <option value="">すべて</option>
+              <option value="active">現在公開中</option>
+              <option value="endingSoon">終了間近</option>
+            </select>
+            <button onclick="clearLeadFilter()">クリア</button>
           </div>
         </div>
         <div class="body" style="padding:0">
@@ -476,7 +501,16 @@ export class DashboardController {
   </main>
 
   <script>
-    const state = { leads: [], mails: [], checklist: [], aiGenerations: [], checklistComplete: false, selectedLeadId: null, selectedMailId: null };
+    const state = {
+      leads: [],
+      mails: [],
+      checklist: [],
+      aiGenerations: [],
+      checklistComplete: false,
+      selectedLeadId: null,
+      selectedMailId: null,
+      leadFilter: { keyword: '', category: '', amountMin: null, amountMax: null, supporterMin: null, supporterMax: null, status: '' }
+    };
 
     async function api(path, options = {}) {
       const response = await fetch(path, {
@@ -675,7 +709,8 @@ export class DashboardController {
     }
 
     function renderLeads() {
-      const rows = state.leads.map((lead) => {
+      const visibleLeads = state.leads.filter(leadMatchesFilter);
+      const rows = visibleLeads.map((lead) => {
         const company = lead.company?.name || lead.companyId;
         const project = lead.project?.title || '案件名なし';
         return '<tr data-selected="' + (lead.id === state.selectedLeadId) + '" onclick="selectLead(\\'' + lead.id + '\\')">' +
@@ -686,10 +721,78 @@ export class DashboardController {
           '<td>' + escapeHtml(labelPriority(lead.priority)) + '</td>' +
         '</tr>';
       }).join('');
-      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="5" class="muted">まだリードがありません</td></tr>';
+      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="5" class="muted">条件に合うリードがありません</td></tr>';
       document.getElementById('generateButton').disabled = !state.selectedLeadId;
       const selected = state.leads.find((lead) => lead.id === state.selectedLeadId);
       document.getElementById('selectedLead').textContent = selected ? (selected.company?.name || selected.id) : '未選択';
+    }
+
+    function updateLeadFilter() {
+      state.leadFilter = {
+        keyword: fieldValue('leadSearch'),
+        category: fieldValue('leadCategoryFilter'),
+        amountMin: numberFieldValue('leadAmountMin'),
+        amountMax: numberFieldValue('leadAmountMax'),
+        supporterMin: numberFieldValue('leadSupporterMin'),
+        supporterMax: numberFieldValue('leadSupporterMax'),
+        status: fieldValue('leadStatusFilter')
+      };
+      renderLeads();
+    }
+
+    function clearLeadFilter() {
+      document.getElementById('leadSearch').value = '';
+      document.getElementById('leadCategoryFilter').value = '';
+      document.getElementById('leadAmountMin').value = '';
+      document.getElementById('leadAmountMax').value = '';
+      document.getElementById('leadSupporterMin').value = '';
+      document.getElementById('leadSupporterMax').value = '';
+      document.getElementById('leadStatusFilter').value = '';
+      updateLeadFilter();
+    }
+
+    function leadMatchesFilter(lead) {
+      const keyword = normalizeSearchText(state.leadFilter.keyword);
+      const category = normalizeSearchText(state.leadFilter.category);
+      const project = lead.project || {};
+      const haystack = normalizeSearchText([
+        lead.company?.name,
+        project.title,
+        project.url,
+        project.category,
+        lead.reason
+      ].filter(Boolean).join(' '));
+
+      if (keyword && !haystack.includes(keyword)) return false;
+      if (category && !normalizeSearchText(project.category || '').includes(category)) return false;
+      if (state.leadFilter.amountMin !== null && Number(project.amount || 0) < state.leadFilter.amountMin) return false;
+      if (state.leadFilter.amountMax !== null && Number(project.amount || 0) > state.leadFilter.amountMax) return false;
+      if (state.leadFilter.supporterMin !== null && Number(project.supporterCount || 0) < state.leadFilter.supporterMin) return false;
+      if (state.leadFilter.supporterMax !== null && Number(project.supporterCount || 0) > state.leadFilter.supporterMax) return false;
+      if (state.leadFilter.status === 'active' && project.status !== 'active') return false;
+      if (state.leadFilter.status === 'endingSoon' && !isEndingSoon(lead)) return false;
+      return true;
+    }
+
+    function isEndingSoon(lead) {
+      if (lead.project?.endDate) {
+        const days = Math.ceil((new Date(lead.project.endDate).getTime() - Date.now()) / 86400000);
+        return days >= 0 && days <= 7;
+      }
+      const reason = lead.reason || '';
+      const match = reason.match(/残り日数: ?([0-9]+)/);
+      return match ? Number(match[1]) <= 7 : false;
+    }
+
+    function normalizeSearchText(value) {
+      return String(value || '').toLowerCase().replace(/\\s+/g, '');
+    }
+
+    function numberFieldValue(id) {
+      const value = fieldValue(id);
+      if (!value) return null;
+      const number = Number(value);
+      return Number.isFinite(number) ? number : null;
     }
 
     function renderAiAnalysis() {
@@ -743,6 +846,7 @@ export class DashboardController {
       const project = lead.project || {};
       openButton.disabled = !project.url;
       container.innerHTML =
+        renderLeadAlerts(lead) +
         '<div class="detail-grid">' +
           detailItem('企業名', company.name || lead.companyId) +
           detailItem('カテゴリ', project.category || '未取得') +
@@ -770,6 +874,12 @@ export class DashboardController {
           '<div class="detail-text">' + escapeHtml(project.description || '未取得') + '</div>' +
         '</div>' +
         renderLeadManagementForm(lead);
+    }
+
+    function renderLeadAlerts(lead) {
+      const memo = lead.brandAnalysisMemo || '';
+      if (!memo.includes('過去プロジェクト')) return '';
+      return '<div class="notice"><strong>過去プロジェクト多数の可能性</strong>' + escapeHtml(memo) + '</div>';
     }
 
     function renderLeadManagementForm(lead) {

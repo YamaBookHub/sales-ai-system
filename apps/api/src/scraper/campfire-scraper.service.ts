@@ -18,6 +18,7 @@ export type ScrapedCampfireProject = {
   category: string;
   features: string[];
   profileUrl: string;
+  profileProjectCount: number;
   websiteUrl: string;
   inquiryUrl: string;
   instagramUrl: string;
@@ -92,6 +93,7 @@ function extractProject(html: string, projectUrl: string): ScrapedCampfireProjec
   const profileName = clean($('a[href*="/profile/"]').first().text());
   const urls = extractExternalUrls($, projectUrl);
   const classifiedUrls = classifyUrls(urls);
+  const profileProjectCount = extractProfileProjectCount(bodyText);
 
   return {
     projectUrl,
@@ -117,6 +119,7 @@ function extractProject(html: string, projectUrl: string): ScrapedCampfireProjec
         '',
       CAMPFIRE_ORIGIN
     ),
+    profileProjectCount,
     websiteUrl: classifiedUrls.websiteUrl,
     inquiryUrl: classifiedUrls.inquiryUrl,
     instagramUrl: classifiedUrls.instagramUrl,
@@ -124,6 +127,16 @@ function extractProject(html: string, projectUrl: string): ScrapedCampfireProjec
     xUrl: classifiedUrls.xUrl,
     externalUrls: urls
   };
+}
+
+function extractProfileProjectCount(text: string) {
+  const patterns = [
+    /([0-9,]+)\s*件のプロジェクト/g,
+    /プロジェクト\s*([0-9,]+)\s*件/g,
+    /([0-9,]+)\s*projects?/gi
+  ];
+
+  return parseInteger(findFirst(text, patterns));
 }
 
 function extractExternalUrls($: cheerio.CheerioAPI, projectUrl: string) {
@@ -266,4 +279,9 @@ function uniqueBy<T>(items: T[], keyFn: (item: T) => string) {
 
 function clean(value: string | undefined | null) {
   return (value || '').replace(/\s+/g, ' ').trim();
+}
+
+function parseInteger(value: string) {
+  const number = Number((value || '').replace(/[^0-9]/g, ''));
+  return Number.isFinite(number) ? number : 0;
 }

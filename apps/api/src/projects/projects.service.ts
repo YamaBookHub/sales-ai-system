@@ -131,7 +131,8 @@ export class ProjectsService {
           instagramUrl: existingLead?.instagramUrl || scraped.instagramUrl || undefined,
           tiktokUrl: existingLead?.tiktokUrl || scraped.tiktokUrl || undefined,
           xUrl: existingLead?.xUrl || scraped.xUrl || undefined,
-          contactMemo: existingLead?.contactMemo || buildAutoUrlMemo(scraped)
+          contactMemo: existingLead?.contactMemo || buildAutoUrlMemo(scraped),
+          brandAnalysisMemo: existingLead?.brandAnalysisMemo || buildLargeProfileWarning(scraped) || undefined
         },
         create: {
           companyId: company.id,
@@ -145,7 +146,8 @@ export class ProjectsService {
           instagramUrl: scraped.instagramUrl || undefined,
           tiktokUrl: scraped.tiktokUrl || undefined,
           xUrl: scraped.xUrl || undefined,
-          contactMemo: buildAutoUrlMemo(scraped)
+          contactMemo: buildAutoUrlMemo(scraped),
+          brandAnalysisMemo: buildLargeProfileWarning(scraped)
         }
       });
 
@@ -165,6 +167,7 @@ export class ProjectsService {
         daysLeft: scraped.daysLeft,
         features: scraped.features,
         profileUrl: scraped.profileUrl,
+        profileProjectCount: scraped.profileProjectCount,
         websiteUrl: scraped.websiteUrl,
         inquiryUrl: scraped.inquiryUrl,
         instagramUrl: scraped.instagramUrl,
@@ -191,8 +194,16 @@ function buildImportReason(scraped: { achievementRate: string; daysLeft: string;
 }
 
 function buildAutoUrlMemo(scraped: { externalUrls: string[] }) {
-  if (!scraped.externalUrls.length) return undefined;
-  return `CAMPFIREページから自動取得したURL: ${scraped.externalUrls.slice(0, 8).join(' / ')}`;
+  const notes = [];
+  if (scraped.externalUrls.length) {
+    notes.push(`CAMPFIREページから自動取得したURL: ${scraped.externalUrls.slice(0, 8).join(' / ')}`);
+  }
+  return notes.join('\n') || undefined;
+}
+
+function buildLargeProfileWarning(scraped: { profileProjectCount: number }) {
+  if (scraped.profileProjectCount < 100) return undefined;
+  return `注意: この実行者は過去プロジェクトが${scraped.profileProjectCount}件以上ある可能性があります。過去案件の詳細スクレイピングは重くなるため、必要な場合だけ手動確認してください。`;
 }
 
 function compact<T extends Record<string, unknown>>(value: T) {
