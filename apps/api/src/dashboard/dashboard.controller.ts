@@ -900,10 +900,11 @@ export class DashboardController {
         return;
       }
       const items = visibleCandidates.map(({ item, originalIndex }) => {
+        const projectUrl = escapeAttr(item.url);
         return '<div class="candidate-item">' +
           '<div>' +
-            '<div class="candidate-title">' + escapeHtml(item.title) + '</div>' +
-            '<div class="candidate-url">' + escapeHtml(item.url) + '</div>' +
+            '<div class="candidate-title"><a href="' + projectUrl + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(item.title) + '</a></div>' +
+            '<div class="candidate-url"><a href="' + projectUrl + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(item.url) + '</a></div>' +
             '<div class="candidate-meta">' +
               '<span>支援額 ' + formatCurrency(item.amount) + '</span>' +
               '<span>支援者 ' + formatNumber(item.supporterCount) + '人</span>' +
