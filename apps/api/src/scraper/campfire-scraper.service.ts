@@ -391,6 +391,10 @@ function extractProfileUrl(html: string) {
 }
 
 function extractProfileProjectCount(text: string) {
+  if (/初めてのプロジェクトです/.test(text)) {
+    return 0;
+  }
+
   const patterns = [
     /他に\s*([0-9,]+)\s*件のプロジェクトを掲載しています/g,
     /([0-9,]+)\s*件のプロジェクト/g,
