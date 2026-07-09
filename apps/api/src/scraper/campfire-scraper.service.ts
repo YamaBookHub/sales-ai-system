@@ -109,10 +109,10 @@ export class CampfireScraperService {
       });
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const resultLimit = normalizeSearchLimit(input.limit);
-      const searchLimit = hasProfileProjectFilter(input) ? Math.min(Math.max(resultLimit * 3, 30), 100) : resultLimit;
-      const items = await collectSearchResults(page, searchLimit);
-      const filteredItems = items.filter((item) => matchesProfileProjectRange(item, input)).slice(0, resultLimit);
-      return { items: filteredItems, total: filteredItems.length };
+      const items = hasProfileProjectFilter(input)
+        ? await collectSearchResultsMatchingProfileRange(page, input, resultLimit)
+        : await collectSearchResults(page, resultLimit);
+      return { items, total: items.length };
     } finally {
       await browser.close();
     }
@@ -262,6 +262,40 @@ async function collectSearchResults(page: Page, limit: number) {
   }
 
   return items.slice(0, limit);
+}
+
+async function collectSearchResultsMatchingProfileRange(page: Page, input: CampfireSearchInput, limit: number) {
+  let items: CampfireSearchResult[] = [];
+  let matched: CampfireSearchResult[] = [];
+  let unchangedCount = 0;
+  const maxCandidates = Math.min(Math.max(limit * 10, 100), 300);
+
+  for (let attempt = 0; attempt < 20 && matched.length < limit && items.length < maxCandidates; attempt += 1) {
+    const beforeCount = items.length;
+    items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+    matched = items.filter((item) => matchesProfileProjectRange(item, input)).slice(0, limit);
+
+    if (matched.length >= limit || items.length >= maxCandidates) break;
+
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
+    await page.waitForTimeout(900);
+    items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+    matched = items.filter((item) => matchesProfileProjectRange(item, input)).slice(0, limit);
+
+    if (matched.length >= limit || items.length >= maxCandidates) break;
+
+    const clickedMore = await clickNextSearchResults(page);
+    if (clickedMore) {
+      await page.waitForTimeout(1200);
+      items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+      matched = items.filter((item) => matchesProfileProjectRange(item, input)).slice(0, limit);
+    }
+
+    unchangedCount = items.length === beforeCount ? unchangedCount + 1 : 0;
+    if (!clickedMore && unchangedCount >= 2) break;
+  }
+
+  return matched;
 }
 
 async function clickNextSearchResults(page: Page) {
