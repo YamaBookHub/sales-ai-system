@@ -958,7 +958,7 @@ export class DashboardController {
         setStatus('checklistStatus', '', '');
         return;
       }
-      const rows = state.checklist.map((item) => {
+      const rows = sortedChecklistItems().map((item) => {
         return '<li><label><input type="checkbox" data-key="' + escapeHtml(item.key) + '" ' + (item.checked ? 'checked' : '') + ' onchange="toggleChecklist(\\'' + item.key + '\\', this.checked)" />' + escapeHtml(item.label) + '</label></li>';
       }).join('');
       container.innerHTML = rows || '<li class="muted">チェック項目を読み込み中</li>';
@@ -966,6 +966,12 @@ export class DashboardController {
       const totalCount = state.checklist.length;
       const message = totalCount ? checkedCount + ' / ' + totalCount + ' 完了' : '';
       setStatus('checklistStatus', message, state.checklistComplete ? 'ok' : 'warn');
+    }
+
+    function sortedChecklistItems() {
+      return state.checklist
+        .map((item, index) => ({ ...item, index }))
+        .sort((a, b) => Number(b.checked) - Number(a.checked) || a.index - b.index);
     }
 
     function selectLead(id) {
