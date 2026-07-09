@@ -108,9 +108,8 @@ export class CampfireScraperService {
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36'
       });
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
-      const html = await page.content();
       const resultLimit = normalizeSearchLimit(input.limit);
-      const items = extractSearchResults(html).slice(0, resultLimit);
+      const items = await collectSearchResults(page, resultLimit);
       return { items, total: items.length };
     } finally {
       await browser.close();
@@ -231,6 +230,55 @@ function extractSearchResults(html: string): CampfireSearchResult[] {
     .filter((item) => item.url && item.title);
 
   return uniqueBy(links, (item) => normalizeUrlForUnique(item.url));
+}
+
+async function collectSearchResults(page: Page, limit: number) {
+  let items: CampfireSearchResult[] = [];
+  let unchangedCount = 0;
+
+  for (let attempt = 0; attempt < 8 && items.length < limit; attempt += 1) {
+    const beforeCount = items.length;
+    items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+
+    if (items.length >= limit) break;
+
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
+    await page.waitForTimeout(1200);
+    items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+
+    if (items.length >= limit) break;
+
+    const clickedMore = await clickNextSearchResults(page);
+    if (clickedMore) {
+      await page.waitForTimeout(1600);
+      items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+    }
+
+    unchangedCount = items.length === beforeCount ? unchangedCount + 1 : 0;
+    if (!clickedMore && unchangedCount >= 2) break;
+  }
+
+  return items.slice(0, limit);
+}
+
+async function clickNextSearchResults(page: Page) {
+  const candidates = [
+    page.locator('button, a').filter({ hasText: /もっと見る|さらに見る|次へ|次のページ/ }).first(),
+    page.locator('a[rel="next"], button[aria-label*="次"], a[aria-label*="次"]').first()
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if ((await candidate.count()) === 0) continue;
+      await candidate.click({ timeout: 1500 });
+      await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => undefined);
+      return true;
+    } catch {
+      // CAMPFIREの検索UIは変更されることがあるため、押せない場合は次の候補を試す。
+    }
+  }
+
+  return false;
 }
 
 function matchesSearchInput(item: CampfireSearchResult, input: CampfireSearchInput) {

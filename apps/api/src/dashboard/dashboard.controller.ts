@@ -305,6 +305,12 @@ export class DashboardController {
       margin-top: 14px;
     }
     .search-panel .toolbar { grid-column: 1 / -1; }
+    .result-filter-panel {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
     .candidate-list {
       display: grid;
       gap: 10px;
@@ -452,16 +458,43 @@ export class DashboardController {
         <div class="section-head">
           <h2>CAMPFIRE検索結果</h2>
           <div class="toolbar">
+            <span id="campfireCandidateCount" class="status muted">未検索</span>
+          </div>
+        </div>
+        <div class="body">
+          <div class="result-filter-panel">
             <select id="campfireResultLimit" onchange="renderCampfireCandidates()">
               <option value="10">最大表示 10件</option>
               <option value="50">最大表示 50件</option>
               <option value="100">最大表示 100件</option>
             </select>
-            <span id="campfireCandidateCount" class="status muted">未検索</span>
+            <select id="campfireDisplayStatus" onchange="renderCampfireCandidates()">
+              <option value="">公開状態 すべて</option>
+              <option value="active">現在公開中</option>
+              <option value="endingSoon">終了間近</option>
+            </select>
+            <select id="campfireDisplayAmountRange" onchange="renderCampfireCandidates()">
+              <option value="">支援額 すべて</option>
+              <option value="0:500000">50万円未満</option>
+              <option value="500000:1000000">50万〜100万円</option>
+              <option value="1000000:3000000">100万〜300万円</option>
+              <option value="3000000:5000000">300万〜500万円</option>
+              <option value="5000000:10000000">500万〜1,000万円</option>
+              <option value="10000000:">1,000万円以上</option>
+            </select>
+            <select id="campfireDisplaySupporterRange" onchange="renderCampfireCandidates()">
+              <option value="">サポーター すべて</option>
+              <option value="0:30">30人未満</option>
+              <option value="30:50">30〜50人</option>
+              <option value="50:100">50〜100人</option>
+              <option value="100:300">100〜300人</option>
+              <option value="300:500">300〜500人</option>
+              <option value="500:">500人以上</option>
+            </select>
           </div>
-        </div>
-        <div class="body" id="campfireCandidates">
-          <div class="muted">左の検索欄で候補URLを探すと、ここに表示されます。</div>
+          <div id="campfireCandidates">
+            <div class="muted">左の検索欄で候補URLを探すと、ここに表示されます。</div>
+          </div>
         </div>
       </section>
 
@@ -651,7 +684,7 @@ export class DashboardController {
         state.campfireCandidates = result.items || [];
         renderCampfireCandidates();
         const countText = '取得 ' + state.campfireCandidates.length + '件';
-        setStatus('campfireSearchStatusText', countText, 'ok');
+        setStatus('campfireSearchStatusText', '検索完了', 'ok');
         if (!state.campfireCandidates.length) {
           document.getElementById('campfireCandidateCount').textContent = countText;
         }
@@ -666,6 +699,9 @@ export class DashboardController {
         document.getElementById(id).value = '';
       });
       document.getElementById('campfireResultLimit').value = '10';
+      document.getElementById('campfireDisplayStatus').value = '';
+      document.getElementById('campfireDisplayAmountRange').value = '';
+      document.getElementById('campfireDisplaySupporterRange').value = '';
       state.campfireCandidates = [];
       renderCampfireCandidates();
       setStatus('campfireSearchStatusText', '', '');
@@ -847,10 +883,17 @@ export class DashboardController {
         return;
       }
       const limit = numberFieldValue('campfireResultLimit') || 10;
-      const visibleCandidates = state.campfireCandidates.slice(0, limit);
+      const filteredCandidates = state.campfireCandidates
+        .map((item, originalIndex) => ({ item, originalIndex }))
+        .filter(({ item }) => matchesCampfireDisplayFilters(item));
+      const visibleCandidates = filteredCandidates.slice(0, limit);
       document.getElementById('campfireCandidateCount').textContent =
         '表示 ' + visibleCandidates.length + '件 / 取得 ' + state.campfireCandidates.length + '件';
-      const items = visibleCandidates.map((item, index) => {
+      if (!visibleCandidates.length) {
+        container.innerHTML = '<div class="muted">表示条件に合う候補がありません。条件をゆるめてください。</div>';
+        return;
+      }
+      const items = visibleCandidates.map(({ item, originalIndex }) => {
         return '<div class="candidate-item">' +
           '<div>' +
             '<div class="candidate-title">' + escapeHtml(item.title) + '</div>' +
@@ -862,10 +905,24 @@ export class DashboardController {
               '<span>過去 ' + (item.profileProjectCount === null ? '-' : escapeHtml(item.profileProjectCount + '件')) + '</span>' +
             '</div>' +
           '</div>' +
-          '<button class="primary" onclick="importCampfireCandidate(' + index + ')">取り込む</button>' +
+          '<button class="primary" onclick="importCampfireCandidate(' + originalIndex + ')">取り込む</button>' +
         '</div>';
       }).join('');
       container.innerHTML = '<div class="candidate-list">' + items + '</div>';
+    }
+
+    function matchesCampfireDisplayFilters(item) {
+      const amountRange = rangeFieldValue('campfireDisplayAmountRange');
+      const supporterRange = rangeFieldValue('campfireDisplaySupporterRange');
+      const status = fieldValue('campfireDisplayStatus');
+
+      if (amountRange.min !== null && item.amount < amountRange.min) return false;
+      if (amountRange.max !== null && item.amount > amountRange.max) return false;
+      if (supporterRange.min !== null && item.supporterCount < supporterRange.min) return false;
+      if (supporterRange.max !== null && item.supporterCount > supporterRange.max) return false;
+      if (status === 'active' && !item.isActive) return false;
+      if (status === 'endingSoon' && (item.daysLeft === null || item.daysLeft > 7)) return false;
+      return true;
     }
 
     function numberFieldValue(id) {
@@ -873,6 +930,17 @@ export class DashboardController {
       if (!value) return null;
       const number = Number(value);
       return Number.isFinite(number) ? number : null;
+    }
+
+    function rangeFieldValue(id) {
+      const value = fieldValue(id);
+      const [min, max] = value.split(':');
+      const minNumber = min === '' || min === undefined ? null : Number(min);
+      const maxNumber = max === '' || max === undefined ? null : Number(max);
+      return {
+        min: Number.isFinite(minNumber) ? minNumber : null,
+        max: Number.isFinite(maxNumber) ? maxNumber : null
+      };
     }
 
     function renderAiAnalysis() {
