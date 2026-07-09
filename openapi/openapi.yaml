@@ -578,6 +578,7 @@ components:
           type: integer
           enum: [10, 50, 100]
           default: 10
+          description: 最大表示件数
         status:
           type: string
           enum: [active, endingSoon]

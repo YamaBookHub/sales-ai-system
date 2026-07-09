@@ -437,9 +437,9 @@ export class DashboardController {
                 <option value="100:">100件以上</option>
               </select>
               <select id="campfireResultLimit">
-                <option value="10">検索結果 10件</option>
-                <option value="50">検索結果 50件</option>
-                <option value="100">検索結果 100件</option>
+                <option value="10">最大表示 10件</option>
+                <option value="50">最大表示 50件</option>
+                <option value="100">最大表示 100件</option>
               </select>
               <div class="toolbar">
                 <select id="campfireSearchStatus">
@@ -674,6 +674,7 @@ export class DashboardController {
         const amountRange = rangeFieldValue('campfireAmountRange');
         const supporterRange = rangeFieldValue('campfireSupporterRange');
         const profileProjectRange = rangeFieldValue('campfireProfileProjectRange');
+        const resultLimit = numberFieldValue('campfireResultLimit');
         const result = await api('/api/projects/search/campfire', {
           method: 'POST',
           body: JSON.stringify(compactPayload({
@@ -685,14 +686,15 @@ export class DashboardController {
             supporterMax: supporterRange.max,
             profileProjectMin: profileProjectRange.min,
             profileProjectMax: profileProjectRange.max,
-            limit: numberFieldValue('campfireResultLimit'),
+            limit: resultLimit,
             status: fieldValue('campfireSearchStatus')
           }))
         });
         state.campfireCandidates = result.items || [];
         renderCampfireCandidates();
-        setStatus('campfireSearchStatusText', state.campfireCandidates.length + '件', 'ok');
-        document.getElementById('campfireCandidateCount').textContent = state.campfireCandidates.length + '件';
+        const countText = '取得 ' + state.campfireCandidates.length + '件 / 最大 ' + resultLimit + '件';
+        setStatus('campfireSearchStatusText', countText, 'ok');
+        document.getElementById('campfireCandidateCount').textContent = countText;
       } catch (error) {
         setStatus('campfireSearchStatusText', error.message, 'error');
         document.getElementById('campfireCandidateCount').textContent = '検索失敗';
