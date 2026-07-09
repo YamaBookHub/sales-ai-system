@@ -429,7 +429,7 @@ export class DashboardController {
               </select>
               <select id="campfireProfileProjectRange">
                 <option value="">過去プロジェクト すべて</option>
-                <option value="0:0">初回</option>
+                <option value="0:0">初回のみ</option>
                 <option value="1:3">1〜3件</option>
                 <option value="4:9">4〜9件</option>
                 <option value="10:29">10〜29件</option>

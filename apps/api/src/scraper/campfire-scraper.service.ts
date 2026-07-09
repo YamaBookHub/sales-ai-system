@@ -131,7 +131,7 @@ export class CampfireScraperService {
       await openPage(page, url);
       const html = await page.content();
       const project = extractProject(html, url);
-      project.profileProjectCount = await fetchProfileProjectCount(page, html, project.profileProjectCount);
+      project.profileProjectCount = (await fetchProfileProjectCount(page, html, project.profileProjectCount)) ?? project.profileProjectCount;
 
       if (!project.projectTitle) {
         throw new BadRequestException('CAMPFIREプロジェクト名を取得できませんでした。');
@@ -265,7 +265,7 @@ async function enrichWithProfileProjectCounts(page: Page, items: CampfireSearchR
       const html = await page.content();
       const fallbackText = (await page.locator('body').innerText({ timeout: 2500 })).replace(/\s+/g, ' ').trim();
       const fallbackCount = extractProfileProjectCount(fallbackText);
-      enriched.push({ ...item, profileProjectCount: await fetchProfileProjectCount(page, html, fallbackCount) });
+      enriched.push({ ...item, profileProjectCount: await fetchProfileProjectCount(page, html, fallbackCount, true) });
     } catch {
       enriched.push(item);
     }
@@ -273,16 +273,16 @@ async function enrichWithProfileProjectCounts(page: Page, items: CampfireSearchR
   return enriched;
 }
 
-async function fetchProfileProjectCount(page: Page, projectHtml: string, fallbackCount = 0) {
+async function fetchProfileProjectCount(page: Page, projectHtml: string, fallbackCount = 0, strictProfileLookup = false) {
   const profileUrl = extractProfileUrl(projectHtml);
-  if (!profileUrl) return fallbackCount;
+  if (!profileUrl) return strictProfileLookup ? null : fallbackCount;
 
   try {
     await openPageFast(page, profileUrl);
     const profileText = (await page.locator('body').innerText({ timeout: 2500 })).replace(/\s+/g, ' ').trim();
     return extractProfileProjectCount(profileText) || fallbackCount;
   } catch {
-    return fallbackCount;
+    return strictProfileLookup ? null : fallbackCount;
   }
 }
 
