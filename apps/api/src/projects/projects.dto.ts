@@ -74,6 +74,10 @@ export class SearchCampfireProjectsDto {
   profileProjectMax?: number;
 
   @IsOptional()
+  @IsInt()
+  limit?: number;
+
+  @IsOptional()
   @IsString()
   status?: string;
 }

@@ -436,6 +436,11 @@ export class DashboardController {
                 <option value="30:99">30〜99件</option>
                 <option value="100:">100件以上</option>
               </select>
+              <select id="campfireResultLimit">
+                <option value="10">検索結果 10件</option>
+                <option value="50">検索結果 50件</option>
+                <option value="100">検索結果 100件</option>
+              </select>
               <div class="toolbar">
                 <select id="campfireSearchStatus">
                   <option value="">すべて</option>
@@ -680,6 +685,7 @@ export class DashboardController {
             supporterMax: supporterRange.max,
             profileProjectMin: profileProjectRange.min,
             profileProjectMax: profileProjectRange.max,
+            limit: numberFieldValue('campfireResultLimit'),
             status: fieldValue('campfireSearchStatus')
           }))
         });
@@ -697,6 +703,7 @@ export class DashboardController {
       ['campfireSearchKeyword', 'campfireSearchCategory', 'campfireAmountRange', 'campfireSupporterRange', 'campfireProfileProjectRange'].forEach((id) => {
         document.getElementById(id).value = '';
       });
+      document.getElementById('campfireResultLimit').value = '10';
       document.getElementById('campfireSearchStatus').value = '';
       state.campfireCandidates = [];
       renderCampfireCandidates();

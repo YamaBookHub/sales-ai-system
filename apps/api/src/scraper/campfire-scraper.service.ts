@@ -3,8 +3,8 @@ import * as cheerio from 'cheerio';
 import { chromium, type Page } from 'playwright';
 
 const CAMPFIRE_ORIGIN = 'https://camp-fire.jp';
-const SEARCH_RESULT_LIMIT = 30;
-const PROFILE_FILTER_RESULT_LIMIT = 10;
+const DEFAULT_SEARCH_RESULT_LIMIT = 10;
+const SEARCH_RESULT_LIMITS = [10, 50, 100];
 
 export type ScrapedCampfireProject = {
   projectUrl: string;
@@ -38,6 +38,7 @@ export type CampfireSearchInput = {
   supporterMax?: number;
   profileProjectMin?: number;
   profileProjectMax?: number;
+  limit?: number;
   status?: string;
 };
 
@@ -108,7 +109,7 @@ export class CampfireScraperService {
       });
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const html = await page.content();
-      const resultLimit = hasProfileProjectFilter(input) ? PROFILE_FILTER_RESULT_LIMIT : SEARCH_RESULT_LIMIT;
+      const resultLimit = normalizeSearchLimit(input.limit);
       const candidates = extractSearchResults(html).filter((item) => matchesSearchInput(item, input)).slice(0, resultLimit);
       const enriched = hasProfileProjectFilter(input) ? await enrichWithProfileProjectCounts(page, candidates) : candidates;
       const items = enriched.filter((item) => matchesProfileProjectRange(item, input));
@@ -250,6 +251,10 @@ function matchesSearchInput(item: CampfireSearchResult, input: CampfireSearchInp
 
 function hasProfileProjectFilter(input: CampfireSearchInput) {
   return typeof input.profileProjectMin === 'number' || typeof input.profileProjectMax === 'number';
+}
+
+function normalizeSearchLimit(limit?: number) {
+  return SEARCH_RESULT_LIMITS.includes(Number(limit)) ? Number(limit) : DEFAULT_SEARCH_RESULT_LIMIT;
 }
 
 async function enrichWithProfileProjectCounts(page: Page, items: CampfireSearchResult[]) {
