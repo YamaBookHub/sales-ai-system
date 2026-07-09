@@ -187,6 +187,29 @@ export class DashboardController {
       line-height: 1.7;
       color: #26323a;
     }
+    .list-block {
+      display: grid;
+      gap: 6px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .list-block li {
+      border-left: 3px solid var(--line);
+      padding-left: 10px;
+      line-height: 1.6;
+    }
+    .ai-history {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .ai-history button {
+      height: auto;
+      min-height: 34px;
+      text-align: left;
+      padding: 8px 10px;
+    }
     a {
       color: var(--accent);
       text-decoration: none;
@@ -279,6 +302,15 @@ export class DashboardController {
 
       <section>
         <div class="section-head">
+          <h2>AI分析結果</h2>
+        </div>
+        <div class="body" id="aiAnalysis">
+          <div class="muted">営業リストから案件を選択してください</div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
           <h2>メール確認</h2>
           <div class="toolbar">
             <button onclick="requestReview()" id="reviewButton" disabled>レビュー依頼</button>
@@ -330,7 +362,7 @@ export class DashboardController {
   </main>
 
   <script>
-    const state = { leads: [], mails: [], checklist: [], checklistComplete: false, selectedLeadId: null, selectedMailId: null };
+    const state = { leads: [], mails: [], checklist: [], aiGenerations: [], checklistComplete: false, selectedLeadId: null, selectedMailId: null };
 
     async function api(path, options = {}) {
       const response = await fetch(path, {
@@ -361,6 +393,7 @@ export class DashboardController {
         renderLeads();
         renderMails();
         renderLeadDetail();
+        if (state.selectedLeadId) void loadAiAnalysis();
         setStatus('apiStatus', 'API接続OK', 'ok');
       } catch (error) {
         setStatus('apiStatus', error.message, 'error');
@@ -396,6 +429,7 @@ export class DashboardController {
         state.selectedMailId = result.email.id;
         setStatus('mailStatus', 'メール生成完了', 'ok');
         await loadAll();
+        await loadAiAnalysis();
         selectMail(state.selectedMailId);
       } catch (error) {
         setStatus('mailStatus', error.message, 'error');
@@ -435,6 +469,21 @@ export class DashboardController {
         renderMails();
       } catch (error) {
         setStatus('checklistStatus', error.message, 'error');
+      }
+    }
+
+    async function loadAiAnalysis() {
+      if (!state.selectedLeadId) {
+        state.aiGenerations = [];
+        renderAiAnalysis();
+        return;
+      }
+      try {
+        const result = await api('/api/ai/leads/' + state.selectedLeadId + '/generations');
+        state.aiGenerations = result.items || [];
+        renderAiAnalysis();
+      } catch (error) {
+        document.getElementById('aiAnalysis').innerHTML = '<div class="status error">' + escapeHtml(error.message) + '</div>';
       }
     }
 
@@ -524,6 +573,43 @@ export class DashboardController {
       document.getElementById('selectedLead').textContent = selected ? (selected.company?.name || selected.id) : '未選択';
     }
 
+    function renderAiAnalysis() {
+      const container = document.getElementById('aiAnalysis');
+      if (!state.selectedLeadId) {
+        container.innerHTML = '<div class="muted">営業リストから案件を選択してください</div>';
+        return;
+      }
+      if (!state.aiGenerations.length) {
+        container.innerHTML = '<div class="muted">まだAI分析・生成結果がありません</div>';
+        return;
+      }
+
+      const latest = state.aiGenerations[0];
+      const output = latest.outputJson || {};
+      container.innerHTML =
+        '<div class="detail-grid">' +
+          detailItem('種別', latest.type) +
+          detailItem('モデル', latest.model) +
+          detailItem('生成日時', formatDate(latest.createdAt)) +
+          detailItem('トークン', formatTokenUsage(latest)) +
+        '</div>' +
+        renderListSection('使用した事実', output.factsUsed) +
+        renderListSection('AIの推測', output.assumptions) +
+        renderListSection('注意点', output.riskFlags) +
+        '<div class="row">' +
+          '<label>生成件名</label>' +
+          '<div class="detail-value">' + escapeHtml(output.subject || latest.email?.subject || '未生成') + '</div>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label>生成本文</label>' +
+          '<div class="detail-text">' + escapeHtml(truncateText(output.body || '', 900) || '未生成') + '</div>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label>履歴</label>' +
+          '<div class="ai-history">' + renderAiHistory() + '</div>' +
+        '</div>';
+    }
+
     function renderLeadDetail() {
       const lead = state.leads.find((item) => item.id === state.selectedLeadId);
       const container = document.getElementById('leadDetail');
@@ -599,8 +685,11 @@ export class DashboardController {
 
     function selectLead(id) {
       state.selectedLeadId = id;
+      state.aiGenerations = [];
       renderLeads();
       renderLeadDetail();
+      renderAiAnalysis();
+      void loadAiAnalysis();
     }
 
     function openSelectedProject() {
@@ -645,6 +734,12 @@ export class DashboardController {
       return Number.isFinite(number) ? number.toLocaleString('ja-JP') + '円' : '0円';
     }
 
+    function formatTokenUsage(item) {
+      const input = Number(item.tokenInput || 0);
+      const output = Number(item.tokenOutput || 0);
+      return (input + output).toLocaleString('ja-JP');
+    }
+
     function detailItem(label, value) {
       return '<div class="detail-item"><div class="detail-label">' + escapeHtml(label) + '</div><div class="detail-value">' + escapeHtml(value || '未取得') + '</div></div>';
     }
@@ -652,6 +747,33 @@ export class DashboardController {
     function renderLink(value) {
       if (!value) return '<span class="muted">未取得</span>';
       return '<a href="' + escapeHtml(value) + '" target="_blank" rel="noopener">' + escapeHtml(value) + '</a>';
+    }
+
+    function renderListSection(label, values) {
+      const items = Array.isArray(values) ? values.filter(Boolean) : [];
+      const content = items.length
+        ? '<ul class="list-block">' + items.map((item) => '<li>' + escapeHtml(item) + '</li>').join('') + '</ul>'
+        : '<div class="muted">なし</div>';
+      return '<div class="row"><label>' + escapeHtml(label) + '</label>' + content + '</div>';
+    }
+
+    function renderAiHistory() {
+      return state.aiGenerations.map((item, index) => {
+        const title = formatDate(item.createdAt) + ' / ' + item.type + ' / ' + item.model;
+        return '<button onclick="showAiGeneration(' + index + ')">' + escapeHtml(title) + '</button>';
+      }).join('');
+    }
+
+    function showAiGeneration(index) {
+      const item = state.aiGenerations[index];
+      if (!item) return;
+      state.aiGenerations = [item].concat(state.aiGenerations.filter((_, itemIndex) => itemIndex !== index));
+      renderAiAnalysis();
+    }
+
+    function truncateText(value, maxLength) {
+      const text = String(value || '');
+      return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
     }
 
     function escapeHtml(value) {

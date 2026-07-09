@@ -344,6 +344,17 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AiMailGenerationResponse' }
+  /api/ai/leads/{leadId}/generations:
+    get:
+      summary: List AI generations for lead
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      responses:
+        '200':
+          description: AI generation history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AiGenerationListResponse' }
   /api/ai/replies/{replyId}/classify:
     post:
       summary: Classify reply by AI
@@ -620,6 +631,38 @@ components:
         factsUsed: { type: array, items: { type: string } }
         assumptions: { type: array, items: { type: string } }
         riskFlags: { type: array, items: { type: string } }
+    AiGeneration:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        leadId: { type: string, format: uuid, nullable: true }
+        emailId: { type: string, format: uuid, nullable: true }
+        type: { type: string }
+        provider: { type: string }
+        model: { type: string }
+        promptVersion: { type: string }
+        inputJson: { type: object }
+        outputJson: { type: object }
+        latencyMs: { type: integer, nullable: true }
+        tokenInput: { type: integer, nullable: true }
+        tokenOutput: { type: integer, nullable: true }
+        costUsd: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        email:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            subject: { type: string }
+            status: { $ref: '#/components/schemas/EmailStatus' }
+            createdAt: { type: string, format: date-time }
+    AiGenerationListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AiGeneration' }
+        total: { type: integer }
     EmailReply:
       type: object
       properties:
