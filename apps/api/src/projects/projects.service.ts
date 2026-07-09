@@ -41,6 +41,10 @@ export class ProjectsService {
     return this.campfireScraper.search(dto);
   }
 
+  campfireCategories() {
+    return this.campfireScraper.categories();
+  }
+
   async importCampfire(dto: ImportCampfireProjectDto) {
     const scraped = await this.campfireScraper.scrape(dto.url);
     const companyName = scraped.brandName || scraped.executorName || 'CAMPFIRE実行者名未取得';

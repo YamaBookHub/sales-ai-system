@@ -305,6 +305,46 @@ export class DashboardController {
       margin-top: 14px;
     }
     .search-panel .toolbar { grid-column: 1 / -1; }
+    .candidate-list {
+      display: grid;
+      gap: 10px;
+    }
+    .candidate-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfd;
+    }
+    .candidate-title {
+      font-weight: 700;
+      line-height: 1.5;
+      margin-bottom: 4px;
+      overflow-wrap: anywhere;
+    }
+    .candidate-url {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+    .candidate-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .candidate-meta span {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: white;
+      color: #34424d;
+      font-size: 12px;
+    }
     a {
       color: var(--accent);
       text-decoration: none;
@@ -366,7 +406,9 @@ export class DashboardController {
             <label>CAMPFIRE候補検索</label>
             <div class="search-panel">
               <input id="campfireSearchKeyword" placeholder="キーワード・商品名" />
-              <input id="campfireSearchCategory" placeholder="カテゴリ" />
+              <select id="campfireSearchCategory">
+                <option value="">カテゴリを取得中</option>
+              </select>
               <input id="campfireAmountMin" type="number" min="0" step="10000" placeholder="支援額 下限" />
               <input id="campfireAmountMax" type="number" min="0" step="10000" placeholder="支援額 上限" />
               <input id="campfireSupporterMin" type="number" min="0" step="1" placeholder="サポーター 下限" />
@@ -383,7 +425,6 @@ export class DashboardController {
               </div>
             </div>
           </div>
-          <div id="campfireCandidates"></div>
         </div>
       </section>
 
@@ -416,6 +457,16 @@ export class DashboardController {
     </div>
 
     <div class="right">
+      <section>
+        <div class="section-head">
+          <h2>CAMPFIRE検索結果</h2>
+          <span id="campfireCandidateCount" class="status muted">未検索</span>
+        </div>
+        <div class="body" id="campfireCandidates">
+          <div class="muted">左の条件で候補URLを検索すると、ここに表示されます。</div>
+        </div>
+      </section>
+
       <div class="tabs" aria-label="機能タブ">
         <button class="tab-button" data-tab-button="detail" data-active="true" onclick="switchTab('detail')">案件詳細</button>
         <button class="tab-button" data-tab-button="ai" onclick="switchTab('ai')">AI分析</button>
@@ -513,6 +564,7 @@ export class DashboardController {
       checklistComplete: false,
       selectedLeadId: null,
       selectedMailId: null,
+      campfireCategories: [],
       campfireCandidates: []
     };
 
@@ -546,9 +598,22 @@ export class DashboardController {
         renderMails();
         renderLeadDetail();
         if (state.selectedLeadId) void loadAiAnalysis();
+        if (!state.campfireCategories.length) void loadCampfireCategories();
         setStatus('apiStatus', 'API接続OK', 'ok');
       } catch (error) {
         setStatus('apiStatus', error.message, 'error');
+      }
+    }
+
+    async function loadCampfireCategories() {
+      const select = document.getElementById('campfireSearchCategory');
+      try {
+        const result = await api('/api/projects/categories/campfire');
+        state.campfireCategories = result.items || [];
+        select.innerHTML = '<option value="">すべてのカテゴリ</option>' +
+          state.campfireCategories.map((name) => '<option value="' + escapeHtml(name) + '">' + escapeHtml(name) + '</option>').join('');
+      } catch (error) {
+        select.innerHTML = '<option value="">カテゴリ取得失敗</option>';
       }
     }
 
@@ -571,6 +636,7 @@ export class DashboardController {
 
     async function searchCampfireCandidates() {
       setStatus('campfireSearchStatusText', '検索中', 'warn');
+      document.getElementById('campfireCandidateCount').textContent = '検索中';
       try {
         const result = await api('/api/projects/search/campfire', {
           method: 'POST',
@@ -587,8 +653,10 @@ export class DashboardController {
         state.campfireCandidates = result.items || [];
         renderCampfireCandidates();
         setStatus('campfireSearchStatusText', state.campfireCandidates.length + '件', 'ok');
+        document.getElementById('campfireCandidateCount').textContent = state.campfireCandidates.length + '件';
       } catch (error) {
         setStatus('campfireSearchStatusText', error.message, 'error');
+        document.getElementById('campfireCandidateCount').textContent = '検索失敗';
       }
     }
 
@@ -600,6 +668,7 @@ export class DashboardController {
       state.campfireCandidates = [];
       renderCampfireCandidates();
       setStatus('campfireSearchStatusText', '', '');
+      document.getElementById('campfireCandidateCount').textContent = '未検索';
     }
 
     async function importCampfireCandidate(index) {
@@ -773,20 +842,24 @@ export class DashboardController {
     function renderCampfireCandidates() {
       const container = document.getElementById('campfireCandidates');
       if (!state.campfireCandidates.length) {
-        container.innerHTML = '';
+        container.innerHTML = '<div class="muted">左の条件で候補URLを検索すると、ここに表示されます。</div>';
         return;
       }
-      const rows = state.campfireCandidates.map((item, index) => {
-        return '<tr>' +
-          '<td><div class="clip">' + escapeHtml(item.title) + '</div><div class="muted clip">' + escapeHtml(item.url) + '</div></td>' +
-          '<td>' + formatCurrency(item.amount) + '</td>' +
-          '<td>' + formatNumber(item.supporterCount) + '人</td>' +
-          '<td>' + (item.daysLeft === null ? '-' : escapeHtml(item.daysLeft + '日')) + '</td>' +
-          '<td><button onclick="importCampfireCandidate(' + index + ')">取り込む</button></td>' +
-        '</tr>';
+      const items = state.campfireCandidates.map((item, index) => {
+        return '<div class="candidate-item">' +
+          '<div>' +
+            '<div class="candidate-title">' + escapeHtml(item.title) + '</div>' +
+            '<div class="candidate-url">' + escapeHtml(item.url) + '</div>' +
+            '<div class="candidate-meta">' +
+              '<span>支援額 ' + formatCurrency(item.amount) + '</span>' +
+              '<span>支援者 ' + formatNumber(item.supporterCount) + '人</span>' +
+              '<span>残り ' + (item.daysLeft === null ? '-' : escapeHtml(item.daysLeft + '日')) + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<button class="primary" onclick="importCampfireCandidate(' + index + ')">取り込む</button>' +
+        '</div>';
       }).join('');
-      container.innerHTML =
-        '<table style="margin-top:12px"><thead><tr><th>候補URL</th><th style="width:100px">支援額</th><th style="width:96px">支援者</th><th style="width:74px">残り</th><th style="width:86px"></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      container.innerHTML = '<div class="candidate-list">' + items + '</div>';
     }
 
     function numberFieldValue(id) {

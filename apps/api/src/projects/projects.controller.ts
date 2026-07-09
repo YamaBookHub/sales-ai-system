@@ -23,6 +23,11 @@ export class ProjectsController {
     return ok(await this.projects.importCampfire(dto));
   }
 
+  @Get('categories/campfire')
+  async campfireCategories() {
+    return ok(await this.projects.campfireCategories());
+  }
+
   @Post('search/campfire')
   async searchCampfire(@Body() dto: SearchCampfireProjectsDto) {
     return ok(await this.projects.searchCampfire(dto));

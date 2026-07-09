@@ -50,6 +50,22 @@ export type CampfireSearchResult = {
 
 @Injectable()
 export class CampfireScraperService {
+  async categories(): Promise<{ items: string[] }> {
+    const browser = await chromium.launch({ headless: true });
+
+    try {
+      const page = await browser.newPage({
+        userAgent:
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36'
+      });
+      await openPage(page, buildCampfireSearchUrl());
+      const html = await page.content();
+      return { items: extractCategoryOptions(html) };
+    } finally {
+      await browser.close();
+    }
+  }
+
   async search(input: CampfireSearchInput): Promise<{ items: CampfireSearchResult[]; total: number }> {
     const browser = await chromium.launch({ headless: true });
 
@@ -97,6 +113,26 @@ function buildCampfireSearchUrl(keyword?: string) {
     url.searchParams.set('word', keyword.trim());
   }
   return url.toString();
+}
+
+function extractCategoryOptions(html: string) {
+  const $ = cheerio.load(html);
+  const fromOptions = $('select option')
+    .toArray()
+    .map((element) => clean($(element).text()))
+    .filter(isCategoryLabel);
+  const fromLinks = $('a[href*="category"], a[href*="categories"]')
+    .toArray()
+    .map((element) => clean($(element).text()))
+    .filter(isCategoryLabel);
+
+  return uniqueBy([...fromOptions, ...fromLinks], (value) => normalizeText(value)).slice(0, 50);
+}
+
+function isCategoryLabel(value: string) {
+  if (!value || value.length > 30) return false;
+  if (/すべて|全て|カテゴリ|カテゴリー|探す|検索|ログイン|新規登録/.test(value)) return false;
+  return /[ぁ-んァ-ン一-龥A-Za-z0-9]/.test(value);
 }
 
 function extractSearchResults(html: string): CampfireSearchResult[] {
