@@ -110,10 +110,7 @@ export class CampfireScraperService {
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const html = await page.content();
       const resultLimit = normalizeSearchLimit(input.limit);
-      const candidateLimit = hasProfileProjectFilter(input) ? Math.max(resultLimit, 100) : resultLimit;
-      const candidates = extractSearchResults(html).filter((item) => matchesSearchInput(item, input)).slice(0, candidateLimit);
-      const enriched = hasProfileProjectFilter(input) ? await enrichWithProfileProjectCounts(page, candidates) : candidates;
-      const items = enriched.filter((item) => matchesProfileProjectRange(item, input)).slice(0, resultLimit);
+      const items = extractSearchResults(html).slice(0, resultLimit);
       return { items, total: items.length };
     } finally {
       await browser.close();

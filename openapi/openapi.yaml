@@ -556,33 +556,11 @@ components:
         category:
           type: string
           description: 検索用カテゴリvalue。CAMPFIREカテゴリURL、preset:カテゴリ名、旧形式のカテゴリ名を受け付ける。
-        amountMin:
-          type: integer
-          minimum: 0
-        amountMax:
-          type: integer
-          minimum: 0
-        supporterMin:
-          type: integer
-          minimum: 0
-        supporterMax:
-          type: integer
-          minimum: 0
-        profileProjectMin:
-          type: integer
-          minimum: 0
-        profileProjectMax:
-          type: integer
-          minimum: 0
         limit:
           type: integer
           enum: [10, 50, 100]
-          default: 10
-          description: 最大表示件数
-        status:
-          type: string
-          enum: [active, endingSoon]
-          description: activeは現在公開中、endingSoonは終了間近の候補を返す
+          default: 100
+          description: 取得上限。画面上の最大表示件数は検索結果エリア側で制御する。
     CampfireCategoryListResponse:
       type: object
       properties:

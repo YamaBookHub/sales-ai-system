@@ -409,44 +409,7 @@ export class DashboardController {
               <select id="campfireSearchCategory">
                 <option value="">カテゴリを取得中</option>
               </select>
-              <select id="campfireAmountRange">
-                <option value="">支援額 すべて</option>
-                <option value="0:500000">50万円未満</option>
-                <option value="500000:1000000">50万〜100万円</option>
-                <option value="1000000:3000000">100万〜300万円</option>
-                <option value="3000000:5000000">300万〜500万円</option>
-                <option value="5000000:10000000">500万〜1,000万円</option>
-                <option value="10000000:">1,000万円以上</option>
-              </select>
-              <select id="campfireSupporterRange">
-                <option value="">サポーター すべて</option>
-                <option value="0:30">30人未満</option>
-                <option value="30:50">30〜50人</option>
-                <option value="50:100">50〜100人</option>
-                <option value="100:300">100〜300人</option>
-                <option value="300:500">300〜500人</option>
-                <option value="500:">500人以上</option>
-              </select>
-              <select id="campfireProfileProjectRange">
-                <option value="">過去プロジェクト すべて</option>
-                <option value="0:0">初回のみ</option>
-                <option value="1:3">1〜3件</option>
-                <option value="4:9">4〜9件</option>
-                <option value="10:29">10〜29件</option>
-                <option value="30:99">30〜99件</option>
-                <option value="100:">100件以上</option>
-              </select>
-              <select id="campfireResultLimit">
-                <option value="10">最大表示 10件</option>
-                <option value="50">最大表示 50件</option>
-                <option value="100">最大表示 100件</option>
-              </select>
               <div class="toolbar">
-                <select id="campfireSearchStatus">
-                  <option value="">すべて</option>
-                  <option value="active">現在公開中</option>
-                  <option value="endingSoon">終了間近</option>
-                </select>
                 <button class="primary" onclick="searchCampfireCandidates()">候補を検索</button>
                 <button onclick="clearCampfireSearch()">クリア</button>
                 <span id="campfireSearchStatusText" class="status"></span>
@@ -488,10 +451,17 @@ export class DashboardController {
       <section>
         <div class="section-head">
           <h2>CAMPFIRE検索結果</h2>
-          <span id="campfireCandidateCount" class="status muted">未検索</span>
+          <div class="toolbar">
+            <select id="campfireResultLimit" onchange="renderCampfireCandidates()">
+              <option value="10">最大表示 10件</option>
+              <option value="50">最大表示 50件</option>
+              <option value="100">最大表示 100件</option>
+            </select>
+            <span id="campfireCandidateCount" class="status muted">未検索</span>
+          </div>
         </div>
         <div class="body" id="campfireCandidates">
-          <div class="muted">左の条件で候補URLを検索すると、ここに表示されます。</div>
+          <div class="muted">左の検索欄で候補URLを探すと、ここに表示されます。</div>
         </div>
       </section>
 
@@ -667,34 +637,24 @@ export class DashboardController {
     }
 
     async function searchCampfireCandidates() {
-      const hasProfileProjectFilter = Boolean(fieldValue('campfireProfileProjectRange'));
-      setStatus('campfireSearchStatusText', hasProfileProjectFilter ? '検索中（過去件数確認あり）' : '検索中', 'warn');
+      setStatus('campfireSearchStatusText', '検索中', 'warn');
       document.getElementById('campfireCandidateCount').textContent = '検索中';
       try {
-        const amountRange = rangeFieldValue('campfireAmountRange');
-        const supporterRange = rangeFieldValue('campfireSupporterRange');
-        const profileProjectRange = rangeFieldValue('campfireProfileProjectRange');
-        const resultLimit = numberFieldValue('campfireResultLimit');
         const result = await api('/api/projects/search/campfire', {
           method: 'POST',
           body: JSON.stringify(compactPayload({
             keyword: fieldValue('campfireSearchKeyword'),
             category: fieldValue('campfireSearchCategory'),
-            amountMin: amountRange.min,
-            amountMax: amountRange.max,
-            supporterMin: supporterRange.min,
-            supporterMax: supporterRange.max,
-            profileProjectMin: profileProjectRange.min,
-            profileProjectMax: profileProjectRange.max,
-            limit: resultLimit,
-            status: fieldValue('campfireSearchStatus')
+            limit: 100
           }))
         });
         state.campfireCandidates = result.items || [];
         renderCampfireCandidates();
-        const countText = '取得 ' + state.campfireCandidates.length + '件 / 最大 ' + resultLimit + '件';
+        const countText = '取得 ' + state.campfireCandidates.length + '件';
         setStatus('campfireSearchStatusText', countText, 'ok');
-        document.getElementById('campfireCandidateCount').textContent = countText;
+        if (!state.campfireCandidates.length) {
+          document.getElementById('campfireCandidateCount').textContent = countText;
+        }
       } catch (error) {
         setStatus('campfireSearchStatusText', error.message, 'error');
         document.getElementById('campfireCandidateCount').textContent = '検索失敗';
@@ -702,11 +662,10 @@ export class DashboardController {
     }
 
     function clearCampfireSearch() {
-      ['campfireSearchKeyword', 'campfireSearchCategory', 'campfireAmountRange', 'campfireSupporterRange', 'campfireProfileProjectRange'].forEach((id) => {
+      ['campfireSearchKeyword', 'campfireSearchCategory'].forEach((id) => {
         document.getElementById(id).value = '';
       });
       document.getElementById('campfireResultLimit').value = '10';
-      document.getElementById('campfireSearchStatus').value = '';
       state.campfireCandidates = [];
       renderCampfireCandidates();
       setStatus('campfireSearchStatusText', '', '');
@@ -884,10 +843,14 @@ export class DashboardController {
     function renderCampfireCandidates() {
       const container = document.getElementById('campfireCandidates');
       if (!state.campfireCandidates.length) {
-        container.innerHTML = '<div class="muted">左の条件で候補URLを検索すると、ここに表示されます。</div>';
+        container.innerHTML = '<div class="muted">左の検索欄で候補URLを探すと、ここに表示されます。</div>';
         return;
       }
-      const items = state.campfireCandidates.map((item, index) => {
+      const limit = numberFieldValue('campfireResultLimit') || 10;
+      const visibleCandidates = state.campfireCandidates.slice(0, limit);
+      document.getElementById('campfireCandidateCount').textContent =
+        '表示 ' + visibleCandidates.length + '件 / 取得 ' + state.campfireCandidates.length + '件';
+      const items = visibleCandidates.map((item, index) => {
         return '<div class="candidate-item">' +
           '<div>' +
             '<div class="candidate-title">' + escapeHtml(item.title) + '</div>' +
@@ -910,17 +873,6 @@ export class DashboardController {
       if (!value) return null;
       const number = Number(value);
       return Number.isFinite(number) ? number : null;
-    }
-
-    function rangeFieldValue(id) {
-      const value = fieldValue(id);
-      const [min, max] = value.split(':');
-      const minNumber = min === '' || min === undefined ? null : Number(min);
-      const maxNumber = max === '' || max === undefined ? null : Number(max);
-      return {
-        min: Number.isFinite(minNumber) ? minNumber : null,
-        max: Number.isFinite(maxNumber) ? maxNumber : null
-      };
     }
 
     function renderAiAnalysis() {
