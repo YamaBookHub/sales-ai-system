@@ -415,6 +415,11 @@ export class DashboardController {
               <select id="campfireSearchCategory">
                 <option value="">カテゴリを取得中</option>
               </select>
+              <select id="campfireFetchLimit">
+                <option value="10">取得上限 10件</option>
+                <option value="50">取得上限 50件</option>
+                <option value="100">取得上限 100件</option>
+              </select>
               <div class="toolbar">
                 <button class="primary" onclick="searchCampfireCandidates()">候補を検索</button>
                 <button onclick="clearCampfireSearch()">クリア</button>
@@ -678,13 +683,13 @@ export class DashboardController {
           body: JSON.stringify(compactPayload({
             keyword: fieldValue('campfireSearchKeyword'),
             category: fieldValue('campfireSearchCategory'),
-            limit: 100
+            limit: numberFieldValue('campfireFetchLimit') || 10
           }))
         });
         state.campfireCandidates = result.items || [];
         renderCampfireCandidates();
         const countText = '取得 ' + state.campfireCandidates.length + '件';
-        setStatus('campfireSearchStatusText', '検索完了', 'ok');
+        setStatus('campfireSearchStatusText', countText, 'ok');
         if (!state.campfireCandidates.length) {
           document.getElementById('campfireCandidateCount').textContent = countText;
         }
@@ -698,6 +703,7 @@ export class DashboardController {
       ['campfireSearchKeyword', 'campfireSearchCategory'].forEach((id) => {
         document.getElementById(id).value = '';
       });
+      document.getElementById('campfireFetchLimit').value = '10';
       document.getElementById('campfireResultLimit').value = '10';
       document.getElementById('campfireDisplayStatus').value = '';
       document.getElementById('campfireDisplayAmountRange').value = '';
