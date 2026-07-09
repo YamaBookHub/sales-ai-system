@@ -34,6 +34,8 @@ export type CampfireSearchInput = {
   amountMax?: number;
   supporterMin?: number;
   supporterMax?: number;
+  profileProjectMin?: number;
+  profileProjectMax?: number;
   status?: string;
 };
 
@@ -45,6 +47,7 @@ export type CampfireSearchResult = {
   category: string;
   daysLeft: number | null;
   isActive: boolean;
+  profileProjectCount: number | null;
   summary: string;
 };
 
@@ -103,7 +106,9 @@ export class CampfireScraperService {
       });
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const html = await page.content();
-      const items = extractSearchResults(html).filter((item) => matchesSearchInput(item, input)).slice(0, 30);
+      const candidates = extractSearchResults(html).filter((item) => matchesSearchInput(item, input)).slice(0, 30);
+      const enriched = hasProfileProjectFilter(input) ? await enrichWithProfileProjectCounts(page, candidates) : candidates;
+      const items = enriched.filter((item) => matchesProfileProjectRange(item, input));
       return { items, total: items.length };
     } finally {
       await browser.close();
@@ -216,6 +221,7 @@ function extractSearchResults(html: string): CampfireSearchResult[] {
         category: '',
         daysLeft,
         isActive,
+        profileProjectCount: null,
         summary: cardText.slice(0, 180)
       };
     })
@@ -235,6 +241,32 @@ function matchesSearchInput(item: CampfireSearchResult, input: CampfireSearchInp
   if (typeof input.supporterMax === 'number' && item.supporterCount > input.supporterMax) return false;
   if (input.status === 'active' && !item.isActive) return false;
   if (input.status === 'endingSoon' && (item.daysLeft === null || item.daysLeft > 7)) return false;
+  return true;
+}
+
+function hasProfileProjectFilter(input: CampfireSearchInput) {
+  return typeof input.profileProjectMin === 'number' || typeof input.profileProjectMax === 'number';
+}
+
+async function enrichWithProfileProjectCounts(page: Page, items: CampfireSearchResult[]) {
+  const enriched: CampfireSearchResult[] = [];
+  for (const item of items) {
+    try {
+      await openPage(page, item.url);
+      const bodyText = (await page.locator('body').innerText({ timeout: 5000 })).replace(/\s+/g, ' ').trim();
+      enriched.push({ ...item, profileProjectCount: extractProfileProjectCount(bodyText) });
+    } catch {
+      enriched.push(item);
+    }
+  }
+  return enriched;
+}
+
+function matchesProfileProjectRange(item: CampfireSearchResult, input: CampfireSearchInput) {
+  if (!hasProfileProjectFilter(input)) return true;
+  if (item.profileProjectCount === null) return false;
+  if (typeof input.profileProjectMin === 'number' && item.profileProjectCount < input.profileProjectMin) return false;
+  if (typeof input.profileProjectMax === 'number' && item.profileProjectCount > input.profileProjectMax) return false;
   return true;
 }
 

@@ -568,6 +568,12 @@ components:
         supporterMax:
           type: integer
           minimum: 0
+        profileProjectMin:
+          type: integer
+          minimum: 0
+        profileProjectMax:
+          type: integer
+          minimum: 0
         status:
           type: string
           enum: [active, endingSoon]
@@ -594,6 +600,7 @@ components:
         category: { type: string }
         daysLeft: { type: integer, nullable: true }
         isActive: { type: boolean }
+        profileProjectCount: { type: integer, nullable: true }
         summary: { type: string }
     CampfireSearchResponse:
       type: object

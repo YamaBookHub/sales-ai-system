@@ -66,6 +66,14 @@ export class SearchCampfireProjectsDto {
   supporterMax?: number;
 
   @IsOptional()
+  @IsInt()
+  profileProjectMin?: number;
+
+  @IsOptional()
+  @IsInt()
+  profileProjectMax?: number;
+
+  @IsOptional()
   @IsString()
   status?: string;
 }

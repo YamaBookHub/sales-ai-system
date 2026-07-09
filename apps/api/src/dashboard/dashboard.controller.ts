@@ -427,6 +427,15 @@ export class DashboardController {
                 <option value="300:500">300〜500人</option>
                 <option value="500:">500人以上</option>
               </select>
+              <select id="campfireProfileProjectRange">
+                <option value="">過去プロジェクト すべて</option>
+                <option value="0:0">初回</option>
+                <option value="1:3">1〜3件</option>
+                <option value="4:9">4〜9件</option>
+                <option value="10:29">10〜29件</option>
+                <option value="30:99">30〜99件</option>
+                <option value="100:">100件以上</option>
+              </select>
               <div class="toolbar">
                 <select id="campfireSearchStatus">
                   <option value="">すべて</option>
@@ -658,6 +667,7 @@ export class DashboardController {
       try {
         const amountRange = rangeFieldValue('campfireAmountRange');
         const supporterRange = rangeFieldValue('campfireSupporterRange');
+        const profileProjectRange = rangeFieldValue('campfireProfileProjectRange');
         const result = await api('/api/projects/search/campfire', {
           method: 'POST',
           body: JSON.stringify(compactPayload({
@@ -667,6 +677,8 @@ export class DashboardController {
             amountMax: amountRange.max,
             supporterMin: supporterRange.min,
             supporterMax: supporterRange.max,
+            profileProjectMin: profileProjectRange.min,
+            profileProjectMax: profileProjectRange.max,
             status: fieldValue('campfireSearchStatus')
           }))
         });
@@ -681,7 +693,7 @@ export class DashboardController {
     }
 
     function clearCampfireSearch() {
-      ['campfireSearchKeyword', 'campfireSearchCategory', 'campfireAmountRange', 'campfireSupporterRange'].forEach((id) => {
+      ['campfireSearchKeyword', 'campfireSearchCategory', 'campfireAmountRange', 'campfireSupporterRange', 'campfireProfileProjectRange'].forEach((id) => {
         document.getElementById(id).value = '';
       });
       document.getElementById('campfireSearchStatus').value = '';
@@ -874,6 +886,7 @@ export class DashboardController {
               '<span>支援額 ' + formatCurrency(item.amount) + '</span>' +
               '<span>支援者 ' + formatNumber(item.supporterCount) + '人</span>' +
               '<span>残り ' + (item.daysLeft === null ? '-' : escapeHtml(item.daysLeft + '日')) + '</span>' +
+              '<span>過去 ' + (item.profileProjectCount === null ? '-' : escapeHtml(item.profileProjectCount + '件')) + '</span>' +
             '</div>' +
           '</div>' +
           '<button class="primary" onclick="importCampfireCandidate(' + index + ')">取り込む</button>' +
