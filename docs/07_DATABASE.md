@@ -313,11 +313,20 @@ erDiagram
 | status | LeadStatus | yes | リード状態 |
 | priority | Int | yes | 優先度 1〜5 |
 | reason | String? | no | 候補化理由 |
-| rejectionReason | String? | no | 対象外理由 |
-| assignedUserId | String? | no | 担当者 |
-| approvedAt | DateTime? | no | 承認日時 |
-| firstContactedAt | DateTime? | no | 初回接触日時 |
-| lastContactedAt | DateTime? | no | 最終接触日時 |
+| ownerMemo | String? | no | 担当者メモ |
+| contactEmail | String? | no | 送信先メールアドレス |
+| contactFormUrl | String? | no | 問い合わせフォームURL |
+| siteMessageUrl | String? | no | サイト内メッセージURL |
+| contactMemo | String? | no | 連絡先確認メモ |
+| sendMethod | String? | no | 送信手段 |
+| sentAt | DateTime? | no | 送信日 |
+| nextFollowUpAt | DateTime? | no | 次回確認日 |
+| brandWebsiteUrl | String? | no | 公式サイトURL |
+| instagramUrl | String? | no | Instagram URL |
+| tiktokUrl | String? | no | TikTok URL |
+| xUrl | String? | no | X URL |
+| brandAnalysisMemo | String? | no | ブランド分析メモ |
+| snsAnalysisMemo | String? | no | SNS分析メモ |
 | nextActionAt | DateTime? | no | 次回対応日 |
 | createdAt | DateTime | yes | 作成日時 |
 | updatedAt | DateTime | yes | 更新日時 |

@@ -743,6 +743,51 @@ export class DashboardController {
         '<div class="row">' +
           '<label>プロジェクト説明</label>' +
           '<div class="detail-text">' + escapeHtml(project.description || '未取得') + '</div>' +
+        '</div>' +
+        renderLeadManagementForm(lead);
+    }
+
+    function renderLeadManagementForm(lead) {
+      return '<div class="row">' +
+          '<label>連絡先確認</label>' +
+          '<div class="grid-2">' +
+            formInput('leadContactEmail', 'メールアドレス', lead.contactEmail) +
+            formInput('leadContactFormUrl', '問い合わせフォームURL', lead.contactFormUrl) +
+            formInput('leadSiteMessageUrl', 'サイト内メッセージURL', lead.siteMessageUrl) +
+            formInput('leadSendMethod', '送信手段', lead.sendMethod, 'メール / フォーム / サイト内メッセージ') +
+          '</div>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label>送信記録</label>' +
+          '<div class="grid-2">' +
+            formInput('leadSentAt', '送信日', toDateTimeLocal(lead.sentAt), '', 'datetime-local') +
+            formInput('leadNextFollowUpAt', '次回確認日', toDateTimeLocal(lead.nextFollowUpAt || lead.nextActionAt), '', 'datetime-local') +
+          '</div>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label>ブランド/SNS分析</label>' +
+          '<div class="grid-2">' +
+            formInput('leadBrandWebsiteUrl', '公式サイト', lead.brandWebsiteUrl) +
+            formInput('leadInstagramUrl', 'Instagram', lead.instagramUrl) +
+            formInput('leadTiktokUrl', 'TikTok', lead.tiktokUrl) +
+            formInput('leadXUrl', 'X', lead.xUrl) +
+          '</div>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label for="leadContactMemo">連絡先メモ</label>' +
+          '<textarea id="leadContactMemo" style="min-height:80px">' + escapeHtml(lead.contactMemo || '') + '</textarea>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label for="leadBrandAnalysisMemo">ブランド分析メモ</label>' +
+          '<textarea id="leadBrandAnalysisMemo" style="min-height:100px">' + escapeHtml(lead.brandAnalysisMemo || '') + '</textarea>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label for="leadSnsAnalysisMemo">SNS分析メモ</label>' +
+          '<textarea id="leadSnsAnalysisMemo" style="min-height:100px">' + escapeHtml(lead.snsAnalysisMemo || '') + '</textarea>' +
+        '</div>' +
+        '<div class="toolbar">' +
+          '<button class="primary" onclick="saveLeadManagement()">営業情報を保存</button>' +
+          '<span id="leadSaveStatus" class="status"></span>' +
         '</div>';
     }
 
@@ -794,6 +839,38 @@ export class DashboardController {
       renderLeadDetail();
       renderAiAnalysis();
       void loadAiAnalysis();
+    }
+
+    async function saveLeadManagement() {
+      if (!state.selectedLeadId) return;
+      setStatus('leadSaveStatus', '保存中', 'warn');
+      const payload = compactPayload({
+        contactEmail: fieldValue('leadContactEmail'),
+        contactFormUrl: fieldValue('leadContactFormUrl'),
+        siteMessageUrl: fieldValue('leadSiteMessageUrl'),
+        contactMemo: fieldValue('leadContactMemo'),
+        sendMethod: fieldValue('leadSendMethod'),
+        sentAt: dateTimeValue('leadSentAt'),
+        nextFollowUpAt: dateTimeValue('leadNextFollowUpAt'),
+        nextActionAt: dateTimeValue('leadNextFollowUpAt'),
+        brandWebsiteUrl: fieldValue('leadBrandWebsiteUrl'),
+        instagramUrl: fieldValue('leadInstagramUrl'),
+        tiktokUrl: fieldValue('leadTiktokUrl'),
+        xUrl: fieldValue('leadXUrl'),
+        brandAnalysisMemo: fieldValue('leadBrandAnalysisMemo'),
+        snsAnalysisMemo: fieldValue('leadSnsAnalysisMemo')
+      });
+      try {
+        await api('/api/leads/' + state.selectedLeadId, {
+          method: 'PATCH',
+          body: JSON.stringify(payload)
+        });
+        setStatus('leadSaveStatus', '保存しました', 'ok');
+        await loadAll();
+        renderLeadDetail();
+      } catch (error) {
+        setStatus('leadSaveStatus', error.message, 'error');
+      }
     }
 
     function openSelectedProject() {
@@ -888,6 +965,34 @@ export class DashboardController {
       return '<div class="detail-item"><div class="detail-label">' + escapeHtml(label) + '</div><div class="detail-value">' + escapeHtml(value || '未取得') + '</div></div>';
     }
 
+    function formInput(id, label, value, placeholder = '', type = 'text') {
+      return '<div class="row">' +
+        '<label for="' + escapeHtml(id) + '">' + escapeHtml(label) + '</label>' +
+        '<input id="' + escapeHtml(id) + '" type="' + escapeHtml(type) + '" value="' + escapeAttr(value || '') + '" placeholder="' + escapeAttr(placeholder) + '" />' +
+      '</div>';
+    }
+
+    function fieldValue(id) {
+      return document.getElementById(id)?.value.trim() || '';
+    }
+
+    function dateTimeValue(id) {
+      const value = fieldValue(id);
+      return value ? new Date(value).toISOString() : '';
+    }
+
+    function compactPayload(payload) {
+      return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== ''));
+    }
+
+    function toDateTimeLocal(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      const offsetMs = date.getTimezoneOffset() * 60000;
+      return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+    }
+
     function renderLink(value) {
       if (!value) return '<span class="muted">未取得</span>';
       return '<a href="' + escapeHtml(value) + '" target="_blank" rel="noopener">' + escapeHtml(value) + '</a>';
@@ -928,6 +1033,10 @@ export class DashboardController {
         '"': '&quot;',
         "'": '&#039;'
       }[char]));
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value);
     }
 
     loadAll();

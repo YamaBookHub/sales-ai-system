@@ -233,6 +233,19 @@ model SalesLead {
   reason       String?
   source       String       @default("manual")
   ownerMemo    String?
+  contactEmail String?
+  contactFormUrl String?
+  siteMessageUrl String?
+  contactMemo  String?
+  sendMethod   String?
+  sentAt       DateTime?
+  nextFollowUpAt DateTime?
+  brandWebsiteUrl String?
+  instagramUrl String?
+  tiktokUrl    String?
+  xUrl         String?
+  brandAnalysisMemo String?
+  snsAnalysisMemo String?
   nextActionAt DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt

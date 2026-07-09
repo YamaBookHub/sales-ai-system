@@ -1,5 +1,5 @@
 import { LeadPriority, LeadStatus } from '@prisma/client';
-import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateLeadDto {
   @IsUUID()
@@ -16,6 +16,62 @@ export class CreateLeadDto {
   @IsOptional()
   @IsString()
   ownerMemo?: string;
+
+  @IsOptional()
+  @IsDateString()
+  nextActionAt?: string;
+
+  @IsOptional()
+  @IsString()
+  contactEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  contactFormUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  siteMessageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  contactMemo?: string;
+
+  @IsOptional()
+  @IsString()
+  sendMethod?: string;
+
+  @IsOptional()
+  @IsDateString()
+  sentAt?: string;
+
+  @IsOptional()
+  @IsDateString()
+  nextFollowUpAt?: string;
+
+  @IsOptional()
+  @IsString()
+  brandWebsiteUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  instagramUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  tiktokUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  xUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  brandAnalysisMemo?: string;
+
+  @IsOptional()
+  @IsString()
+  snsAnalysisMemo?: string;
 }
 
 export class UpdateLeadDto {
@@ -30,4 +86,60 @@ export class UpdateLeadDto {
   @IsOptional()
   @IsString()
   ownerMemo?: string;
+
+  @IsOptional()
+  @IsDateString()
+  nextActionAt?: string;
+
+  @IsOptional()
+  @IsString()
+  contactEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  contactFormUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  siteMessageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  contactMemo?: string;
+
+  @IsOptional()
+  @IsString()
+  sendMethod?: string;
+
+  @IsOptional()
+  @IsDateString()
+  sentAt?: string;
+
+  @IsOptional()
+  @IsDateString()
+  nextFollowUpAt?: string;
+
+  @IsOptional()
+  @IsString()
+  brandWebsiteUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  instagramUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  tiktokUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  xUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  brandAnalysisMemo?: string;
+
+  @IsOptional()
+  @IsString()
+  snsAnalysisMemo?: string;
 }

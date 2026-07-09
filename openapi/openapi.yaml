@@ -123,6 +123,32 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SalesLead' }
+  /api/leads/{leadId}:
+    get:
+      summary: Get sales lead
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      responses:
+        '200':
+          description: Lead detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SalesLeadWithRelations' }
+    patch:
+      summary: Update sales lead management fields
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateLeadRequest' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SalesLead' }
   /api/leads/{leadId}/score:
     post:
       summary: Recalculate lead score
@@ -516,6 +542,20 @@ components:
         score: { type: integer }
         reason: { type: string, nullable: true }
         source: { type: string }
+        ownerMemo: { type: string, nullable: true }
+        contactEmail: { type: string, nullable: true }
+        contactFormUrl: { type: string, nullable: true }
+        siteMessageUrl: { type: string, nullable: true }
+        contactMemo: { type: string, nullable: true }
+        sendMethod: { type: string, nullable: true }
+        sentAt: { type: string, format: date-time, nullable: true }
+        nextFollowUpAt: { type: string, format: date-time, nullable: true }
+        brandWebsiteUrl: { type: string, nullable: true }
+        instagramUrl: { type: string, nullable: true }
+        tiktokUrl: { type: string, nullable: true }
+        xUrl: { type: string, nullable: true }
+        brandAnalysisMemo: { type: string, nullable: true }
+        snsAnalysisMemo: { type: string, nullable: true }
         nextActionAt: { type: string, format: date-time, nullable: true }
     CreateLeadRequest:
       type: object
@@ -525,6 +565,26 @@ components:
         projectId: { type: string, format: uuid, nullable: true }
         source: { type: string, default: manual }
         ownerMemo: { type: string, nullable: true }
+    UpdateLeadRequest:
+      type: object
+      properties:
+        status: { $ref: '#/components/schemas/LeadStatus' }
+        priority: { $ref: '#/components/schemas/LeadPriority' }
+        ownerMemo: { type: string, nullable: true }
+        contactEmail: { type: string, nullable: true }
+        contactFormUrl: { type: string, nullable: true }
+        siteMessageUrl: { type: string, nullable: true }
+        contactMemo: { type: string, nullable: true }
+        sendMethod: { type: string, nullable: true }
+        sentAt: { type: string, format: date-time, nullable: true }
+        nextFollowUpAt: { type: string, format: date-time, nullable: true }
+        nextActionAt: { type: string, format: date-time, nullable: true }
+        brandWebsiteUrl: { type: string, nullable: true }
+        instagramUrl: { type: string, nullable: true }
+        tiktokUrl: { type: string, nullable: true }
+        xUrl: { type: string, nullable: true }
+        brandAnalysisMemo: { type: string, nullable: true }
+        snsAnalysisMemo: { type: string, nullable: true }
     LeadListResponse:
       type: object
       properties:
