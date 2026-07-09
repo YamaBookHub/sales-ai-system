@@ -109,9 +109,11 @@ export class CampfireScraperService {
       });
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const resultLimit = normalizeSearchLimit(input.limit);
-      const items = await collectSearchResults(page, resultLimit);
+      const searchLimit = hasProfileProjectFilter(input) ? Math.min(Math.max(resultLimit * 3, 100), 300) : resultLimit;
+      const items = await collectSearchResults(page, searchLimit);
       const enrichedItems = await enrichWithProfileProjectCounts(page, items);
-      return { items: enrichedItems, total: enrichedItems.length };
+      const filteredItems = enrichedItems.filter((item) => matchesProfileProjectRange(item, input)).slice(0, resultLimit);
+      return { items: filteredItems, total: filteredItems.length };
     } finally {
       await browser.close();
     }

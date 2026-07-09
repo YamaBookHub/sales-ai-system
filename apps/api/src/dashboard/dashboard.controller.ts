@@ -420,6 +420,16 @@ export class DashboardController {
                 <option value="50">取得上限 50件</option>
                 <option value="100">取得上限 100件</option>
               </select>
+              <select id="campfireSearchProfileProjectRange">
+                <option value=":99">過去プロジェクト 100件未満</option>
+                <option value="">過去プロジェクト すべて</option>
+                <option value="0:0">初回のみ</option>
+                <option value="1:3">1〜3件</option>
+                <option value="4:9">4〜9件</option>
+                <option value="10:29">10〜29件</option>
+                <option value="30:99">30〜99件</option>
+                <option value="100:">100件以上</option>
+              </select>
               <div class="toolbar">
                 <button class="primary" onclick="searchCampfireCandidates()">候補を検索</button>
                 <button onclick="clearCampfireSearch()">クリア</button>
@@ -684,7 +694,9 @@ export class DashboardController {
     }
 
     async function searchCampfireCandidates() {
-      setStatus('campfireSearchStatusText', '検索中', 'warn');
+      const profileProjectRange = rangeFieldValue('campfireSearchProfileProjectRange');
+      const hasProfileProjectSearch = profileProjectRange.min !== null || profileProjectRange.max !== null;
+      setStatus('campfireSearchStatusText', hasProfileProjectSearch ? '検索中（過去件数確認あり）' : '検索中', 'warn');
       document.getElementById('campfireCandidateCount').textContent = '検索中';
       try {
         const result = await api('/api/projects/search/campfire', {
@@ -692,6 +704,8 @@ export class DashboardController {
           body: JSON.stringify(compactPayload({
             keyword: fieldValue('campfireSearchKeyword'),
             category: fieldValue('campfireSearchCategory'),
+            profileProjectMin: profileProjectRange.min,
+            profileProjectMax: profileProjectRange.max,
             limit: numberFieldValue('campfireFetchLimit') || 10
           }))
         });
@@ -713,6 +727,7 @@ export class DashboardController {
         document.getElementById(id).value = '';
       });
       document.getElementById('campfireFetchLimit').value = '10';
+      document.getElementById('campfireSearchProfileProjectRange').value = ':99';
       document.getElementById('campfireResultLimit').value = '10';
       document.getElementById('campfireDisplayStatus').value = '';
       document.getElementById('campfireDisplayAmountRange').value = '';
