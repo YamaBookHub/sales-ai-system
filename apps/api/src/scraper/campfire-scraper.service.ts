@@ -3,6 +3,8 @@ import * as cheerio from 'cheerio';
 import { chromium, type Page } from 'playwright';
 
 const CAMPFIRE_ORIGIN = 'https://camp-fire.jp';
+const SEARCH_RESULT_LIMIT = 30;
+const PROFILE_FILTER_RESULT_LIMIT = 10;
 
 export type ScrapedCampfireProject = {
   projectUrl: string;
@@ -106,7 +108,8 @@ export class CampfireScraperService {
       });
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const html = await page.content();
-      const candidates = extractSearchResults(html).filter((item) => matchesSearchInput(item, input)).slice(0, 30);
+      const resultLimit = hasProfileProjectFilter(input) ? PROFILE_FILTER_RESULT_LIMIT : SEARCH_RESULT_LIMIT;
+      const candidates = extractSearchResults(html).filter((item) => matchesSearchInput(item, input)).slice(0, resultLimit);
       const enriched = hasProfileProjectFilter(input) ? await enrichWithProfileProjectCounts(page, candidates) : candidates;
       const items = enriched.filter((item) => matchesProfileProjectRange(item, input));
       return { items, total: items.length };
@@ -253,9 +256,9 @@ async function enrichWithProfileProjectCounts(page: Page, items: CampfireSearchR
   const enriched: CampfireSearchResult[] = [];
   for (const item of items) {
     try {
-      await openPage(page, item.url);
+      await openPageFast(page, item.url);
       const html = await page.content();
-      const fallbackText = (await page.locator('body').innerText({ timeout: 5000 })).replace(/\s+/g, ' ').trim();
+      const fallbackText = (await page.locator('body').innerText({ timeout: 2500 })).replace(/\s+/g, ' ').trim();
       const fallbackCount = extractProfileProjectCount(fallbackText);
       enriched.push({ ...item, profileProjectCount: await fetchProfileProjectCount(page, html, fallbackCount) });
     } catch {
@@ -270,8 +273,8 @@ async function fetchProfileProjectCount(page: Page, projectHtml: string, fallbac
   if (!profileUrl) return fallbackCount;
 
   try {
-    await openPage(page, profileUrl);
-    const profileText = (await page.locator('body').innerText({ timeout: 5000 })).replace(/\s+/g, ' ').trim();
+    await openPageFast(page, profileUrl);
+    const profileText = (await page.locator('body').innerText({ timeout: 2500 })).replace(/\s+/g, ' ').trim();
     return extractProfileProjectCount(profileText) || fallbackCount;
   } catch {
     return fallbackCount;
@@ -298,6 +301,12 @@ async function openPage(page: Page, url: string) {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
   await page.waitForLoadState('load', { timeout: 15000 }).catch(() => undefined);
   await page.waitForTimeout(2500);
+}
+
+async function openPageFast(page: Page, url: string) {
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 12000 });
+  await page.waitForLoadState('load', { timeout: 4000 }).catch(() => undefined);
+  await page.waitForTimeout(600);
 }
 
 function validateCampfireUrl(url: string) {

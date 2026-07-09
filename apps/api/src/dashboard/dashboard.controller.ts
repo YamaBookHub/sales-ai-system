@@ -662,7 +662,8 @@ export class DashboardController {
     }
 
     async function searchCampfireCandidates() {
-      setStatus('campfireSearchStatusText', '検索中', 'warn');
+      const hasProfileProjectFilter = Boolean(fieldValue('campfireProfileProjectRange'));
+      setStatus('campfireSearchStatusText', hasProfileProjectFilter ? '検索中（過去件数確認あり）' : '検索中', 'warn');
       document.getElementById('campfireCandidateCount').textContent = '検索中';
       try {
         const amountRange = rangeFieldValue('campfireAmountRange');
