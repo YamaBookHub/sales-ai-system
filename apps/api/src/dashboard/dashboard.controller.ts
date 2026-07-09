@@ -162,8 +162,38 @@ export class DashboardController {
       grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
       gap: 16px;
     }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .detail-item {
+      min-width: 0;
+      border-left: 3px solid var(--line);
+      padding-left: 10px;
+    }
+    .detail-label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .detail-value {
+      overflow-wrap: anywhere;
+      line-height: 1.5;
+    }
+    .detail-text {
+      white-space: pre-wrap;
+      line-height: 1.7;
+      color: #26323a;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover { text-decoration: underline; }
     @media (max-width: 980px) {
-      main, .split, .grid-2 { grid-template-columns: 1fr; }
+      main, .split, .grid-2, .detail-grid { grid-template-columns: 1fr; }
       header { padding: 0 14px; }
     }
   </style>
@@ -232,6 +262,18 @@ export class DashboardController {
             </thead>
             <tbody id="leadRows"></tbody>
           </table>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>案件詳細</h2>
+          <div class="toolbar">
+            <button id="openProjectButton" onclick="openSelectedProject()" disabled>URLを開く</button>
+          </div>
+        </div>
+        <div class="body" id="leadDetail">
+          <div class="muted">営業リストから案件を選択してください</div>
         </div>
       </section>
 
@@ -318,6 +360,7 @@ export class DashboardController {
         state.mails = mails.items || [];
         renderLeads();
         renderMails();
+        renderLeadDetail();
         setStatus('apiStatus', 'API接続OK', 'ok');
       } catch (error) {
         setStatus('apiStatus', error.message, 'error');
@@ -481,6 +524,48 @@ export class DashboardController {
       document.getElementById('selectedLead').textContent = selected ? (selected.company?.name || selected.id) : '未選択';
     }
 
+    function renderLeadDetail() {
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      const container = document.getElementById('leadDetail');
+      const openButton = document.getElementById('openProjectButton');
+      if (!lead) {
+        container.innerHTML = '<div class="muted">営業リストから案件を選択してください</div>';
+        openButton.disabled = true;
+        return;
+      }
+
+      const company = lead.company || {};
+      const project = lead.project || {};
+      openButton.disabled = !project.url;
+      container.innerHTML =
+        '<div class="detail-grid">' +
+          detailItem('企業名', company.name || lead.companyId) +
+          detailItem('カテゴリ', project.category || '未取得') +
+          detailItem('支援額', formatCurrency(project.amount)) +
+          detailItem('支援者数', formatNumber(project.supporterCount) + '人') +
+          detailItem('Lead状態', lead.status) +
+          detailItem('優先度', lead.priority) +
+          detailItem('スコア', String(Number(lead.score || 0))) +
+          detailItem('作成日', formatDate(lead.createdAt)) +
+        '</div>' +
+        '<div class="row">' +
+          '<label>案件名</label>' +
+          '<div class="detail-value">' + escapeHtml(project.title || '案件名なし') + '</div>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label>CAMPFIRE URL</label>' +
+          '<div class="detail-value">' + renderLink(project.url) + '</div>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label>リード理由</label>' +
+          '<div class="detail-text">' + escapeHtml(lead.reason || '未入力') + '</div>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label>プロジェクト説明</label>' +
+          '<div class="detail-text">' + escapeHtml(project.description || '未取得') + '</div>' +
+        '</div>';
+    }
+
     function renderMails() {
       const rows = state.mails.map((mail) => {
         return '<tr data-selected="' + (mail.id === state.selectedMailId) + '" onclick="selectMail(\\'' + mail.id + '\\')">' +
@@ -515,6 +600,13 @@ export class DashboardController {
     function selectLead(id) {
       state.selectedLeadId = id;
       renderLeads();
+      renderLeadDetail();
+    }
+
+    function openSelectedProject() {
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      const url = lead?.project?.url;
+      if (url) window.open(url, '_blank', 'noopener');
     }
 
     function selectMail(id) {
@@ -541,6 +633,25 @@ export class DashboardController {
     function formatDate(value) {
       if (!value) return '';
       return new Date(value).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatNumber(value) {
+      const number = Number(value || 0);
+      return Number.isFinite(number) ? number.toLocaleString('ja-JP') : '0';
+    }
+
+    function formatCurrency(value) {
+      const number = Number(value || 0);
+      return Number.isFinite(number) ? number.toLocaleString('ja-JP') + '円' : '0円';
+    }
+
+    function detailItem(label, value) {
+      return '<div class="detail-item"><div class="detail-label">' + escapeHtml(label) + '</div><div class="detail-value">' + escapeHtml(value || '未取得') + '</div></div>';
+    }
+
+    function renderLink(value) {
+      if (!value) return '<span class="muted">未取得</span>';
+      return '<a href="' + escapeHtml(value) + '" target="_blank" rel="noopener">' + escapeHtml(value) + '</a>';
     }
 
     function escapeHtml(value) {
