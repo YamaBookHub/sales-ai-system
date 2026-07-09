@@ -611,7 +611,11 @@ export class DashboardController {
         const result = await api('/api/projects/categories/campfire');
         state.campfireCategories = result.items || [];
         select.innerHTML = '<option value="">すべてのカテゴリ</option>' +
-          state.campfireCategories.map((name) => '<option value="' + escapeHtml(name) + '">' + escapeHtml(name) + '</option>').join('');
+          state.campfireCategories.map((item) => {
+            const label = typeof item === 'string' ? item : item.label;
+            const value = typeof item === 'string' ? item : item.value;
+            return '<option value="' + escapeHtml(value) + '">' + escapeHtml(label) + '</option>';
+          }).join('');
       } catch (error) {
         select.innerHTML = '<option value="">カテゴリ取得失敗</option>';
       }

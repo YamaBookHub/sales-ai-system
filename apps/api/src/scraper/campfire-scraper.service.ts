@@ -48,9 +48,14 @@ export type CampfireSearchResult = {
   summary: string;
 };
 
+export type CampfireCategoryOption = {
+  label: string;
+  value: string;
+};
+
 @Injectable()
 export class CampfireScraperService {
-  async categories(): Promise<{ items: string[] }> {
+  async categories(): Promise<{ items: CampfireCategoryOption[] }> {
     const browser = await chromium.launch({ headless: true });
 
     try {
@@ -74,7 +79,7 @@ export class CampfireScraperService {
         userAgent:
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36'
       });
-      await openPage(page, buildCampfireSearchUrl(input.keyword));
+      await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const html = await page.content();
       const items = extractSearchResults(html).filter((item) => matchesSearchInput(item, input)).slice(0, 30);
       return { items, total: items.length };
@@ -107,8 +112,8 @@ export class CampfireScraperService {
   }
 }
 
-function buildCampfireSearchUrl(keyword?: string) {
-  const url = new URL('/projects/search', CAMPFIRE_ORIGIN);
+function buildCampfireSearchUrl(keyword?: string, category?: string) {
+  const url = normalizeCampfireCategoryUrl(category) || new URL('/projects/search', CAMPFIRE_ORIGIN);
   if (keyword?.trim()) {
     url.searchParams.set('word', keyword.trim());
   }
@@ -119,20 +124,41 @@ function extractCategoryOptions(html: string) {
   const $ = cheerio.load(html);
   const fromOptions = $('select option')
     .toArray()
-    .map((element) => clean($(element).text()))
-    .filter(isCategoryLabel);
+    .map((element) => toCategoryOption(clean($(element).text()), $(element).attr('value') || ''))
+    .filter((item): item is CampfireCategoryOption => Boolean(item));
   const fromLinks = $('a[href*="category"], a[href*="categories"]')
     .toArray()
-    .map((element) => clean($(element).text()))
-    .filter(isCategoryLabel);
+    .map((element) => toCategoryOption(clean($(element).text()), $(element).attr('href') || ''))
+    .filter((item): item is CampfireCategoryOption => Boolean(item));
 
-  return uniqueBy([...fromOptions, ...fromLinks], (value) => normalizeText(value)).slice(0, 50);
+  return uniqueBy([...fromOptions, ...fromLinks], (item) => normalizeUrlForUnique(item.value)).slice(0, 50);
+}
+
+function toCategoryOption(label: string, value: string): CampfireCategoryOption | null {
+  if (!isCategoryLabel(label)) return null;
+  const url = normalizeCampfireCategoryUrl(value);
+  if (!url) return null;
+  return { label, value: url.toString() };
 }
 
 function isCategoryLabel(value: string) {
   if (!value || value.length > 30) return false;
   if (/すべて|全て|カテゴリ|カテゴリー|探す|検索|ログイン|新規登録/.test(value)) return false;
   return /[ぁ-んァ-ン一-龥A-Za-z0-9]/.test(value);
+}
+
+function normalizeCampfireCategoryUrl(value?: string) {
+  if (!value?.trim()) return null;
+  let url: URL;
+  try {
+    url = new URL(value, CAMPFIRE_ORIGIN);
+  } catch {
+    return null;
+  }
+
+  if (!['camp-fire.jp', 'www.camp-fire.jp'].includes(url.hostname)) return null;
+  if (!/categor/i.test(url.pathname + url.search)) return null;
+  return url;
 }
 
 function extractSearchResults(html: string): CampfireSearchResult[] {
@@ -167,7 +193,7 @@ function extractSearchResults(html: string): CampfireSearchResult[] {
 }
 
 function matchesSearchInput(item: CampfireSearchResult, input: CampfireSearchInput) {
-  const category = normalizeText(input.category);
+  const category = normalizeCampfireCategoryUrl(input.category) ? '' : normalizeText(input.category);
   const haystack = normalizeText([item.title, item.summary, item.category, item.url].join(' '));
 
   if (category && !haystack.includes(category)) return false;
