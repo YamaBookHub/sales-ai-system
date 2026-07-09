@@ -67,10 +67,48 @@ export class DashboardController {
     button:disabled { opacity: .55; cursor: not-allowed; }
     main {
       display: grid;
-      grid-template-columns: 380px minmax(0, 1fr);
+      grid-template-columns: 420px minmax(0, 1fr);
       gap: 16px;
       padding: 16px;
       min-height: calc(100vh - 58px);
+    }
+    .workflow {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      background: transparent;
+      border: 0;
+    }
+    .workflow-step {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 12px;
+      min-width: 0;
+    }
+    .workflow-step strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    .workflow-step span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .step-label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: #e7f2f0;
+      color: var(--accent);
+      font-weight: 700;
+      margin-right: 6px;
     }
     section {
       background: var(--panel);
@@ -226,7 +264,7 @@ export class DashboardController {
     }
     a:hover { text-decoration: underline; }
     @media (max-width: 980px) {
-      main, .split, .grid-2, .detail-grid { grid-template-columns: 1fr; }
+      main, .workflow, .split, .grid-2, .detail-grid { grid-template-columns: 1fr; }
       header { padding: 0 14px; }
     }
   </style>
@@ -240,10 +278,33 @@ export class DashboardController {
     </div>
   </header>
   <main>
+    <section class="workflow" aria-label="業務ステップ">
+      <div class="workflow-step">
+        <strong><span class="step-label">1</span>取り込む</strong>
+        <span>CAMPFIRE URLを入れて案件を登録</span>
+      </div>
+      <div class="workflow-step">
+        <strong><span class="step-label">2</span>選ぶ</strong>
+        <span>営業リストから優先案件を選択</span>
+      </div>
+      <div class="workflow-step">
+        <strong><span class="step-label">3</span>見る</strong>
+        <span>商品・実行者・支援状況を確認</span>
+      </div>
+      <div class="workflow-step">
+        <strong><span class="step-label">4</span>作る</strong>
+        <span>AI分析を見てメール下書きを生成</span>
+      </div>
+      <div class="workflow-step">
+        <strong><span class="step-label">5</span>確認する</strong>
+        <span>本文チェック、レビュー、承認、キュー投入</span>
+      </div>
+    </section>
+
     <div class="left">
       <section>
         <div class="section-head">
-          <h2>CAMPFIRE取り込み</h2>
+          <h2>1. CAMPFIRE取り込み</h2>
         </div>
         <div class="body">
           <div class="row">
@@ -259,21 +320,7 @@ export class DashboardController {
 
       <section>
         <div class="section-head">
-          <h2>送信前チェック</h2>
-        </div>
-        <div class="body">
-          <ul class="checklist" id="checklistRows">
-            <li class="muted">メールを選択してください</li>
-          </ul>
-          <div id="checklistStatus" class="status muted" style="margin-top:12px"></div>
-        </div>
-      </section>
-    </div>
-
-    <div class="right">
-      <section>
-        <div class="section-head">
-          <h2>営業リスト</h2>
+          <h2>2. 営業リスト</h2>
           <div class="toolbar">
             <select id="templateKey">
               <option value="normal">通常版</option>
@@ -289,18 +336,20 @@ export class DashboardController {
                 <th style="width:24%">会社</th>
                 <th>案件</th>
                 <th style="width:90px">状態</th>
-                <th style="width:80px">点数</th>
-                <th style="width:90px">優先度</th>
+                <th style="width:76px">点数</th>
+                <th style="width:76px">優先度</th>
               </tr>
             </thead>
             <tbody id="leadRows"></tbody>
           </table>
         </div>
       </section>
+    </div>
 
+    <div class="right">
       <section>
         <div class="section-head">
-          <h2>案件詳細</h2>
+          <h2>3. 案件詳細</h2>
           <div class="toolbar">
             <button id="openProjectButton" onclick="openSelectedProject()" disabled>URLを開く</button>
           </div>
@@ -312,7 +361,7 @@ export class DashboardController {
 
       <section>
         <div class="section-head">
-          <h2>AI分析結果</h2>
+          <h2>4. AI分析結果</h2>
         </div>
         <div class="body" id="aiAnalysis">
           <div class="muted">営業リストから案件を選択してください</div>
@@ -321,7 +370,7 @@ export class DashboardController {
 
       <section>
         <div class="section-head">
-          <h2>メール確認</h2>
+          <h2>5. メール確認・承認</h2>
           <div class="toolbar">
             <button onclick="requestReview()" id="reviewButton" disabled>レビュー依頼</button>
             <button onclick="requestReReview()" id="reReviewButton" disabled>再レビュー依頼</button>
@@ -347,6 +396,13 @@ export class DashboardController {
             </div>
           </div>
           <div>
+            <div class="row">
+              <label>送信前チェック</label>
+              <ul class="checklist" id="checklistRows">
+                <li class="muted">メールを選択してください</li>
+              </ul>
+              <div id="checklistStatus" class="status muted" style="margin-top:8px"></div>
+            </div>
             <div class="grid-2">
               <div class="row">
                 <label>選択リード</label>
