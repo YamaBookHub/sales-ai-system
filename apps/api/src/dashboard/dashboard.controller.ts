@@ -136,8 +136,8 @@ export class DashboardController {
     .status { font-size: 13px; }
     .split {
       display: grid;
-      grid-template-columns: minmax(0, 1.4fr) minmax(340px, .6fr);
-      gap: 14px;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
     }
     table {
       width: 100%;
@@ -168,7 +168,7 @@ export class DashboardController {
     .badge.ok { color: var(--ok); border-color: #bddfc9; background: #f1fbf4; }
     .badge.warn { color: var(--warn); border-color: #ecd2a8; background: #fff8eb; }
     .badge.danger { color: var(--danger); border-color: #ecc4c4; background: #fff4f4; }
-    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
     .detail-item { border: 1px solid var(--line); border-radius: 4px; padding: 8px; }
     .detail-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
     .detail-value { word-break: break-word; }
@@ -241,7 +241,7 @@ export class DashboardController {
 
       <section>
         <div class="section-head">
-          <h2>選択案件</h2>
+          <h2>選択案件の詳細</h2>
           <div class="toolbar">
             <button onclick="openProject()" id="openProjectButton" disabled>URLを開く</button>
           </div>
