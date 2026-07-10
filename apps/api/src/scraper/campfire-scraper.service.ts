@@ -138,6 +138,7 @@ export class CampfireScraperService {
       await openPage(page, url);
       const html = await page.content();
       const project = extractProject(html, url);
+      assertProjectIsFundraising(project);
       project.profileProjectCount = (await fetchProfileProjectCount(page, html, project.profileProjectCount)) ?? project.profileProjectCount;
 
       if (!project.projectTitle) {
@@ -247,7 +248,7 @@ function isFundraisingProject(cardText: string, daysLeft: number | null) {
   if (/(もうすぐ公開|近日公開|公開予定|COMING\s*SOON|終了したもの|終了しました|募集終了|受付終了|SUCCESS|失敗)/i.test(cardText)) {
     return false;
   }
-  return daysLeft !== null || /募集中のもの|支援者|現在の支援総額|残り\s*[0-9]+\s*日|あと\s*[0-9]+\s*日/.test(cardText);
+  return daysLeft !== null;
 }
 
 async function collectSearchResults(page: Page, limit: number, excludedUrls = new Set<string>(), input: CampfireSearchInput = {}) {
@@ -579,6 +580,11 @@ function extractProject(html: string, projectUrl: string): ScrapedCampfireProjec
     xUrl: classifiedUrls.xUrl,
     externalUrls: urls
   };
+}
+
+function assertProjectIsFundraising(project: ScrapedCampfireProject) {
+  if (project.daysLeft) return;
+  throw new BadRequestException('このCAMPFIREプロジェクトは募集中ではないため取り込みません。終了済み・公開前の案件は営業対象から除外します。');
 }
 
 function extractProfileUrl(html: string) {
