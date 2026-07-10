@@ -185,6 +185,11 @@ export class DashboardController {
     }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
+    footer {
+      padding: 0 12px 14px;
+      color: var(--muted);
+      font-size: 12px;
+    }
     @media (max-width: 1100px) {
       .filters, .stats, .split, .detail-grid { grid-template-columns: 1fr; }
       th { position: static; }
@@ -300,6 +305,7 @@ export class DashboardController {
     </section>
 
   </main>
+  <footer>Sales AI System</footer>
   <script>
     const state = { leads: [], mails: [], selectedLeadId: null };
 
@@ -615,7 +621,7 @@ export class DashboardController {
       font-size: 14px;
     }
     header {
-      height: 58px;
+      min-height: 56px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -626,7 +632,23 @@ export class DashboardController {
       top: 0;
       z-index: 10;
     }
-    h1 { font-size: 18px; margin: 0; }
+    h1 { font-size: 18px; margin: 0; letter-spacing: 0; }
+    .top-nav {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f4f6f8;
+    }
+    .top-nav button {
+      border-color: transparent;
+      background: transparent;
+    }
+    .top-nav button.primary {
+      background: var(--accent);
+      color: white;
+    }
     button, input, select, textarea {
       font: inherit;
     }
@@ -648,10 +670,10 @@ export class DashboardController {
     button:disabled { opacity: .55; cursor: not-allowed; }
     main {
       display: grid;
-      grid-template-columns: 420px minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 10px;
       padding: 12px;
-      min-height: calc(100vh - 58px);
+      min-height: calc(100vh - 56px);
     }
     .workflow {
       display: none;
@@ -662,7 +684,7 @@ export class DashboardController {
       border-radius: 4px;
       min-width: 0;
     }
-    .left, .right { display: grid; gap: 10px; align-content: start; }
+    .left, .right { display: grid; gap: 10px; align-content: start; min-width: 0; }
     .section-head {
       padding: 10px 12px;
       border-bottom: 1px solid var(--line);
@@ -683,7 +705,7 @@ export class DashboardController {
       color: var(--text);
       padding: 9px 10px;
     }
-    textarea { min-height: 260px; resize: vertical; line-height: 1.7; }
+    textarea { min-height: 300px; resize: vertical; line-height: 1.8; }
     .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .muted { color: var(--muted); }
     .status { font-size: 12px; min-height: 18px; }
@@ -707,7 +729,7 @@ export class DashboardController {
     }
     th, td {
       border-bottom: 1px solid var(--line);
-      padding: 8px 10px;
+      padding: 9px 10px;
       text-align: left;
       vertical-align: top;
     }
@@ -775,8 +797,8 @@ export class DashboardController {
     }
     .split {
       display: grid;
-      grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
-      gap: 16px;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
     }
     .detail-grid {
       display: grid;
@@ -880,9 +902,7 @@ export class DashboardController {
     body.mail-workspace-page .right {
       display: block;
     }
-    .mail-lead-filter {
-      display: none;
-    }
+    .mail-lead-filter { display: none; }
     body.mail-workspace-page .mail-lead-filter {
       display: block;
     }
@@ -963,7 +983,8 @@ export class DashboardController {
     body.url-search-page .search-console {
       border-radius: 4px;
     }
-    .search-drawer > summary {
+    .search-drawer > summary,
+    .mail-filter-drawer > summary {
       min-height: 42px;
       display: flex;
       align-items: center;
@@ -974,10 +995,12 @@ export class DashboardController {
       font-weight: 700;
       border-bottom: 1px solid transparent;
     }
-    .search-drawer[open] > summary {
+    .search-drawer[open] > summary,
+    .mail-filter-drawer[open] > summary {
       border-bottom-color: var(--line);
     }
-    .search-drawer .body {
+    .search-drawer .body,
+    .mail-filter-drawer .body {
       padding-top: 12px;
     }
     .search-block {
@@ -1072,14 +1095,32 @@ export class DashboardController {
       background: #f8fafb;
       text-decoration: none;
     }
+    .compact-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .mail-actions {
+      border-top: 1px solid var(--line);
+      margin-top: 12px;
+      padding-top: 12px;
+    }
+    footer {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 0 12px 14px;
+      color: var(--muted);
+      font-size: 12px;
+    }
     a {
       color: var(--accent);
       text-decoration: none;
     }
     a:hover { text-decoration: underline; }
     @media (max-width: 980px) {
-      main, .workflow, .split, .grid-2, .detail-grid { grid-template-columns: 1fr; }
+      main, .workflow, .split, .grid-2, .detail-grid, .compact-summary { grid-template-columns: 1fr; }
       header { padding: 0 14px; }
+      .direct-import, .quick-search, .search-filter-row, .mail-filter-row, .result-filter-panel { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -1161,29 +1202,33 @@ export class DashboardController {
       </section>
 
       <section class="mail-lead-filter">
-        <div class="section-head">
-          <h2>対象検索</h2>
-        </div>
-        <div class="body">
-          <div class="mail-filter-row">
-            <input id="mailLeadKeyword" placeholder="会社・案件・理由で検索" oninput="renderLeads()" />
-            <select id="mailLeadStatusFilter" onchange="renderLeads()">
-              <option value="">状態 すべて</option>
-              <option value="discovered">発見</option>
-              <option value="qualified">候補</option>
-              <option value="drafted">下書き済み</option>
-              <option value="reviewing">確認中</option>
-              <option value="approved">承認済み</option>
-              <option value="queued">送信待ち</option>
-              <option value="rejected">対象外</option>
-            </select>
+        <details class="mail-filter-drawer">
+          <summary>
+            <span>対象検索</span>
+            <span class="muted">必要な時だけ開く</span>
+          </summary>
+          <div class="body">
+            <div class="mail-filter-row">
+              <input id="mailLeadKeyword" placeholder="会社・案件・理由で検索" oninput="renderLeads()" />
+              <select id="mailLeadStatusFilter" onchange="renderLeads()">
+                <option value="">状態 すべて</option>
+                <option value="discovered">発見</option>
+                <option value="qualified">候補</option>
+                <option value="drafted">下書き済み</option>
+                <option value="reviewing">確認中</option>
+                <option value="approved">承認済み</option>
+                <option value="queued">送信待ち</option>
+                <option value="rejected">対象外</option>
+              </select>
+            </div>
           </div>
-        </div>
+        </details>
       </section>
 
       <section>
         <div class="section-head">
-          <h2>対象を選ぶ</h2>
+          <h2>営業対象一覧</h2>
+          <span id="mailLeadCount" class="status muted">0件</span>
         </div>
         <div class="body" style="padding:0">
           <table>
@@ -1300,11 +1345,6 @@ export class DashboardController {
               <option value="sns_video_ad">SNS動画・広告版</option>
             </select>
             <button class="primary" id="generateButton" onclick="generateMail()" disabled>新規メール生成</button>
-            <button onclick="requestReview()" id="reviewButton" disabled>レビュー依頼</button>
-            <button onclick="requestReReview()" id="reReviewButton" disabled>再レビュー依頼</button>
-            <button onclick="rejectMail()" id="rejectButton" disabled>棄却</button>
-            <button onclick="approveMail()" id="approveButton" disabled>承認</button>
-            <button onclick="queueMail()" id="queueButton" disabled>キュー投入</button>
           </div>
         </div>
         <div class="body">
@@ -1342,14 +1382,14 @@ export class DashboardController {
               </div>
             </div>
             <div>
-              <div class="grid-2">
-                <div class="row">
-                  <label>選択リード</label>
-                  <div id="selectedLead" class="muted">未選択</div>
+              <div class="compact-summary">
+                <div class="detail-item">
+                  <div class="detail-label">選択リード</div>
+                  <div id="selectedLead" class="detail-value muted">未選択</div>
                 </div>
-                <div class="row">
-                  <label>選択メール</label>
-                  <div id="selectedMail" class="muted">未選択</div>
+                <div class="detail-item">
+                  <div class="detail-label">選択メール</div>
+                  <div id="selectedMail" class="detail-value muted">未選択</div>
                 </div>
               </div>
               <div class="row">
@@ -1359,12 +1399,22 @@ export class DashboardController {
                 </ul>
                 <div id="checklistStatus" class="status muted" style="margin-top:8px"></div>
               </div>
+              <div class="toolbar mail-actions">
+                <button onclick="requestReview()" id="reviewButton" disabled>レビュー依頼</button>
+                <button onclick="requestReReview()" id="reReviewButton" disabled>再レビュー依頼</button>
+                <button onclick="rejectMail()" id="rejectButton" disabled>棄却</button>
+                <button onclick="approveMail()" id="approveButton" disabled>承認</button>
+                <button onclick="queueMail()" id="queueButton" disabled>キュー投入</button>
+              </div>
             </div>
           </div>
         </div>
       </section>
     </div>
   </main>
+  <footer>
+    <span>Sales AI System</span>
+  </footer>
 
   <script>
     const state = {
@@ -1721,6 +1771,8 @@ export class DashboardController {
         '</tr>';
       }).join('');
       document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="6" class="muted">まだリードがありません</td></tr>';
+      const mailLeadCount = document.getElementById('mailLeadCount');
+      if (mailLeadCount) mailLeadCount.textContent = leads.length + '件';
       document.getElementById('generateButton').disabled = !state.selectedLeadId;
       document.getElementById('analysisButton').disabled = !state.selectedLeadId;
       const selected = state.leads.find((lead) => lead.id === state.selectedLeadId);
