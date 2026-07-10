@@ -25,6 +25,56 @@ const MAKUAKE_CATEGORIES = [
   '教育'
 ].map((label) => ({ label, value: `preset:${label}` }));
 
+const PREFECTURES = [
+  '北海道',
+  '青森',
+  '岩手',
+  '宮城',
+  '秋田',
+  '山形',
+  '福島',
+  '茨城',
+  '栃木',
+  '群馬',
+  '埼玉',
+  '千葉',
+  '東京',
+  '神奈川',
+  '新潟',
+  '富山',
+  '石川',
+  '福井',
+  '山梨',
+  '長野',
+  '岐阜',
+  '静岡',
+  '愛知',
+  '三重',
+  '滋賀',
+  '京都',
+  '大阪',
+  '兵庫',
+  '奈良',
+  '和歌山',
+  '鳥取',
+  '島根',
+  '岡山',
+  '広島',
+  '山口',
+  '徳島',
+  '香川',
+  '愛媛',
+  '高知',
+  '福岡',
+  '佐賀',
+  '長崎',
+  '熊本',
+  '大分',
+  '宮崎',
+  '鹿児島',
+  '沖縄'
+];
+
 @Injectable()
 export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
   readonly source = 'makuake' as const;
@@ -132,6 +182,7 @@ type MakuakeSearchResult = {
   daysLeft: number | null;
   profileProjectCount: number | null;
   category: string;
+  location: string;
 };
 
 type ScrapedMakuakeProject = {
@@ -144,6 +195,7 @@ type ScrapedMakuakeProject = {
   isEnded: boolean;
   description: string;
   category: string;
+  location: string;
   thumbnailUrl: string;
   websiteUrl: string;
   inquiryUrl: string;
@@ -193,7 +245,7 @@ async function collectSearchResultsFromPage(page: Page) {
 
 async function enrichSearchResults(context: BrowserContext, items: MakuakeSearchResult[]) {
   return runWithConcurrency(items, 4, async (item) => {
-    if (item.amount > 0 && item.supporterCount > 0) return item;
+    if (item.amount > 0 && item.supporterCount > 0 && item.category && item.location) return item;
     const page = await context.newPage();
     try {
       await page.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 25000 });
@@ -202,7 +254,9 @@ async function enrichSearchResults(context: BrowserContext, items: MakuakeSearch
       return {
         ...item,
         amount: item.amount || extractAmount(text),
-        supporterCount: item.supporterCount || extractSupporterCount(text)
+        supporterCount: item.supporterCount || extractSupporterCount(text),
+        category: item.category || extractCategory(text),
+        location: item.location || extractLocation(text)
       };
     } catch {
       return item;
@@ -229,7 +283,8 @@ function extractSearchResults(html: string): MakuakeSearchResult[] {
         supporterCount: extractSupporterCount(text),
         daysLeft: extractDaysLeft(text),
         profileProjectCount: null,
-        category: extractCategory(text)
+        category: extractCategory(text),
+        location: extractLocation(text)
       };
     })
     .filter((item) => item.url && item.title && isProjectUrl(item.url))
@@ -255,6 +310,7 @@ function extractProject(html: string, url: string): ScrapedMakuakeProject {
     isEnded: /終了|募集終了|販売終了/.test(pageText) && extractDaysLeft(pageText) === null,
     description,
     category: extractCategory(pageText),
+    location: extractLocation(pageText),
     thumbnailUrl: $('meta[property="og:image"]').attr('content') || '',
     websiteUrl: externalUrls.find((item) => !/makuake\.com|twitter\.com|x\.com|instagram\.com|facebook\.com|youtube\.com/.test(item)) || '',
     inquiryUrl: externalUrls.find((item) => /contact|inquiry|お問い合わせ/.test(item)) || '',
@@ -276,6 +332,7 @@ function buildImportReason(scraped: ScrapedMakuakeProject) {
     scraped.daysLeft !== null ? `残り日数: ${scraped.daysLeft}日` : '',
     scraped.memberStats.projectCount !== null ? `実行者プロジェクト数: ${scraped.memberStats.projectCount}件` : '',
     scraped.memberStats.supporterCount !== null ? `実行者サポーター数: ${scraped.memberStats.supporterCount.toLocaleString()}人` : '',
+    scraped.location ? `所在地: ${scraped.location}` : '',
     scraped.category ? `カテゴリ: ${scraped.category}` : ''
   ].filter(Boolean);
   return values.join(' / ') || 'Makuake import';
@@ -288,6 +345,7 @@ function buildCompanyMemo(scraped: ScrapedMakuakeProject) {
     stats.totalAmount !== null ? `Makuake応援購入総額: ${stats.totalAmount.toLocaleString()}円` : '',
     stats.projectCount !== null ? `Makuakeプロジェクト数: ${stats.projectCount}件` : '',
     stats.supporterCount !== null ? `Makuakeサポーター数: ${stats.supporterCount.toLocaleString()}人` : '',
+    scraped.location ? `Makuake所在地: ${scraped.location}` : '',
     stats.url ? `Makuake member URL: ${stats.url}` : ''
   ].filter(Boolean);
   return lines.join('\n') || undefined;
@@ -299,6 +357,7 @@ function buildMemberAnalysisMemo(scraped: ScrapedMakuakeProject) {
     stats.projectCount !== null ? `Makuake実行者の累計プロジェクト数: ${stats.projectCount}件` : '',
     stats.totalAmount !== null ? `Makuake実行者の応援購入総額: ${stats.totalAmount.toLocaleString()}円` : '',
     stats.supporterCount !== null ? `Makuake実行者の累計サポーター数: ${stats.supporterCount.toLocaleString()}人` : '',
+    scraped.location ? `所在地: ${scraped.location}` : '',
     stats.description ? `実行者紹介: ${stats.description.slice(0, 240)}` : ''
   ].filter(Boolean);
   return lines.join('\n') || undefined;
@@ -391,6 +450,26 @@ function extractDaysLeft(text: string) {
 
 function extractCategory(text: string) {
   return MAKUAKE_CATEGORIES.find((item) => text.includes(item.label))?.label || '';
+}
+
+function extractLocation(text: string) {
+  const normalized = clean(text);
+  const locationLabelMatch = normalized.match(/(?:所在地|活動拠点|拠点|地域)\s*[:：]?\s*([^\s　、。/#]{2,12})/);
+  if (locationLabelMatch?.[1]) {
+    const labeled = normalizePrefecture(locationLabelMatch[1]);
+    if (labeled) return labeled;
+  }
+  for (const prefecture of PREFECTURES) {
+    const suffixPattern = prefecture === '北海道' ? '北海道' : `${prefecture}(?:都|府|県)?`;
+    if (new RegExp(`(?:^|\\s|#|、|。)${suffixPattern}(?:\\s|#|、|。|$)`).test(normalized)) return prefecture;
+  }
+  return '';
+}
+
+function normalizePrefecture(value: string) {
+  const cleaned = clean(value).replace(/[都府県]$/, '');
+  if (value.includes('北海道')) return '北海道';
+  return PREFECTURES.find((prefecture) => prefecture === cleaned || value.includes(prefecture)) || '';
 }
 
 function extractExternalUrls($: cheerio.CheerioAPI, currentUrl: string) {
