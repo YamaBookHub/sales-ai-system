@@ -1883,7 +1883,8 @@ export class DashboardController {
       selectedLeadId: null,
       selectedMailId: null,
       campfireCategories: [],
-      campfireCandidates: []
+      campfireCandidates: [],
+      candidateImportStatus: {}
     };
 
     async function api(path, options = {}) {
@@ -1912,6 +1913,7 @@ export class DashboardController {
         ]);
         state.leads = leads.items || [];
         state.mails = mails.items || [];
+        syncCandidateImportStatuses();
         const selectedMail = ensureSelectedMailForLead();
         renderLeads();
         renderMailLeadSummary();
@@ -1977,6 +1979,7 @@ export class DashboardController {
           }))
         });
         state.campfireCandidates = result.items || [];
+        syncCandidateImportStatuses();
         renderCampfireCandidates();
         const countText = '取得 ' + state.campfireCandidates.length + '件';
         setStatus('campfireSearchStatusText', countText, 'ok');
@@ -2001,6 +2004,7 @@ export class DashboardController {
       document.getElementById('campfireDisplaySupporterRange').value = '';
       document.getElementById('campfireDisplayProfileProjectRange').value = '';
       state.campfireCandidates = [];
+      state.candidateImportStatus = {};
       renderCampfireCandidates();
       setStatus('campfireSearchStatusText', '', '');
       document.getElementById('campfireCandidateCount').textContent = '未検索';
@@ -2009,8 +2013,28 @@ export class DashboardController {
     async function importCampfireCandidate(index) {
       const candidate = state.campfireCandidates[index];
       if (!candidate?.url) return;
+      const importState = getCandidateImportState(candidate);
+      if (importState.status === 'existing' || importState.status === 'imported' || importState.status === 'importing') return;
       document.getElementById('campfireUrl').value = candidate.url;
-      await importCampfire();
+      setCandidateImportStatus(candidate, 'importing', '取り込み中');
+      renderCampfireCandidates();
+      setStatus('importStatus', '取り込み中', 'warn');
+      try {
+        const result = await api('/api/projects/import/campfire', {
+          method: 'POST',
+          body: JSON.stringify({ url: candidate.url })
+        });
+        state.selectedLeadId = result.lead.id;
+        setCandidateImportStatus(candidate, 'imported', '取り込み済み', result.lead.id);
+        renderCampfireCandidates();
+        setStatus('importStatus', '取り込み完了。AI分析中', 'warn');
+        await loadAll();
+        await analyzeLead({ automatic: true });
+      } catch (error) {
+        setCandidateImportStatus(candidate, 'failed', error.message);
+        renderCampfireCandidates();
+        setStatus('importStatus', error.message, 'error');
+      }
     }
 
     async function bulkImportVisibleCandidates() {
@@ -2018,26 +2042,44 @@ export class DashboardController {
       if (!entries.length) return;
       const ok = window.confirm('表示中の' + entries.length + '件を取り込みます。よろしいですか？');
       if (!ok) return;
+      let successCount = 0;
+      let failedCount = 0;
+      let skippedCount = 0;
       setStatus('importStatus', '一括取り込み中 0/' + entries.length, 'warn');
       for (let index = 0; index < entries.length; index += 1) {
         const candidate = entries[index].item;
+        const importState = getCandidateImportState(candidate);
+        if (importState.status === 'existing' || importState.status === 'imported') {
+          skippedCount += 1;
+          continue;
+        }
         try {
           document.getElementById('campfireUrl').value = candidate.url;
+          setCandidateImportStatus(candidate, 'importing', '取り込み中');
+          renderCampfireCandidates();
           const result = await api('/api/projects/import/campfire', {
             method: 'POST',
             body: JSON.stringify({ url: candidate.url })
           });
           state.selectedLeadId = result.lead.id;
           await api('/api/ai/leads/' + result.lead.id + '/analyze', { method: 'POST' });
+          setCandidateImportStatus(candidate, 'imported', '取り込み済み', result.lead.id);
+          successCount += 1;
           setStatus('importStatus', '一括取り込み中 ' + (index + 1) + '/' + entries.length, 'warn');
         } catch (error) {
-          setStatus('importStatus', '一括取り込みで停止: ' + error.message, 'error');
-          await loadAll();
-          return;
+          setCandidateImportStatus(candidate, 'failed', error.message);
+          failedCount += 1;
+          setStatus('importStatus', '一括取り込み中 ' + (index + 1) + '/' + entries.length + '（失敗 ' + failedCount + '件）', 'warn');
         }
+        renderCampfireCandidates();
       }
-      setStatus('importStatus', '一括取り込み完了 ' + entries.length + '件', 'ok');
+      setStatus(
+        'importStatus',
+        '一括取り込み完了: 取込 ' + successCount + '件 / 登録済みスキップ ' + skippedCount + '件 / 失敗 ' + failedCount + '件',
+        failedCount ? 'warn' : 'ok'
+      );
       await loadAll();
+      renderCampfireCandidates();
     }
 
     async function analyzeLead(options = {}) {
@@ -2321,15 +2363,18 @@ export class DashboardController {
         return;
       }
       const visibleCandidates = getVisibleCandidateEntries();
-      document.getElementById('bulkImportButton').disabled = !visibleCandidates.length;
+      const importableCount = visibleCandidates.filter(({ item }) => isCandidateImportable(item)).length;
+      document.getElementById('bulkImportButton').disabled = !importableCount;
       document.getElementById('campfireCandidateCount').textContent =
-        '表示 ' + visibleCandidates.length + '件 / 取得 ' + state.campfireCandidates.length + '件';
+        '表示 ' + visibleCandidates.length + '件 / 取得 ' + state.campfireCandidates.length + '件 / 未取込 ' + importableCount + '件';
       if (!visibleCandidates.length) {
         container.innerHTML = '<div class="muted">表示条件に合う候補がありません。条件をゆるめてください。</div>';
         return;
       }
       const rows = visibleCandidates.map(({ item, originalIndex }) => {
         const projectUrl = escapeAttr(item.url);
+        const importState = getCandidateImportState(item);
+        const importDisabled = importState.status === 'existing' || importState.status === 'imported' || importState.status === 'importing';
         const pastProjects = item.profileProjectCount === null
           ? '-'
           : item.profileProjectCount === 0
@@ -2345,8 +2390,12 @@ export class DashboardController {
           '<td class="center-cell">' + (item.daysLeft === null ? '-' : escapeHtml(item.daysLeft + '日')) + '</td>' +
           '<td class="center-cell">' + escapeHtml(pastProjects) + '</td>' +
           '<td>' + escapeHtml(item.category || '-') + '</td>' +
+          '<td>' +
+            '<span class="badge ' + candidateImportBadgeClass(importState.status) + '">' + escapeHtml(labelCandidateImportStatus(importState.status)) + '</span>' +
+            (importState.message ? '<div class="muted clip" title="' + escapeAttr(importState.message) + '">' + escapeHtml(importState.message) + '</div>' : '') +
+          '</td>' +
           '<td class="center-cell"><a class="link-button" href="' + projectUrl + '" target="_blank" rel="noopener noreferrer">開く</a></td>' +
-          '<td class="action-cell"><button class="primary" onclick="importCampfireCandidate(' + originalIndex + ')">取り込む</button></td>' +
+          '<td class="action-cell"><button class="primary" onclick="importCampfireCandidate(' + originalIndex + ')" ' + (importDisabled ? 'disabled' : '') + '>' + escapeHtml(candidateImportButtonLabel(importState.status)) + '</button></td>' +
         '</tr>';
       }).join('');
       container.innerHTML =
@@ -2360,6 +2409,7 @@ export class DashboardController {
                 '<th style="width:76px">残り</th>' +
                 '<th style="width:96px">過去PJ</th>' +
                 '<th style="width:130px">カテゴリ</th>' +
+                '<th style="width:130px">取込状態</th>' +
                 '<th style="width:76px">URL</th>' +
                 '<th style="width:104px">操作</th>' +
               '</tr>' +
@@ -2367,6 +2417,109 @@ export class DashboardController {
             '<tbody>' + rows + '</tbody>' +
           '</table>' +
         '</div>';
+    }
+
+    function syncCandidateImportStatuses() {
+      state.campfireCandidates.forEach((candidate) => {
+        const existing = findExistingLeadForCandidate(candidate);
+        if (!existing) return;
+        const key = candidateImportKey(candidate);
+        const current = state.candidateImportStatus[key];
+        if (!current || current.status === 'not_imported' || current.status === 'importing') {
+          state.candidateImportStatus[key] = {
+            status: current?.status === 'importing' ? 'imported' : 'existing',
+            message: existing.company?.name ? existing.company.name + 'で登録済み' : '営業リストに登録済み',
+            leadId: existing.id
+          };
+        }
+      });
+    }
+
+    function setCandidateImportStatus(candidate, status, message = '', leadId = null) {
+      const key = candidateImportKey(candidate);
+      if (!key) return;
+      state.candidateImportStatus[key] = { status, message, leadId };
+    }
+
+    function getCandidateImportState(candidate) {
+      const key = candidateImportKey(candidate);
+      const current = key ? state.candidateImportStatus[key] : null;
+      if (current && (current.status === 'importing' || current.status === 'imported' || current.status === 'failed')) return current;
+      const existing = findExistingLeadForCandidate(candidate);
+      if (existing) {
+        return {
+          status: 'existing',
+          message: existing.company?.name ? existing.company.name + 'で登録済み' : '営業リストに登録済み',
+          leadId: existing.id
+        };
+      }
+      return current || { status: 'not_imported', message: '', leadId: null };
+    }
+
+    function isCandidateImportable(candidate) {
+      const status = getCandidateImportState(candidate).status;
+      return status === 'not_imported' || status === 'failed';
+    }
+
+    function findExistingLeadForCandidate(candidate) {
+      const candidateProjectId = campfireProjectId(candidate?.url);
+      const candidateUrl = normalizeComparableUrl(candidate?.url);
+      return state.leads.find((lead) => {
+        const projectUrl = lead.project?.url;
+        if (!projectUrl) return false;
+        const leadProjectId = campfireProjectId(projectUrl);
+        if (candidateProjectId && leadProjectId && candidateProjectId === leadProjectId) return true;
+        return candidateUrl && normalizeComparableUrl(projectUrl) === candidateUrl;
+      });
+    }
+
+    function candidateImportKey(candidate) {
+      return campfireProjectId(candidate?.url) || normalizeComparableUrl(candidate?.url);
+    }
+
+    function campfireProjectId(value) {
+      const match = String(value || '').match(/camp-fire\\.jp\\/projects\\/(\\d+)/);
+      return match ? match[1] : '';
+    }
+
+    function normalizeComparableUrl(value) {
+      if (!value) return '';
+      try {
+        const url = new URL(value);
+        url.hash = '';
+        url.search = '';
+        return url.toString().replace(/\\/$/, '');
+      } catch (_) {
+        return String(value).split('#')[0].split('?')[0].replace(/\\/$/, '');
+      }
+    }
+
+    function labelCandidateImportStatus(status) {
+      const labels = {
+        not_imported: '未取込',
+        existing: '登録済み',
+        importing: '取込中',
+        imported: '取込済み',
+        failed: '失敗'
+      };
+      return labels[status] || '未取込';
+    }
+
+    function candidateImportButtonLabel(status) {
+      const labels = {
+        existing: '登録済み',
+        importing: '取込中',
+        imported: '取込済み',
+        failed: '再取込'
+      };
+      return labels[status] || '取り込む';
+    }
+
+    function candidateImportBadgeClass(status) {
+      if (status === 'existing' || status === 'imported') return 'ok';
+      if (status === 'importing') return 'warn';
+      if (status === 'failed') return 'danger';
+      return '';
     }
 
     function getVisibleCandidateEntries() {
