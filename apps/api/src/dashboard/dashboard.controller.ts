@@ -1273,10 +1273,20 @@ export class DashboardController {
       gap: 8px;
     }
     .display-filter {
-      margin-top: 10px;
+      position: relative;
+      margin-top: 0;
     }
     .display-filter .result-filter-panel {
-      margin-top: 10px;
+      position: absolute;
+      right: 0;
+      top: 40px;
+      z-index: 20;
+      width: min(760px, calc(100vw - 48px));
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      box-shadow: 0 12px 28px rgba(23, 32, 38, .14);
     }
     .candidate-table-wrap {
       overflow: auto;
@@ -1433,6 +1443,12 @@ export class DashboardController {
       main, .workflow, .split, .grid-2, .detail-grid, .compact-summary, .mail-create-bar, .mail-editor-grid, .next-action-strip, .info-columns { grid-template-columns: 1fr; }
       header { padding: 0 14px; }
       .direct-import, .quick-search, .search-filter-row, .mail-filter-row, .result-filter-panel, .search-block { grid-template-columns: 1fr; }
+      .display-filter .result-filter-panel {
+        position: static;
+        width: auto;
+        margin-top: 8px;
+        box-shadow: none;
+      }
       .search-block .direct-import,
       .search-block .quick-search,
       .search-block .search-filter-row {
@@ -1571,6 +1587,48 @@ export class DashboardController {
           <h2>CAMPFIRE候補一覧</h2>
           <div class="toolbar">
             <span id="campfireCandidateCount" class="status muted">未検索</span>
+            <details class="display-filter">
+              <summary>表示条件</summary>
+              <div class="result-filter-panel">
+                <select id="campfireResultLimit" onchange="renderCampfireCandidates()">
+                  <option value="10">最大表示 10件</option>
+                  <option value="50">最大表示 50件</option>
+                  <option value="100">最大表示 100件</option>
+                </select>
+                <select id="campfireDisplayStatus" onchange="renderCampfireCandidates()">
+                  <option value="">公開状態 すべて</option>
+                  <option value="active">現在公開中</option>
+                  <option value="endingSoon">終了間近</option>
+                </select>
+                <select id="campfireDisplayAmountRange" onchange="renderCampfireCandidates()">
+                  <option value="">支援額 すべて</option>
+                  <option value="0:500000">50万円未満</option>
+                  <option value="500000:1000000">50万〜100万円</option>
+                  <option value="1000000:3000000">100万〜300万円</option>
+                  <option value="3000000:5000000">300万〜500万円</option>
+                  <option value="5000000:10000000">500万〜1,000万円</option>
+                  <option value="10000000:">1,000万円以上</option>
+                </select>
+                <select id="campfireDisplaySupporterRange" onchange="renderCampfireCandidates()">
+                  <option value="">サポーター すべて</option>
+                  <option value="0:30">30人未満</option>
+                  <option value="30:50">30〜50人</option>
+                  <option value="50:100">50〜100人</option>
+                  <option value="100:300">100〜300人</option>
+                  <option value="300:500">300〜500人</option>
+                  <option value="500:">500人以上</option>
+                </select>
+                <select id="campfireDisplayProfileProjectRange" onchange="renderCampfireCandidates()">
+                  <option value="">過去プロジェクト すべて</option>
+                  <option value="0:0">初回のみ</option>
+                  <option value="1:3">1〜3件</option>
+                  <option value="4:9">4〜9件</option>
+                  <option value="10:29">10〜29件</option>
+                  <option value="30:99">30〜99件</option>
+                  <option value="100:">100件以上</option>
+                </select>
+              </div>
+            </details>
             <button onclick="bulkImportVisibleCandidates()" id="bulkImportButton" disabled>表示中を一括取り込み</button>
           </div>
         </div>
@@ -1578,48 +1636,6 @@ export class DashboardController {
           <div id="campfireCandidates">
             <div class="muted">検索すると候補URLがここに表示されます。</div>
           </div>
-          <details class="display-filter">
-            <summary>一覧の表示条件</summary>
-            <div class="result-filter-panel">
-              <select id="campfireResultLimit" onchange="renderCampfireCandidates()">
-                <option value="10">最大表示 10件</option>
-                <option value="50">最大表示 50件</option>
-                <option value="100">最大表示 100件</option>
-              </select>
-              <select id="campfireDisplayStatus" onchange="renderCampfireCandidates()">
-                <option value="">公開状態 すべて</option>
-                <option value="active">現在公開中</option>
-                <option value="endingSoon">終了間近</option>
-              </select>
-              <select id="campfireDisplayAmountRange" onchange="renderCampfireCandidates()">
-                <option value="">支援額 すべて</option>
-                <option value="0:500000">50万円未満</option>
-                <option value="500000:1000000">50万〜100万円</option>
-                <option value="1000000:3000000">100万〜300万円</option>
-                <option value="3000000:5000000">300万〜500万円</option>
-                <option value="5000000:10000000">500万〜1,000万円</option>
-                <option value="10000000:">1,000万円以上</option>
-              </select>
-              <select id="campfireDisplaySupporterRange" onchange="renderCampfireCandidates()">
-                <option value="">サポーター すべて</option>
-                <option value="0:30">30人未満</option>
-                <option value="30:50">30〜50人</option>
-                <option value="50:100">50〜100人</option>
-                <option value="100:300">100〜300人</option>
-                <option value="300:500">300〜500人</option>
-                <option value="500:">500人以上</option>
-              </select>
-              <select id="campfireDisplayProfileProjectRange" onchange="renderCampfireCandidates()">
-                <option value="">過去プロジェクト すべて</option>
-                <option value="0:0">初回のみ</option>
-                <option value="1:3">1〜3件</option>
-                <option value="4:9">4〜9件</option>
-                <option value="10:29">10〜29件</option>
-                <option value="30:99">30〜99件</option>
-                <option value="100:">100件以上</option>
-              </select>
-            </div>
-          </details>
         </div>
       </section>
 
