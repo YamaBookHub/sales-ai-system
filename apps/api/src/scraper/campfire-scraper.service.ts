@@ -223,7 +223,7 @@ function extractSearchResults(html: string): CampfireSearchResult[] {
       const supporterCount = parseInteger(findFirst(cardText, [/([0-9,]+)\s*人/g]));
       const daysLeftText = findFirst(cardText, [/残り\s*([0-9]+)\s*日/g, /あと\s*([0-9]+)\s*日/g]);
       const daysLeft = daysLeftText ? parseInteger(daysLeftText) : null;
-      const isActive = !/(終了|募集終了|SUCCESS|失敗)/i.test(cardText);
+      const isActive = isFundraisingProject(cardText, daysLeft);
       const profileProjectCount = extractProfileProjectCount(cardText);
 
       return {
@@ -241,6 +241,13 @@ function extractSearchResults(html: string): CampfireSearchResult[] {
     .filter((item) => item.url && item.title);
 
   return uniqueBy(links, (item) => normalizeUrlForUnique(item.url));
+}
+
+function isFundraisingProject(cardText: string, daysLeft: number | null) {
+  if (/(もうすぐ公開|近日公開|公開予定|COMING\s*SOON|終了したもの|終了しました|募集終了|受付終了|SUCCESS|失敗)/i.test(cardText)) {
+    return false;
+  }
+  return daysLeft !== null || /募集中のもの|支援者|現在の支援総額|残り\s*[0-9]+\s*日|あと\s*[0-9]+\s*日/.test(cardText);
 }
 
 async function collectSearchResults(page: Page, limit: number, excludedUrls = new Set<string>(), input: CampfireSearchInput = {}) {

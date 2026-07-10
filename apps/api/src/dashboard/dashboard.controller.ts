@@ -1771,7 +1771,7 @@ export class DashboardController {
                 </select>
                 <select id="campfireDisplayStatus" onchange="renderCampfireCandidates()">
                   <option value="">公開状態 すべて</option>
-                  <option value="active">現在公開中</option>
+                  <option value="active">募集中のみ</option>
                   <option value="endingSoon">終了間近</option>
                 </select>
                 <select id="campfireDisplayAmountRange" onchange="renderCampfireCandidates()">
