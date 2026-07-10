@@ -265,7 +265,7 @@ export class DashboardController {
           <h2>営業リスト</h2>
           <span id="listCount" class="status muted">0件</span>
         </div>
-        <div class="body" style="padding:0">
+        <div class="body table-scroll lead-list-scroll" style="padding:0">
           <table>
             <thead>
               <tr>
@@ -1005,6 +1005,25 @@ export class DashboardController {
       font-size: 12px;
       font-weight: 600;
       background: #fafbfc;
+    }
+    .table-scroll {
+      overflow: auto;
+      border-top: 0;
+    }
+    .table-scroll table {
+      margin: 0;
+    }
+    .table-scroll thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      border-bottom: 1px solid var(--line);
+    }
+    .lead-list-scroll {
+      max-height: 280px;
+    }
+    .mail-history-scroll {
+      max-height: 220px;
     }
     tr[data-selected="true"] { background: #edf7f5; }
     tr:hover { background: #f7faf9; }
@@ -1753,7 +1772,7 @@ export class DashboardController {
                 <span id="generateHelp" class="status muted">対象を選択してください</span>
               </div>
             </div>
-            <div class="mail-stage-body" style="padding:0">
+            <div class="mail-stage-body table-scroll mail-history-scroll" style="padding:0">
               <table>
                 <thead>
                   <tr>
