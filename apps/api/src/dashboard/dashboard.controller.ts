@@ -104,9 +104,9 @@ export class DashboardController {
       grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(150px, 180px));
       gap: 8px;
     }
-    .lead-list-main { order: 1; }
-    .filters-panel { order: 2; }
-    .summary-panel { order: 3; }
+    .summary-panel { order: 1; }
+    .lead-list-main { order: 2; }
+    .filters-panel { order: 3; }
     .collapsible-panel summary {
       min-height: 48px;
       display: flex;
@@ -205,6 +205,15 @@ export class DashboardController {
     </div>
   </header>
   <main>
+    <section class="summary-panel">
+      <div class="section-head">
+        <h2>状態サマリー</h2>
+      </div>
+      <div class="body">
+        <div class="stats" id="stats"></div>
+      </div>
+    </section>
+
     <div class="split lead-list-main">
       <section>
         <div class="section-head">
@@ -290,17 +299,6 @@ export class DashboardController {
       </details>
     </section>
 
-    <section class="summary-panel collapsible-panel">
-      <details>
-        <summary>
-          <span>状態サマリー</span>
-          <span class="muted">必要な時だけ開く</span>
-        </summary>
-        <div class="body">
-          <div class="stats" id="stats"></div>
-        </div>
-      </details>
-    </section>
   </main>
   <script>
     const state = { leads: [], mails: [], selectedLeadId: null };
