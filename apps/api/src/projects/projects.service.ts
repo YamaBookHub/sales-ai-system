@@ -65,7 +65,13 @@ export class ProjectsService {
       ...existingProjects.map((project) => project.url)
     ].filter(Boolean)));
 
-    return provider.search({ ...dto, excludeUrls });
+    const result = await provider.search({ ...dto, excludeUrls });
+    if (dto.status === 'endingSoon') {
+      return {
+        items: result.items.filter((item) => typeof item.daysLeft === 'number' && item.daysLeft <= 7)
+      };
+    }
+    return result;
   }
 
   campfireCategories() {

@@ -215,6 +215,7 @@ function matchesNumericFilters(item: MakuakeSearchResult, input: SearchCampfireP
   if (typeof input.amountMax === 'number' && item.amount > input.amountMax) return false;
   if (typeof input.supporterMin === 'number' && item.supporterCount < input.supporterMin) return false;
   if (typeof input.supporterMax === 'number' && item.supporterCount > input.supporterMax) return false;
+  if (input.status === 'endingSoon' && (item.daysLeft === null || item.daysLeft > 7)) return false;
   return true;
 }
 

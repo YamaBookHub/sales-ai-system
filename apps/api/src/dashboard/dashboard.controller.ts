@@ -1768,6 +1768,10 @@ export class DashboardController {
                   <option value="50">取得上限 50件</option>
                   <option value="100">取得上限 100件</option>
                 </select>
+                <select id="campfireSearchStatus">
+                  <option value="active">募集中のみ</option>
+                  <option value="endingSoon">終了間近のみ</option>
+                </select>
                 <select id="campfireSearchProfileProjectRange">
                   <option value="">過去プロジェクト すべて</option>
                   <option value="0:0">初回のみ</option>
@@ -2270,7 +2274,7 @@ export class DashboardController {
             profileProjectMin: profileProjectRange.min,
             profileProjectMax: profileProjectRange.max,
             limit: desiredLimit,
-            status: 'active',
+            status: fieldValue('campfireSearchStatus') || 'active',
             excludeUrls: knownCampfireUrls()
           }))
         });
@@ -2306,6 +2310,7 @@ export class DashboardController {
         document.getElementById(id).value = '';
       });
       document.getElementById('campfireFetchLimit').value = '10';
+      document.getElementById('campfireSearchStatus').value = 'active';
       document.getElementById('campfireSearchProfileProjectRange').value = '';
       document.getElementById('campfireResultLimit').value = '10';
       document.getElementById('campfireDisplayStatus').value = '';
