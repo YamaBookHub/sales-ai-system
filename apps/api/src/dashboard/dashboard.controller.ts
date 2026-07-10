@@ -845,6 +845,8 @@ export class DashboardController {
       max-width: 1240px;
       width: 100%;
       margin: 0 auto;
+      align-content: start;
+      gap: 12px;
     }
     body.mail-workspace-page main {
       grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
