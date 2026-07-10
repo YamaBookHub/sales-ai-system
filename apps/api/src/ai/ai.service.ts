@@ -22,7 +22,12 @@ export class AiService {
     }
 
     const project = lead.project;
-    const analysisSource = [project?.title, project?.description, lead.reason, lead.brandAnalysisMemo, lead.snsAnalysisMemo]
+    const projectAnalysisSource = [project?.title, project?.description, project?.category, lead.reason]
+      .filter(Boolean)
+      .join(' ');
+    const safeBrandAnalysisMemo = compatibleAnalysisMemo(lead.brandAnalysisMemo, projectAnalysisSource);
+    const safeSnsAnalysisMemo = compatibleAnalysisMemo(lead.snsAnalysisMemo, projectAnalysisSource);
+    const analysisSource = [projectAnalysisSource, safeBrandAnalysisMemo, safeSnsAnalysisMemo]
       .filter(Boolean)
       .join(' ');
     const factsUsed = [
@@ -33,16 +38,16 @@ export class AiService {
       typeof project?.amount === 'number' ? `支援額: ${project.amount.toLocaleString()}円` : '',
       typeof project?.supporterCount === 'number' ? `支援者数: ${project.supporterCount.toLocaleString()}人` : '',
       lead.reason ? `リード理由: ${lead.reason}` : '',
-      lead.brandAnalysisMemo ? `ブランド分析メモ: ${lead.brandAnalysisMemo}` : '',
-      lead.snsAnalysisMemo ? `SNS分析メモ: ${lead.snsAnalysisMemo}` : ''
+      safeBrandAnalysisMemo ? `ブランド分析メモ: ${safeBrandAnalysisMemo}` : '',
+      safeSnsAnalysisMemo ? `SNS分析メモ: ${safeSnsAnalysisMemo}` : ''
     ].filter(Boolean);
 
     const output = {
       summary: buildLocalSummary(lead.company.name, project?.title, project?.category, project?.amount, project?.supporterCount),
-      productStrengths: buildLocalStrengths(analysisSource, lead.reason),
-      targetUsers: buildLocalTargetUsers(project?.category, analysisSource),
+      productStrengths: buildLocalStrengths(projectAnalysisSource, lead.reason),
+      targetUsers: buildLocalTargetUsers(project?.category, projectAnalysisSource),
       salesAngles: buildLocalSalesAngles(project?.amount, project?.supporterCount),
-      snsIdeas: buildLocalSnsIdeas(project?.category, analysisSource),
+      snsIdeas: buildLocalSnsIdeas(project?.category, projectAnalysisSource),
       readiness: buildMailReadiness(lead, project),
       missingInfo: buildMissingInfo(lead, project),
       nextChecks: buildNextChecks(lead, project),
@@ -53,8 +58,8 @@ export class AiService {
         project?.category,
         project?.description,
         lead.reason,
-        lead.brandAnalysisMemo,
-        lead.snsAnalysisMemo
+        safeBrandAnalysisMemo,
+        safeSnsAnalysisMemo
       ),
       factsUsed,
       assumptions: ['OpenAI APIを使わない無料分析のため、商品説明から読み取れる範囲で整理しています。'],
@@ -76,8 +81,8 @@ export class AiService {
           projectAmount: project?.amount,
           supporterCount: project?.supporterCount,
           leadReason: lead.reason,
-          brandAnalysisMemo: lead.brandAnalysisMemo,
-          snsAnalysisMemo: lead.snsAnalysisMemo
+          brandAnalysisMemo: safeBrandAnalysisMemo,
+          snsAnalysisMemo: safeSnsAnalysisMemo
         },
         outputJson: output,
         latencyMs: 0
@@ -547,6 +552,12 @@ function cleanProjectTitleForMail(title?: string | null) {
     .replace(/\s*[｜|]\s*Makuake（マクアケ）$/i, '')
     .replace(/\s*[｜|]\s*Makuake$/i, '')
     .trim();
+}
+
+function compatibleAnalysisMemo(memo?: string | null, projectSource = '') {
+  const cleaned = sanitizeAnalysisSource(memo || '');
+  if (!cleaned) return '';
+  return isPhraseCompatibleWithProject(cleaned, projectSource) ? cleaned : '';
 }
 
 function sanitizeAnalysisSource(value: string) {

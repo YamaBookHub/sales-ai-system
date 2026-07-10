@@ -670,6 +670,10 @@ export class DashboardController {
         return { ownerMemo: '', brandAnalysisMemo: '', snsAnalysisMemo: '' };
       }
       const placeholders = output.mailPlaceholders || {};
+      const projectSource = leadProjectSource(lead);
+      const productStrengths = compatibleMemoItems(output.productStrengths, projectSource);
+      const appeal = isMemoTextCompatible(placeholders.appeal, projectSource) ? placeholders.appeal : '';
+      const targetUser = isMemoTextCompatible(placeholders.targetUser, projectSource) ? placeholders.targetUser : '';
       return {
         ownerMemo: [
           output.summary,
@@ -677,9 +681,9 @@ export class DashboardController {
           memoList('次に確認', output.nextChecks)
         ].filter(Boolean).join('\\n\\n'),
         brandAnalysisMemo: [
-          memoList('商品の魅力・強み', output.productStrengths),
-          placeholders.appeal ? 'メールで触れる魅力: ' + placeholders.appeal : '',
-          placeholders.targetUser ? '想定する相手: ' + placeholders.targetUser : '',
+          memoList('商品の魅力・強み', productStrengths),
+          appeal ? 'メールで触れる魅力: ' + appeal : '',
+          targetUser ? '想定する相手: ' + targetUser : '',
           memoList('不足情報', output.missingInfo)
         ].filter(Boolean).join('\\n\\n'),
         snsAnalysisMemo: [
@@ -692,6 +696,27 @@ export class DashboardController {
     function memoList(label, values) {
       const items = Array.isArray(values) ? values.filter(Boolean) : [];
       return items.length ? label + '\\n' + items.map((item) => '・' + item).join('\\n') : '';
+    }
+
+    function leadProjectSource(lead) {
+      const project = lead?.project || {};
+      return [project.title, project.description, project.category].filter(Boolean).join(' ');
+    }
+
+    function compatibleMemoItems(items, projectSource) {
+      return Array.isArray(items) ? items.filter((item) => isMemoTextCompatible(item, projectSource)) : [];
+    }
+
+    function isMemoTextCompatible(text, projectSource) {
+      if (!text || !projectSource) return true;
+      const rules = [
+        { pattern: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/, required: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/ },
+        { pattern: /醤油差し|醤油|サイフォン|有田焼|陶磁器|器|食卓|残量|ガラス管|NEO CLAY/i, required: /醤油差し|醤油|サイフォン|有田焼|陶磁器|器|食卓|残量|ガラス管|NEO CLAY/i },
+        { pattern: /エアベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/, required: /エアベッド|ベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/ },
+        { pattern: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/, required: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/ },
+        { pattern: /焼き鳥|焼鳥|炭火|店舗|飲食|居酒屋|リフォーム|改装/, required: /焼き鳥|焼鳥|炭火|店舗|飲食|居酒屋|リフォーム|改装/ }
+      ];
+      return rules.every((rule) => !rule.pattern.test(text) || rule.required.test(projectSource));
     }
 
     function renderLeadEditPanel(lead) {
@@ -3021,6 +3046,10 @@ export class DashboardController {
         return { contactMemo: '', brandAnalysisMemo: '', snsAnalysisMemo: '' };
       }
       const placeholders = output.mailPlaceholders || {};
+      const projectSource = leadProjectSource(lead);
+      const productStrengths = compatibleMemoItems(output.productStrengths, projectSource);
+      const appeal = isMemoTextCompatible(placeholders.appeal, projectSource) ? placeholders.appeal : '';
+      const targetUser = isMemoTextCompatible(placeholders.targetUser, projectSource) ? placeholders.targetUser : '';
       return {
         contactMemo: [
           output.readiness?.label ? '判断: ' + output.readiness.label + (typeof output.readiness.score === 'number' ? ' / ' + output.readiness.score + '点' : '') : '',
@@ -3028,9 +3057,9 @@ export class DashboardController {
         ].filter(Boolean).join('\\n\\n'),
         brandAnalysisMemo: [
           output.summary,
-          memoList('商品の魅力・強み', output.productStrengths),
-          placeholders.appeal ? 'メールで触れる魅力: ' + placeholders.appeal : '',
-          placeholders.targetUser ? '想定する相手: ' + placeholders.targetUser : '',
+          memoList('商品の魅力・強み', productStrengths),
+          appeal ? 'メールで触れる魅力: ' + appeal : '',
+          targetUser ? '想定する相手: ' + targetUser : '',
           memoList('不足情報', output.missingInfo)
         ].filter(Boolean).join('\\n\\n'),
         snsAnalysisMemo: [
@@ -3043,6 +3072,27 @@ export class DashboardController {
     function memoList(label, values) {
       const items = Array.isArray(values) ? values.filter(Boolean) : [];
       return items.length ? label + '\\n' + items.map((item) => '・' + item).join('\\n') : '';
+    }
+
+    function leadProjectSource(lead) {
+      const project = lead?.project || {};
+      return [project.title, project.description, project.category].filter(Boolean).join(' ');
+    }
+
+    function compatibleMemoItems(items, projectSource) {
+      return Array.isArray(items) ? items.filter((item) => isMemoTextCompatible(item, projectSource)) : [];
+    }
+
+    function isMemoTextCompatible(text, projectSource) {
+      if (!text || !projectSource) return true;
+      const rules = [
+        { pattern: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/, required: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/ },
+        { pattern: /醤油差し|醤油|サイフォン|有田焼|陶磁器|器|食卓|残量|ガラス管|NEO CLAY/i, required: /醤油差し|醤油|サイフォン|有田焼|陶磁器|器|食卓|残量|ガラス管|NEO CLAY/i },
+        { pattern: /エアベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/, required: /エアベッド|ベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/ },
+        { pattern: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/, required: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/ },
+        { pattern: /焼き鳥|焼鳥|炭火|店舗|飲食|居酒屋|リフォーム|改装/, required: /焼き鳥|焼鳥|炭火|店舗|飲食|居酒屋|リフォーム|改装/ }
+      ];
+      return rules.every((rule) => !rule.pattern.test(text) || rule.required.test(projectSource));
     }
 
     function renderLeadManagementForm(lead) {

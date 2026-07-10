@@ -25,7 +25,7 @@ export class LeadsService {
       this.prisma.salesLead.count({ where })
     ]);
 
-    return { items, page, limit, total };
+    return { items: items.map(sanitizeLeadMemos), page, limit, total };
   }
 
   create(dto: CreateLeadDto) {
@@ -53,7 +53,7 @@ export class LeadsService {
       throw new NotFoundException('Lead not found');
     }
 
-    return lead;
+    return sanitizeLeadMemos(lead);
   }
 
   update(id: string, dto: UpdateLeadDto) {
@@ -91,4 +91,25 @@ export class LeadsService {
     await this.prisma.salesLead.update({ where: { id }, data: { score: totalScore } });
     return score;
   }
+}
+
+function sanitizeLeadMemos<T extends { project?: { title?: string | null; description?: string | null; category?: string | null } | null; brandAnalysisMemo?: string | null; snsAnalysisMemo?: string | null }>(lead: T): T {
+  const source = [lead.project?.title, lead.project?.description, lead.project?.category].filter(Boolean).join(' ');
+  return {
+    ...lead,
+    brandAnalysisMemo: isMemoCompatibleWithProject(lead.brandAnalysisMemo, source) ? lead.brandAnalysisMemo : null,
+    snsAnalysisMemo: isMemoCompatibleWithProject(lead.snsAnalysisMemo, source) ? lead.snsAnalysisMemo : null
+  };
+}
+
+function isMemoCompatibleWithProject(memo?: string | null, projectSource = '') {
+  if (!memo || !projectSource) return true;
+  const rules = [
+    { pattern: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/, required: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/ },
+    { pattern: /醤油差し|醤油|サイフォン|有田焼|陶磁器|器|食卓|残量|ガラス管|NEO CLAY/i, required: /醤油差し|醤油|サイフォン|有田焼|陶磁器|器|食卓|残量|ガラス管|NEO CLAY/i },
+    { pattern: /エアベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/, required: /エアベッド|ベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/ },
+    { pattern: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/, required: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/ },
+    { pattern: /焼き鳥|焼鳥|炭火|店舗|飲食|居酒屋|リフォーム|改装/, required: /焼き鳥|焼鳥|炭火|店舗|飲食|居酒屋|リフォーム|改装/ }
+  ];
+  return rules.every((rule) => !rule.pattern.test(memo) || rule.required.test(projectSource));
 }
