@@ -1677,7 +1677,7 @@ export class DashboardController {
           <h2>営業対象一覧</h2>
           <span id="mailLeadCount" class="status muted">0件</span>
         </div>
-        <div class="body" style="padding:0">
+        <div class="body table-scroll lead-list-scroll" style="padding:0">
           <table>
             <thead>
               <tr>
