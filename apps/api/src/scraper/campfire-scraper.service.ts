@@ -516,6 +516,7 @@ function extractExternalUrls($: cheerio.CheerioAPI, projectUrl: string) {
       const parsed = new URL(url);
       if (parsed.hostname === projectHost || parsed.hostname.endsWith('.camp-fire.jp')) return false;
       if (['mailto:', 'tel:'].includes(parsed.protocol)) return false;
+      if (isShareOrTrackingUrl(parsed)) return false;
       return ['http:', 'https:'].includes(parsed.protocol);
     });
 
@@ -523,20 +524,28 @@ function extractExternalUrls($: cheerio.CheerioAPI, projectUrl: string) {
 }
 
 function classifyUrls(urls: string[]) {
-  const instagramUrl = urls.find((url) => /(^|\.)instagram\.com$/i.test(new URL(url).hostname)) || '';
-  const tiktokUrl = urls.find((url) => /(^|\.)tiktok\.com$/i.test(new URL(url).hostname)) || '';
+  const cleanUrls = urls.filter((url) => {
+    try {
+      return !isShareOrTrackingUrl(new URL(url));
+    } catch {
+      return false;
+    }
+  });
+  const instagramUrl = cleanUrls.find((url) => /(^|\.)instagram\.com$/i.test(new URL(url).hostname)) || '';
+  const tiktokUrl = cleanUrls.find((url) => /(^|\.)tiktok\.com$/i.test(new URL(url).hostname)) || '';
   const xUrl =
-    urls.find((url) => {
-      const host = new URL(url).hostname.toLowerCase();
-      return host === 'x.com' || host === 'twitter.com' || host.endsWith('.twitter.com');
+    cleanUrls.find((url) => {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      return (host === 'x.com' || host === 'twitter.com' || host.endsWith('.twitter.com')) && !parsed.pathname.toLowerCase().startsWith('/intent/');
     }) || '';
   const inquiryUrl =
-    urls.find((url) => {
+    cleanUrls.find((url) => {
       const normalized = url.toLowerCase();
       return /contact|inquiry|toiawase|support|help|form|otoiawase/.test(normalized);
     }) || '';
   const websiteUrl =
-    urls.find((url) => {
+    cleanUrls.find((url) => {
       const host = new URL(url).hostname.toLowerCase();
       return ![
         'instagram.com',
@@ -555,6 +564,28 @@ function classifyUrls(urls: string[]) {
     }) || '';
 
   return { websiteUrl, inquiryUrl, instagramUrl, tiktokUrl, xUrl };
+}
+
+function isShareOrTrackingUrl(url: URL) {
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname.toLowerCase();
+
+  if (host === 'x.com' || host === 'twitter.com' || host.endsWith('.twitter.com')) {
+    return path.startsWith('/intent/') || path.startsWith('/share');
+  }
+
+  if (host === 'facebook.com' || host === 'www.facebook.com' || host.endsWith('.facebook.com')) {
+    return path.includes('/sharer') || path.includes('/share');
+  }
+
+  if (host === 'social-plugins.line.me' || host.endsWith('.line.me')) {
+    return path.includes('/share') || path.includes('/lineit');
+  }
+
+  if (host === 'app.adjust.com' || host.endsWith('.adjust.com')) return true;
+  if (host === 'b.hatena.ne.jp' || host === 'pinterest.com' || host === 'www.pinterest.com') return true;
+
+  return false;
 }
 
 function extractFeatureCandidates($: cheerio.CheerioAPI, description: string) {
