@@ -928,18 +928,22 @@ export class DashboardController {
       display: grid;
       gap: 8px;
       align-items: center;
+      max-width: 980px;
     }
     .direct-import {
-      grid-template-columns: minmax(0, 1fr) 180px;
+      grid-template-columns: minmax(320px, 720px) 180px;
+      justify-content: start;
     }
     .quick-search {
-      grid-template-columns: minmax(0, 1fr) 84px 84px;
+      grid-template-columns: minmax(320px, 720px) 84px 84px;
+      justify-content: start;
     }
     .search-filter-row {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(180px, 240px));
       gap: 8px;
       padding-top: 0;
+      justify-content: start;
     }
     .direct-import .status,
     .quick-search .status {
