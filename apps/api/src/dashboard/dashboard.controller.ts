@@ -369,6 +369,7 @@ export class DashboardController {
   </main>
   <footer>Sales AI System</footer>
   <script>
+    const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
     const state = { leads: [], mails: [], aiGenerations: [], selectedLeadId: null };
 
     async function api(path, options = {}) {
@@ -390,6 +391,7 @@ export class DashboardController {
         ]);
         state.leads = leads.items || [];
         state.mails = mails.items || [];
+        restoreSelectedLead();
         render();
         document.getElementById('pageStatus').textContent = '読み込み完了';
       } catch (error) {
@@ -573,11 +575,24 @@ export class DashboardController {
 
     function selectLead(id) {
       state.selectedLeadId = id;
+      persistSelectedLead(id);
       state.aiGenerations = [];
       renderRows();
       renderDetail();
       renderLeadAnalysis();
       void loadLeadAnalysis();
+    }
+
+    function persistSelectedLead(id) {
+      if (!id) return;
+      localStorage.setItem(SELECTED_LEAD_STORAGE_KEY, id);
+    }
+
+    function restoreSelectedLead() {
+      const savedId = localStorage.getItem(SELECTED_LEAD_STORAGE_KEY);
+      if (savedId && state.leads.some((lead) => lead.id === savedId)) {
+        state.selectedLeadId = savedId;
+      }
     }
 
     function openProject() {
@@ -1989,6 +2004,7 @@ export class DashboardController {
       campfireSearchTimerId: null,
       campfireSearchStartedAt: null
     };
+    const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
 
     async function api(path, options = {}) {
       const response = await fetch(path, {
@@ -2047,6 +2063,7 @@ export class DashboardController {
         ]);
         state.leads = leads.items || [];
         state.mails = mails.items || [];
+        restoreSelectedLead();
         syncCandidateImportStatuses();
         const selectedMail = ensureSelectedMailForLead();
         renderLeads();
@@ -3124,6 +3141,7 @@ export class DashboardController {
 
     function selectLead(id) {
       state.selectedLeadId = id;
+      persistSelectedLead(id);
       state.aiGenerations = [];
       state.checklist = [];
       state.checklistComplete = false;
@@ -3140,6 +3158,18 @@ export class DashboardController {
       renderLeadDetail();
       renderAiAnalysis();
       void loadAiAnalysis();
+    }
+
+    function persistSelectedLead(id) {
+      if (!id) return;
+      localStorage.setItem(SELECTED_LEAD_STORAGE_KEY, id);
+    }
+
+    function restoreSelectedLead() {
+      const savedId = localStorage.getItem(SELECTED_LEAD_STORAGE_KEY);
+      if (savedId && state.leads.some((lead) => lead.id === savedId)) {
+        state.selectedLeadId = savedId;
+      }
     }
 
     function renderSelectedMailWorkspace() {
