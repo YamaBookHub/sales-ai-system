@@ -492,6 +492,7 @@ export class DashboardController {
       try {
         const result = await api('/api/ai/leads/' + state.selectedLeadId + '/generations');
         state.aiGenerations = result.items || [];
+        renderDetail();
         renderLeadAnalysis();
       } catch (error) {
         document.getElementById('leadAnalysis').innerHTML = '<div class="status error">' + escapeHtml(error.message) + '</div>';
@@ -638,7 +639,43 @@ export class DashboardController {
       ].filter(Boolean).join('<br>') || '未取得';
     }
 
+    function latestProjectAnalysisOutput() {
+      const latest = state.aiGenerations.find((item) => item.type === 'project_summary');
+      return latest?.outputJson || {};
+    }
+
+    function suggestedLeadMemos(lead) {
+      const output = latestProjectAnalysisOutput();
+      if (!Object.keys(output).length) {
+        return { ownerMemo: '', brandAnalysisMemo: '', snsAnalysisMemo: '' };
+      }
+      const placeholders = output.mailPlaceholders || {};
+      return {
+        ownerMemo: [
+          output.summary,
+          output.readiness?.label ? '判断: ' + output.readiness.label + (typeof output.readiness.score === 'number' ? ' / ' + output.readiness.score + '点' : '') : '',
+          memoList('次に確認', output.nextChecks)
+        ].filter(Boolean).join('\\n\\n'),
+        brandAnalysisMemo: [
+          memoList('商品の魅力・強み', output.productStrengths),
+          placeholders.appeal ? 'メールで触れる魅力: ' + placeholders.appeal : '',
+          placeholders.targetUser ? '想定する相手: ' + placeholders.targetUser : '',
+          memoList('不足情報', output.missingInfo)
+        ].filter(Boolean).join('\\n\\n'),
+        snsAnalysisMemo: [
+          memoList('SNSでの見せ方', output.snsIdeas),
+          memoList('メールでの切り口', output.mailAdvice)
+        ].filter(Boolean).join('\\n\\n')
+      };
+    }
+
+    function memoList(label, values) {
+      const items = Array.isArray(values) ? values.filter(Boolean) : [];
+      return items.length ? label + '\\n' + items.map((item) => '・' + item).join('\\n') : '';
+    }
+
     function renderLeadEditPanel(lead) {
+      const memo = suggestedLeadMemos(lead);
       return '<div class="row">' +
         '<label>営業管理</label>' +
         '<div class="form-grid">' +
@@ -683,15 +720,15 @@ export class DashboardController {
         '</div>' +
         '<div class="row">' +
           '<label for="leadOwnerMemoEdit">営業メモ</label>' +
-          '<textarea id="leadOwnerMemoEdit">' + escapeHtml(lead.ownerMemo || '') + '</textarea>' +
+          '<textarea id="leadOwnerMemoEdit">' + escapeHtml(lead.ownerMemo || memo.ownerMemo || '') + '</textarea>' +
         '</div>' +
         '<div class="row">' +
           '<label for="leadBrandAnalysisMemoEdit">ブランド分析メモ</label>' +
-          '<textarea id="leadBrandAnalysisMemoEdit">' + escapeHtml(lead.brandAnalysisMemo || '') + '</textarea>' +
+          '<textarea id="leadBrandAnalysisMemoEdit">' + escapeHtml(lead.brandAnalysisMemo || memo.brandAnalysisMemo || '') + '</textarea>' +
         '</div>' +
         '<div class="row">' +
           '<label for="leadSnsAnalysisMemoEdit">SNS分析メモ</label>' +
-          '<textarea id="leadSnsAnalysisMemoEdit">' + escapeHtml(lead.snsAnalysisMemo || '') + '</textarea>' +
+          '<textarea id="leadSnsAnalysisMemoEdit">' + escapeHtml(lead.snsAnalysisMemo || memo.snsAnalysisMemo || '') + '</textarea>' +
         '</div>' +
         '<div class="toolbar">' +
           '<button class="primary" onclick="saveLeadEdit()">営業情報を保存</button>' +
@@ -2278,6 +2315,7 @@ export class DashboardController {
       try {
         const result = await api('/api/ai/leads/' + state.selectedLeadId + '/generations');
         state.aiGenerations = result.items || [];
+        renderLeadDetail();
         renderAiAnalysis();
       } catch (error) {
         document.getElementById('aiAnalysis').innerHTML = '<div class="status error">' + escapeHtml(error.message) + '</div>';
@@ -2804,7 +2842,43 @@ export class DashboardController {
       return '<div class="notice"><strong>過去プロジェクト多数の可能性</strong>' + escapeHtml(memo) + '</div>';
     }
 
+    function latestProjectAnalysisOutput() {
+      const latest = state.aiGenerations.find((item) => item.type === 'project_summary');
+      return latest?.outputJson || {};
+    }
+
+    function suggestedLeadMemos(lead) {
+      const output = latestProjectAnalysisOutput();
+      if (!Object.keys(output).length) {
+        return { contactMemo: '', brandAnalysisMemo: '', snsAnalysisMemo: '' };
+      }
+      const placeholders = output.mailPlaceholders || {};
+      return {
+        contactMemo: [
+          output.readiness?.label ? '判断: ' + output.readiness.label + (typeof output.readiness.score === 'number' ? ' / ' + output.readiness.score + '点' : '') : '',
+          memoList('次に確認', output.nextChecks)
+        ].filter(Boolean).join('\\n\\n'),
+        brandAnalysisMemo: [
+          output.summary,
+          memoList('商品の魅力・強み', output.productStrengths),
+          placeholders.appeal ? 'メールで触れる魅力: ' + placeholders.appeal : '',
+          placeholders.targetUser ? '想定する相手: ' + placeholders.targetUser : '',
+          memoList('不足情報', output.missingInfo)
+        ].filter(Boolean).join('\\n\\n'),
+        snsAnalysisMemo: [
+          memoList('SNSでの見せ方', output.snsIdeas),
+          memoList('メールでの切り口', output.mailAdvice)
+        ].filter(Boolean).join('\\n\\n')
+      };
+    }
+
+    function memoList(label, values) {
+      const items = Array.isArray(values) ? values.filter(Boolean) : [];
+      return items.length ? label + '\\n' + items.map((item) => '・' + item).join('\\n') : '';
+    }
+
     function renderLeadManagementForm(lead) {
+      const memo = suggestedLeadMemos(lead);
       return '<div class="row">' +
           '<label>連絡先確認</label>' +
           '<div class="grid-2">' +
@@ -2832,15 +2906,15 @@ export class DashboardController {
         '</div>' +
         '<div class="row">' +
           '<label for="leadContactMemo">連絡先メモ</label>' +
-          '<textarea id="leadContactMemo" style="min-height:80px">' + escapeHtml(lead.contactMemo || '') + '</textarea>' +
+          '<textarea id="leadContactMemo" style="min-height:80px">' + escapeHtml(lead.contactMemo || memo.contactMemo || '') + '</textarea>' +
         '</div>' +
         '<div class="row">' +
           '<label for="leadBrandAnalysisMemo">ブランド分析メモ</label>' +
-          '<textarea id="leadBrandAnalysisMemo" style="min-height:100px">' + escapeHtml(lead.brandAnalysisMemo || '') + '</textarea>' +
+          '<textarea id="leadBrandAnalysisMemo" style="min-height:100px">' + escapeHtml(lead.brandAnalysisMemo || memo.brandAnalysisMemo || '') + '</textarea>' +
         '</div>' +
         '<div class="row">' +
           '<label for="leadSnsAnalysisMemo">SNS分析メモ</label>' +
-          '<textarea id="leadSnsAnalysisMemo" style="min-height:100px">' + escapeHtml(lead.snsAnalysisMemo || '') + '</textarea>' +
+          '<textarea id="leadSnsAnalysisMemo" style="min-height:100px">' + escapeHtml(lead.snsAnalysisMemo || memo.snsAnalysisMemo || '') + '</textarea>' +
         '</div>' +
         '<div class="toolbar">' +
           '<button class="primary" onclick="saveLeadManagement()">営業情報を保存</button>' +
