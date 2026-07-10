@@ -1907,7 +1907,9 @@ export class DashboardController {
       selectedMailId: null,
       campfireCategories: [],
       campfireCandidates: [],
-      candidateImportStatus: {}
+      candidateImportStatus: {},
+      campfireSearchTimerId: null,
+      campfireSearchStartedAt: null
     };
 
     async function api(path, options = {}) {
@@ -1926,6 +1928,37 @@ export class DashboardController {
       const element = document.getElementById(id);
       element.textContent = message;
       element.className = 'status ' + type;
+    }
+
+    function startCampfireSearchTimer(hasProfileProjectSearch) {
+      stopCampfireSearchTimer();
+      state.campfireSearchStartedAt = Date.now();
+      const note = hasProfileProjectSearch ? ' / 過去PJ条件あり' : '';
+      const render = () => {
+        setStatus('campfireSearchStatusText', '検索中 ' + formatElapsed(Date.now() - state.campfireSearchStartedAt) + note, 'warn');
+      };
+      render();
+      state.campfireSearchTimerId = window.setInterval(render, 1000);
+    }
+
+    function stopCampfireSearchTimer() {
+      if (state.campfireSearchTimerId) {
+        window.clearInterval(state.campfireSearchTimerId);
+        state.campfireSearchTimerId = null;
+      }
+    }
+
+    function currentSearchElapsedText() {
+      if (!state.campfireSearchStartedAt) return '';
+      return formatElapsed(Date.now() - state.campfireSearchStartedAt);
+    }
+
+    function formatElapsed(milliseconds) {
+      const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      if (!minutes) return seconds + '秒';
+      return minutes + '分' + String(seconds).padStart(2, '0') + '秒';
     }
 
     async function loadAll() {
@@ -1988,7 +2021,7 @@ export class DashboardController {
     async function searchCampfireCandidates() {
       const profileProjectRange = rangeFieldValue('campfireSearchProfileProjectRange');
       const hasProfileProjectSearch = profileProjectRange.min !== null || profileProjectRange.max !== null;
-      setStatus('campfireSearchStatusText', hasProfileProjectSearch ? '検索中（プロジェクトページ上部の過去件数を確認中）' : '検索中', 'warn');
+      startCampfireSearchTimer(hasProfileProjectSearch);
       document.getElementById('campfireCandidateCount').textContent = '検索中';
       try {
         const result = await api('/api/projects/search/campfire', {
@@ -2005,12 +2038,16 @@ export class DashboardController {
         syncCandidateImportStatuses();
         renderCampfireCandidates();
         const countText = '取得 ' + state.campfireCandidates.length + '件';
-        setStatus('campfireSearchStatusText', countText, 'ok');
+        const elapsed = currentSearchElapsedText();
+        stopCampfireSearchTimer();
+        setStatus('campfireSearchStatusText', countText + ' / ' + elapsed, 'ok');
         if (!state.campfireCandidates.length) {
           document.getElementById('campfireCandidateCount').textContent = countText;
         }
       } catch (error) {
-        setStatus('campfireSearchStatusText', error.message, 'error');
+        const elapsed = currentSearchElapsedText();
+        stopCampfireSearchTimer();
+        setStatus('campfireSearchStatusText', error.message + (elapsed ? ' / ' + elapsed : ''), 'error');
         document.getElementById('campfireCandidateCount').textContent = '検索失敗';
       }
     }
@@ -2028,6 +2065,8 @@ export class DashboardController {
       document.getElementById('campfireDisplayProfileProjectRange').value = '';
       state.campfireCandidates = [];
       state.candidateImportStatus = {};
+      stopCampfireSearchTimer();
+      state.campfireSearchStartedAt = null;
       renderCampfireCandidates();
       setStatus('campfireSearchStatusText', '', '');
       document.getElementById('campfireCandidateCount').textContent = '未検索';
