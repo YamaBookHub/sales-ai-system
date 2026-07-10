@@ -14,7 +14,7 @@ export class AiService {
   async analyzeLead(leadId: string) {
     const lead = await this.prisma.salesLead.findUnique({
       where: { id: leadId },
-      include: { company: true, project: true }
+      include: { company: true, project: { include: { platform: true } } }
     });
 
     if (!lead) {
@@ -27,6 +27,7 @@ export class AiService {
       .join(' ');
     const factsUsed = [
       lead.company.name ? `会社名: ${lead.company.name}` : '',
+      projectPlatformLabel(project) ? `取得元: ${projectPlatformLabel(project)}` : '',
       project?.title ? `プロジェクト名: ${project.title}` : '',
       project?.category ? `カテゴリ: ${project.category}` : '',
       typeof project?.amount === 'number' ? `支援額: ${project.amount.toLocaleString()}円` : '',
@@ -89,7 +90,7 @@ export class AiService {
   async generateMailDraft(leadId: string, dto: GenerateMailDto) {
     const lead = await this.prisma.salesLead.findUnique({
       where: { id: leadId },
-      include: { company: true, project: true }
+      include: { company: true, project: { include: { platform: true } } }
     });
 
     if (!lead) {
@@ -164,7 +165,7 @@ export class AiService {
     const email = await this.prisma.outreachEmail.findUnique({
       where: { id: mailId },
       include: {
-        lead: { include: { company: true, project: true } }
+        lead: { include: { company: true, project: { include: { platform: true } } } }
       }
     });
 
@@ -302,6 +303,7 @@ type MailInput = {
   tone?: string;
   companyName: string;
   projectTitle?: string | null;
+  projectPlatformName?: string | null;
   projectUrl?: string | null;
   projectCategory?: string | null;
   projectDescription?: string | null;
@@ -320,6 +322,7 @@ function buildMailInput(
     company: { name: string };
     project?: {
       title?: string | null;
+      platform?: { name?: string | null; type?: string | null } | null;
       url?: string | null;
       category?: string | null;
       description?: string | null;
@@ -334,6 +337,7 @@ function buildMailInput(
     tone: dto.tone,
     companyName: lead.company.name,
     projectTitle: lead.project?.title,
+    projectPlatformName: projectPlatformLabel(lead.project),
     projectUrl: lead.project?.url,
     projectCategory: lead.project?.category,
     projectDescription: lead.project?.description,
@@ -345,7 +349,28 @@ function buildMailInput(
   };
 }
 
+function projectPlatformLabel(project?: { platform?: { name?: string | null; type?: string | null } | null; url?: string | null } | null) {
+  if (project?.platform?.name) return project.platform.name;
+  const type = project?.platform?.type;
+  if (type) {
+    return (
+      {
+        campfire: 'CAMPFIRE',
+        makuake: 'Makuake',
+        green_funding: 'GREEN FUNDING',
+        other: 'クラウドファンディングサイト'
+      } as Record<string, string>
+    )[type] || type;
+  }
+  const url = project?.url || '';
+  if (url.includes('camp-fire.jp')) return 'CAMPFIRE';
+  if (url.includes('makuake.com')) return 'Makuake';
+  if (url.includes('greenfunding.jp')) return 'GREEN FUNDING';
+  return 'クラウドファンディングサイト';
+}
+
 function buildFreeMailDraft(input: MailInput) {
+  const platformName = input.projectPlatformName || 'クラウドファンディングサイト';
   const placeholders = buildMailPlaceholders(
     input.companyName,
     input.projectTitle,
@@ -362,7 +387,7 @@ function buildFreeMailDraft(input: MailInput) {
     'お世話になっております。',
     '株式会社第弐ヴォヌールの山本と申します。',
     '',
-    `CAMPFIREにて、貴社の「${placeholders.productName}」を拝見しました。`,
+    `${platformName}にて、貴社の「${placeholders.productName}」を拝見しました。`,
     '',
     `${placeholders.appeal}がとても印象的で、`,
     `${placeholders.targetUser}にとって、実際の${placeholders.subjectType}の魅力をイメージしやすい内容だと感じました。`,
@@ -379,10 +404,11 @@ function buildFreeMailDraft(input: MailInput) {
   ].join('\n');
 
   return {
-    subject: 'CAMPFIREでのプロジェクトを拝見しご連絡いたしました',
+    subject: `${platformName}でのプロジェクトを拝見しご連絡いたしました`,
     body,
     factsUsed: [
       `会社名: ${input.companyName}`,
+      `取得元: ${platformName}`,
       `プロジェクト名: ${placeholders.productName}`,
       `魅力: ${placeholders.appeal}`,
       `想定読者: ${placeholders.targetUser}`,
@@ -399,7 +425,7 @@ function buildFreeMailDraft(input: MailInput) {
 }
 
 function buildLocalSummary(companyName?: string, title?: string | null, category?: string | null, amount?: number | null, supporters?: number | null) {
-  const projectText = title ? `「${title}」` : 'CAMPFIRE掲載プロジェクト';
+  const projectText = title ? `「${title}」` : 'クラウドファンディング掲載プロジェクト';
   const categoryText = category ? `${category}領域の` : '';
   const amountText = typeof amount === 'number' && amount > 0 ? `支援額は約${amount.toLocaleString()}円` : '';
   const supporterText = typeof supporters === 'number' && supporters > 0 ? `支援者は${supporters.toLocaleString()}人` : '';
@@ -442,7 +468,7 @@ function buildMailPlaceholders(
 
   return {
     companyRecipient: companyName ? `${companyName} ご担当者様` : 'ご担当者様',
-    productName: title || 'CAMPFIRE掲載プロジェクト',
+    productName: title || 'クラウドファンディング掲載プロジェクト',
     appeal,
     targetUser: target,
     subjectType,
@@ -662,17 +688,18 @@ function buildNextChecks(
     tiktokUrl?: string | null;
     xUrl?: string | null;
   },
-  project?: { url?: string | null; description?: string | null } | null
+  project?: { url?: string | null; description?: string | null; platform?: { name?: string | null; type?: string | null } | null } | null
 ) {
+  const platformName = projectPlatformLabel(project);
   const checks = [
-    '会社名と商品名がCAMPFIREページと一致しているか確認する。',
-    project?.description ? '商品特徴がメール本文に入れて問題ない表現か確認する。' : '商品特徴をCAMPFIREページから手動で補足する。',
+    `会社名と商品名が${platformName}ページと一致しているか確認する。`,
+    project?.description ? '商品特徴がメール本文に入れて問題ない表現か確認する。' : `商品特徴を${platformName}ページから手動で補足する。`,
     lead.contactEmail || lead.contactFormUrl || lead.siteMessageUrl ? '送信先がメール・フォーム・サイト内メッセージのどれか確認する。' : '送信先メール、問い合わせフォーム、サイト内メッセージの有無を確認する。'
   ];
   if (lead.brandWebsiteUrl || lead.instagramUrl || lead.tiktokUrl || lead.xUrl) {
     checks.push('公式サイトやSNSの見せ方を確認し、メール内で触れるべきか判断する。');
   }
-  if (project?.url) checks.push('CAMPFIREページを開き、終了日や公開状態が変わっていないか確認する。');
+  if (project?.url) checks.push(`${platformName}ページを開き、終了日や公開状態が変わっていないか確認する。`);
   return checks;
 }
 

@@ -25,7 +25,7 @@ export class MailService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: { company: true, lead: { include: { project: true } } }
+        include: { company: true, lead: { include: { project: { include: { platform: true } } } } }
       }),
       this.prisma.outreachEmail.count({ where })
     ]);
@@ -36,7 +36,7 @@ export class MailService {
   async createDraft(dto: CreateMailDraftDto) {
     const lead = await this.prisma.salesLead.findUnique({
       where: { id: dto.leadId },
-      include: { company: true }
+      include: { company: true, project: { include: { platform: true } } }
     });
 
     if (!lead) {
@@ -59,7 +59,7 @@ export class MailService {
           leadId: lead.id,
           companyId: lead.companyId,
           templateKey: dto.templateKey,
-          subject: 'CAMPFIREでのプロジェクトを拝見しご連絡いたしました',
+          subject: `${projectPlatformLabel(lead.project)}でのプロジェクトを拝見しご連絡いたしました`,
           body: dto.manualInstruction ?? 'TODO: AI-generated draft body will be inserted here.',
           status: 'draft',
           events: { create: { type: 'created' } }
@@ -325,6 +325,26 @@ export class MailService {
       return email;
     });
   }
+}
+
+function projectPlatformLabel(project?: { platform?: { name?: string | null; type?: string | null } | null; url?: string | null } | null) {
+  if (project?.platform?.name) return project.platform.name;
+  const type = project?.platform?.type;
+  if (type) {
+    return (
+      {
+        campfire: 'CAMPFIRE',
+        makuake: 'Makuake',
+        green_funding: 'GREEN FUNDING',
+        other: 'クラウドファンディング'
+      } as Record<string, string>
+    )[type] || type;
+  }
+  const url = project?.url || '';
+  if (url.includes('camp-fire.jp')) return 'CAMPFIRE';
+  if (url.includes('makuake.com')) return 'Makuake';
+  if (url.includes('greenfunding.jp')) return 'GREEN FUNDING';
+  return 'クラウドファンディング';
 }
 
 function leadStatusForEmailStatus(status: EmailStatus): LeadStatus | null {

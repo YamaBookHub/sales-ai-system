@@ -5,6 +5,7 @@ export type SalesMailDraftInput = {
   tone?: string;
   companyName: string;
   projectTitle?: string | null;
+  projectPlatformName?: string | null;
   projectUrl?: string | null;
   projectCategory?: string | null;
   projectDescription?: string | null;
@@ -114,10 +115,10 @@ export class OpenAiClientService {
   private buildSystemPrompt() {
     return [
       'あなたは日本語のBtoB営業メール作成アシスタントです。',
-      'CAMPFIRE掲載プロジェクトの事実だけを使い、低圧で丁寧な営業メール下書きを作成してください。',
+      'クラウドファンディング掲載プロジェクトの事実だけを使い、低圧で丁寧な営業メール下書きを作成してください。',
       '出力はJSONのみ。キーは subject, body, factsUsed, assumptions, riskFlags。',
       'subject/bodyは文字列、factsUsed/assumptions/riskFlagsは文字列配列。',
-      'subjectは必ず「CAMPFIREでのプロジェクトを拝見しご連絡いたしました」にしてください。',
+      'subjectは必ず「【取得元】でのプロジェクトを拝見しご連絡いたしました」にしてください。【取得元】にはproject.platformNameを使ってください。',
       'bodyは必ず次の定型文の順番、敬体を守ってください。見出しや箇条書きは入れないでください。',
       '改行は読みやすい営業メールとして整えてください。1段落ごとに空行を1つだけ入れ、1文の途中に空行を入れないでください。',
       '1段落は原則1〜2文にしてください。句点「。」で自然に区切り、読点「、」の直後で段落を分けないでください。',
@@ -136,7 +137,7 @@ export class OpenAiClientService {
       'お世話になっております。',
       '株式会社第弐ヴォヌールの山本と申します。',
       '',
-      'CAMPFIREにて、貴社の「【商品名】」を拝見しました。',
+      '【取得元】にて、貴社の「【商品名】」を拝見しました。',
       '',
       '【商品の魅力・特徴・強み】という点がとても印象的で、【使う人】にとって、実際の使用シーンをイメージしやすい商品だと感じました。',
       '',
@@ -157,11 +158,12 @@ export class OpenAiClientService {
     const maxDescriptionLength = Number.isFinite(descriptionLimit) ? descriptionLimit : 1200;
 
     return {
-      task: 'CAMPFIRE営業メール下書き生成',
+      task: 'クラウドファンディング営業メール下書き生成',
       templateKey: input.templateKey,
       tone: input.tone || 'low_sales_pressure',
       companyName: input.companyName,
       project: {
+        platformName: input.projectPlatformName || 'クラウドファンディングサイト',
         title: input.projectTitle,
         url: input.projectUrl,
         category: input.projectCategory,
@@ -208,14 +210,16 @@ export class OpenAiClientService {
   ) {
     return {
       ...draft,
-      subject: this.expectedSubject(),
-      body: this.composeStableMailBody(input, draft.body)
+      subject: this.expectedSubject(input),
+      body: this.composeStableMailBody(input, draft.body),
+      factsUsed: Array.from(new Set([`取得元: ${this.cleanPhrase(input.projectPlatformName) || 'クラウドファンディングサイト'}`, ...draft.factsUsed]))
     };
   }
 
   private composeStableMailBody(input: SalesMailDraftInput, aiBody: string) {
     const companyName = this.cleanPhrase(input.companyName) || 'ご担当者';
     const productName = this.cleanPhrase(input.projectTitle) || '貴社プロジェクト';
+    const platformName = this.cleanPhrase(input.projectPlatformName) || 'クラウドファンディングサイト';
     const appeal = this.extractAppeal(input, aiBody);
     const targetUser = this.extractTargetUser(input, aiBody);
     const subjectType = this.projectSubjectType(input);
@@ -223,7 +227,7 @@ export class OpenAiClientService {
     return [
       `${companyName} ご担当者様`,
       'お世話になっております。\n株式会社第弐ヴォヌールの山本と申します。',
-      `CAMPFIREにて、貴社の「${productName}」を拝見しました。`,
+      `${platformName}にて、貴社の「${productName}」を拝見しました。`,
       `${this.withPointSuffix(appeal)}がとても印象的で、${targetUser}にとって、${subjectType}の魅力をイメージしやすい内容だと感じました。`,
       '弊社では、クラウドファンディング支援およびSNSマーケティング支援を行っております。',
       '実績としては、SNS運用で1か月総再生400万回超、クラウドファンディング領域では、担当商品で3,500万円規模の売上実績がございます。',
@@ -406,7 +410,7 @@ export class OpenAiClientService {
     if (previous.endsWith('様')) return true;
     if (next === 'お世話になっております。') return true;
     if (previous === 'お世話になっております。') return false;
-    if (next.startsWith('CAMPFIREにて')) return true;
+    if (next.match(/(?:CAMPFIRE|Makuake|GREEN FUNDING|クラウドファンディングサイト)にて/)) return true;
     if (next.includes('という点がとても印象的で')) return true;
     if (next.startsWith('弊社では、')) return true;
     if (next.startsWith('実績としては')) return true;
@@ -419,8 +423,9 @@ export class OpenAiClientService {
     return `${previous}${next}`;
   }
 
-  private expectedSubject() {
-    return 'CAMPFIREでのプロジェクトを拝見しご連絡いたしました';
+  private expectedSubject(input?: SalesMailDraftInput) {
+    const platformName = this.cleanPhrase(input?.projectPlatformName) || 'クラウドファンディング';
+    return `${platformName}でのプロジェクトを拝見しご連絡いたしました`;
   }
 
   private isDraftShape(value: unknown): value is {
