@@ -386,7 +386,7 @@ export class DashboardController {
       </div>
       <div class="workflow-step">
         <strong><span class="step-label">4</span>作る</strong>
-        <span>AI分析を見てメール下書きを生成</span>
+        <span>無料分析を見て必要な時だけメール生成</span>
       </div>
       <div class="workflow-step">
         <strong><span class="step-label">5</span>確認する</strong>
@@ -442,13 +442,6 @@ export class DashboardController {
       <section>
         <div class="section-head">
           <h2>2. 営業リスト</h2>
-          <div class="toolbar">
-            <select id="templateKey">
-              <option value="normal">通常版</option>
-              <option value="sns_video_ad">SNS動画・広告版</option>
-            </select>
-            <button class="primary" id="generateButton" onclick="generateMail()" disabled>メール生成</button>
-          </div>
         </div>
         <div class="body" style="padding:0">
           <table>
@@ -555,6 +548,11 @@ export class DashboardController {
         <div class="section-head">
           <h2>5. メール確認・承認</h2>
           <div class="toolbar">
+            <select id="templateKey">
+              <option value="normal">通常版</option>
+              <option value="sns_video_ad">SNS動画・広告版</option>
+            </select>
+            <button class="primary" id="generateButton" onclick="generateMail()" disabled>メール生成</button>
             <button onclick="requestReview()" id="reviewButton" disabled>レビュー依頼</button>
             <button onclick="requestReReview()" id="reReviewButton" disabled>再レビュー依頼</button>
             <button onclick="rejectMail()" id="rejectButton" disabled>棄却</button>
