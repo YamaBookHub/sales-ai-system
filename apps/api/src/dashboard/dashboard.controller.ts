@@ -2392,6 +2392,7 @@ export class DashboardController {
 
     function renderAiAnalysis() {
       const container = document.getElementById('aiAnalysis');
+      if (!container) return;
       if (!state.selectedLeadId) {
         container.innerHTML = '<div class="muted">営業リストから案件を選択してください</div>';
         return;
@@ -2438,15 +2439,16 @@ export class DashboardController {
       const lead = state.leads.find((item) => item.id === state.selectedLeadId);
       const container = document.getElementById('leadDetail');
       const openButton = document.getElementById('openProjectButton');
+      if (!container) return;
       if (!lead) {
         container.innerHTML = '<div class="muted">営業リストから案件を選択してください</div>';
-        openButton.disabled = true;
+        if (openButton) openButton.disabled = true;
         return;
       }
 
       const company = lead.company || {};
       const project = lead.project || {};
-      openButton.disabled = !project.url;
+      if (openButton) openButton.disabled = !project.url;
       container.innerHTML =
         renderLeadAlerts(lead) +
         '<div class="detail-grid">' +
@@ -2673,15 +2675,15 @@ export class DashboardController {
       state.checklist = [];
       state.checklistComplete = false;
       renderLeads();
-      renderLeadDetail();
       renderMailLeadSummary();
-      renderAiAnalysis();
       if (latestMail) {
         selectMail(latestMail.id);
       } else {
         clearMailEditor();
         renderMails();
       }
+      renderLeadDetail();
+      renderAiAnalysis();
       void loadAiAnalysis();
     }
 
