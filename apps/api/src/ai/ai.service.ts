@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GenerateMailDto } from './ai.dto';
 import { OpenAiClientService } from './openai-client.service';
@@ -79,6 +79,16 @@ export class AiService {
       throw new NotFoundException('Lead not found');
     }
 
+    const existingMail = await this.prisma.outreachEmail.findFirst({
+      where: { leadId: lead.id },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, status: true }
+    });
+
+    if (existingMail) {
+      throw new ConflictException('この営業対象には既存メールがあります。履歴からメールを選択して編集・レビューしてください。');
+    }
+
     const aiInput = {
       templateKey: dto.templateKey,
       tone: dto.tone,
@@ -104,6 +114,10 @@ export class AiService {
           status: 'draft',
           events: { create: { type: 'generated' } }
         }
+      });
+      await tx.salesLead.update({
+        where: { id: lead.id },
+        data: { status: 'drafted' }
       });
       const aiGeneration = await tx.aiGeneration.create({
         data: {

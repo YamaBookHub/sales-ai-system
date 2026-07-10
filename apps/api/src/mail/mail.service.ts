@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { EmailEventType, EmailStatus, Prisma } from '@prisma/client';
+import { EmailEventType, EmailStatus, LeadStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMailDraftDto, RejectMailDto, UpdateMailChecklistDto, UpdateMailDto } from './mail.dto';
 
@@ -43,19 +43,36 @@ export class MailService {
       throw new NotFoundException('Lead not found');
     }
 
-    const email = await this.prisma.outreachEmail.create({
-      data: {
-        leadId: lead.id,
-        companyId: lead.companyId,
-        templateKey: dto.templateKey,
-        subject: 'CAMPFIREでのプロジェクトを拝見しご連絡いたしました',
-        body: dto.manualInstruction ?? 'TODO: AI-generated draft body will be inserted here.',
-        status: 'draft',
-        events: { create: { type: 'created' } }
-      }
+    const existingMail = await this.prisma.outreachEmail.findFirst({
+      where: { leadId: lead.id },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true }
     });
 
-    return email;
+    if (existingMail) {
+      throw new ConflictException('この営業対象には既存メールがあります。履歴からメールを選択して編集・レビューしてください。');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const email = await tx.outreachEmail.create({
+        data: {
+          leadId: lead.id,
+          companyId: lead.companyId,
+          templateKey: dto.templateKey,
+          subject: 'CAMPFIREでのプロジェクトを拝見しご連絡いたしました',
+          body: dto.manualInstruction ?? 'TODO: AI-generated draft body will be inserted here.',
+          status: 'draft',
+          events: { create: { type: 'created' } }
+        }
+      });
+
+      await tx.salesLead.update({
+        where: { id: lead.id },
+        data: { status: 'drafted' }
+      });
+
+      return email;
+    });
   }
 
   update(id: string, dto: UpdateMailDto) {
@@ -224,20 +241,42 @@ export class MailService {
     });
   }
 
-  private transition(
+  private async transition(
     id: string,
     status: EmailStatus,
     eventType: EmailEventType,
     extra: Record<string, unknown> = {},
     payload?: Prisma.InputJsonObject
   ) {
-    return this.prisma.outreachEmail.update({
-      where: { id },
-      data: {
-        status,
-        ...extra,
-        events: { create: { type: eventType, payload } }
+    return this.prisma.$transaction(async (tx) => {
+      const email = await tx.outreachEmail.update({
+        where: { id },
+        data: {
+          status,
+          ...extra,
+          events: { create: { type: eventType, payload } }
+        }
+      });
+
+      const leadStatus = leadStatusForEmailStatus(status);
+      if (leadStatus && email.leadId) {
+        await tx.salesLead.update({
+          where: { id: email.leadId },
+          data: { status: leadStatus }
+        });
       }
+
+      return email;
     });
   }
+}
+
+function leadStatusForEmailStatus(status: EmailStatus): LeadStatus | null {
+  if (status === 'draft') return 'drafted';
+  if (status === 'in_review') return 'reviewing';
+  if (status === 'rejected') return 'rejected';
+  if (status === 'approved') return 'approved';
+  if (status === 'queued') return 'queued';
+  if (status === 'sent') return 'contacted';
+  return null;
 }
