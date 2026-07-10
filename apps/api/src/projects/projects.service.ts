@@ -87,24 +87,35 @@ export class ProjectsService {
   async bulkImport(dto: BulkImportProjectsDto, actor: ProjectActor = {}) {
     const provider = this.providerFor(dto.source);
     const userId = await this.resolveActorUserId(actor);
-    const urls = Array.from(new Set((dto.urls || []).map((url) => provider.normalizeUrl(url)).filter(Boolean)));
+    const urlInputs = Array.from(
+      new Map(
+        (dto.urls || [])
+          .map((originalUrl) => ({
+            originalUrl,
+            url: provider.normalizeUrl(originalUrl)
+          }))
+          .filter((item) => item.url)
+          .map((item) => [item.url, item])
+      ).values()
+    );
     const importConcurrency = clampConcurrency(dto.importConcurrency, 1, 4, 4);
     const analysisConcurrency = clampConcurrency(dto.analysisConcurrency, 1, 4, 3);
-    const imported: Array<{ url: string; leadId: string; projectId: string; companyId: string }> = [];
-    const items: Array<{ url: string; status: 'imported' | 'failed'; leadId?: string; message?: string }> = [];
+    const imported: Array<{ originalUrl: string; url: string; leadId: string; projectId: string; companyId: string }> = [];
+    const items: Array<{ originalUrl: string; url: string; status: 'imported' | 'failed'; leadId?: string; message?: string }> = [];
 
-    await runWithConcurrency(urls, importConcurrency, async (url) => {
+    await runWithConcurrency(urlInputs, importConcurrency, async (item) => {
       try {
-        const result = await this.importWithProvider(provider, url, { bulk: true, actor, userId });
+        const result = await this.importWithProvider(provider, item.url, { bulk: true, actor, userId });
         imported.push({
-          url,
+          originalUrl: item.originalUrl,
+          url: item.url,
           leadId: result.lead.id,
           projectId: result.project.id,
           companyId: result.company.id
         });
-        items.push({ url, status: 'imported', leadId: result.lead.id });
+        items.push({ originalUrl: item.originalUrl, url: item.url, status: 'imported', leadId: result.lead.id });
       } catch (error) {
-        items.push({ url, status: 'failed', message: error instanceof Error ? error.message : '取り込みに失敗しました' });
+        items.push({ originalUrl: item.originalUrl, url: item.url, status: 'failed', message: error instanceof Error ? error.message : '取り込みに失敗しました' });
       }
     });
 
@@ -127,7 +138,7 @@ export class ProjectsService {
         entityType: 'Project',
         after: {
           source: provider.source,
-          requested: urls.length,
+          requested: urlInputs.length,
           imported: items.filter((item) => item.status === 'imported').length,
           failed: items.filter((item) => item.status === 'failed').length,
           analyzed: analysisItems.filter((item) => item.status === 'analyzed').length,
@@ -138,7 +149,7 @@ export class ProjectsService {
 
     return {
       source: provider.source,
-      total: urls.length,
+      total: urlInputs.length,
       imported: items.filter((item) => item.status === 'imported').length,
       failed: items.filter((item) => item.status === 'failed').length,
       analyzed: analysisItems.filter((item) => item.status === 'analyzed').length,
@@ -151,6 +162,9 @@ export class ProjectsService {
   private async importWithProvider(provider: ProjectSourceProvider, url: string, options: ImportOptions = {}) {
     const normalizedUrl = provider.normalizeUrl(url);
     const imported = await provider.import(normalizedUrl);
+    if (imported.project.status !== 'active') {
+      throw new BadRequestException('現在公開中・募集中のプロジェクトだけ取り込めます。終了済み・公開前のURLは対象外です。');
+    }
     const userId = options.userId ?? (await this.resolveActorUserId(options.actor));
     const result = await this.persistImportedProject(imported, { ...options, userId });
 

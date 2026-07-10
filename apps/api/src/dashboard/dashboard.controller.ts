@@ -2044,7 +2044,8 @@ export class DashboardController {
       campfireCandidates: [],
       candidateImportStatus: {},
       campfireSearchTimerId: null,
-      campfireSearchStartedAt: null
+      campfireSearchStartedAt: null,
+      currentSourcePlatform: null
     };
     const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
 
@@ -2082,15 +2083,36 @@ export class DashboardController {
 
     function onSourcePlatformChange() {
       const platform = selectedSourcePlatform();
+      const sourceChanged = state.currentSourcePlatform && state.currentSourcePlatform !== platform;
       const urlInput = document.getElementById('campfireUrl');
+      const profileSearch = document.getElementById('campfireSearchProfileProjectRange');
+      const profileDisplay = document.getElementById('campfireDisplayProfileProjectRange');
       if (urlInput) {
         urlInput.placeholder = ({
           campfire: 'https://camp-fire.jp/projects/.../view',
           makuake: 'https://www.makuake.com/project/.../'
         })[platform] || sourcePlatformLabel(platform) + 'のプロジェクトURL（準備中）';
       }
+      if (profileSearch) {
+        profileSearch.disabled = platform !== 'campfire';
+        if (platform !== 'campfire') profileSearch.value = '';
+      }
+      if (profileDisplay) {
+        profileDisplay.disabled = platform !== 'campfire';
+        if (platform !== 'campfire') profileDisplay.value = '';
+      }
+      void loadCampfireCategories();
+      if (sourceChanged) {
+        state.campfireCandidates = [];
+        state.candidateImportStatus = {};
+        renderCampfireCandidates();
+      }
+      state.currentSourcePlatform = platform;
       if (platform === 'campfire' || platform === 'makuake') {
-        setStatus('sourcePlatformStatus', sourcePlatformLabel(platform) + 'の募集中プロジェクトに対応', 'muted');
+        const note = platform === 'campfire'
+          ? '募集中プロジェクト、カテゴリ、過去PJ条件に対応'
+          : '募集中プロジェクト、キーワード、カテゴリに対応（過去PJ条件は対象外）';
+        setStatus('sourcePlatformStatus', sourcePlatformLabel(platform) + 'の' + note, 'muted');
         return;
       }
       setStatus('sourcePlatformStatus', sourcePlatformLabel(platform) + 'は取得元として準備中です', 'warn');
@@ -2195,7 +2217,8 @@ export class DashboardController {
 
     async function searchCampfireCandidates() {
       if (!ensureSupportedSourcePlatform('campfireSearchStatusText')) return;
-      const profileProjectRange = rangeFieldValue('campfireSearchProfileProjectRange');
+      const source = selectedSourcePlatform();
+      const profileProjectRange = source === 'campfire' ? rangeFieldValue('campfireSearchProfileProjectRange') : { min: null, max: null };
       const hasProfileProjectSearch = profileProjectRange.min !== null || profileProjectRange.max !== null;
       const desiredLimit = numberFieldValue('campfireFetchLimit') || 10;
       startCampfireSearchTimer(hasProfileProjectSearch);
@@ -2204,7 +2227,7 @@ export class DashboardController {
         const result = await api('/api/projects/search', {
           method: 'POST',
           body: JSON.stringify(compactPayload({
-            source: selectedSourcePlatform(),
+            source,
             keyword: fieldValue('campfireSearchKeyword'),
             category: fieldValue('campfireSearchCategory'),
             profileProjectMin: profileProjectRange.min,
@@ -2310,12 +2333,21 @@ export class DashboardController {
             analysisConcurrency: 3
           })
         });
-        const resultByUrl = Object.fromEntries((result.items || []).map((item) => [item.url, item]));
+        const resultByUrl = {};
+        (result.items || []).forEach((row) => {
+          if (row.originalUrl) resultByUrl[row.originalUrl] = row;
+          if (row.url) resultByUrl[row.url] = row;
+        });
+        const analysisByLeadId = Object.fromEntries((result.analysisItems || []).map((item) => [item.leadId, item]));
         importableEntries.forEach(({ item }) => {
           const row = resultByUrl[item.url];
           if (!row) return setCandidateImportStatus(item, 'failed', '結果を確認できませんでした');
           if (row.status === 'imported') {
-            setCandidateImportStatus(item, 'imported', '取り込み・AI分析済み', row.leadId);
+            const analysis = row.leadId ? analysisByLeadId[row.leadId] : null;
+            const message = analysis?.status === 'failed'
+              ? '取り込み済み / AI分析失敗: ' + (analysis.message || '')
+              : '取り込み・AI分析済み';
+            setCandidateImportStatus(item, 'imported', message, row.leadId);
             state.selectedLeadId = row.leadId || state.selectedLeadId;
           } else {
             setCandidateImportStatus(item, 'failed', row.message || '取り込みに失敗しました');

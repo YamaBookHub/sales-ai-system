@@ -443,32 +443,38 @@ function buildMailPlaceholders(
   snsAnalysisMemo?: string | null
 ) {
   const manualAnalysis = sanitizeAnalysisSource(`${brandAnalysisMemo || ''} ${snsAnalysisMemo || ''}`);
-  const source = sanitizeAnalysisSource(`${title || ''} ${category || ''} ${description || ''} ${reason || ''} ${manualAnalysis}`);
-  const isStoreProject = /飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業|地域/.test(source);
-  const isEventProject = /ライブ|コンサート|音楽|バンド|ファン|周年|結成|記念|イベント|公演|ツアー|フェス|アーティスト/.test(source);
-  const isRiceStorageProject = /米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(source);
+  const projectSource = sanitizeAnalysisSource(`${title || ''} ${category || ''} ${description || ''}`);
+  const source = sanitizeAnalysisSource(`${projectSource} ${reason || ''} ${manualAnalysis}`);
+  const isStoreProject = /飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業|地域/.test(projectSource);
+  const isEventProject = /ライブ|コンサート|音楽|バンド|ファン|周年|結成|記念|イベント|公演|ツアー|フェス|アーティスト/.test(projectSource);
+  const isRiceStorageProject = /米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(projectSource);
+  const isAirBedProject = /エアベッド|ベッド|寝られる|寝心地|空気|マットレス|キャンプ|車中泊|アウトドア/.test(projectSource);
   const strength = buildLocalStrengths(description, [reason, manualAnalysis].filter(Boolean).join(' '))[0] || '';
-  const manualAppeal = pickManualAppeal(manualAnalysis);
-  const manualTarget = pickManualTarget(manualAnalysis);
-  const appeal = manualAppeal || (isStoreProject
+  const manualAppeal = pickManualAppeal(manualAnalysis, projectSource);
+  const manualTarget = pickManualTarget(manualAnalysis, projectSource);
+  const appeal = ensureCompatibleAppeal(manualAppeal || (isStoreProject
     ? '長年親しまれてきた店舗をより利用しやすい形で継続しようとされている点'
     : isEventProject
       ? '節目となる企画をファンの方々と一緒に盛り上げようとされている点'
       : isRiceStorageProject
         ? 'お米の鮮度を保ちながら、キッチンに収まりやすい形で分けて保存できる点'
-      : toMailSafeAppeal(strength, title));
+        : isAirBedProject
+          ? '屋内外で使いやすく、寝心地や持ち運びやすさを訴求しやすい点'
+      : toMailSafeAppeal(strength, title)), projectSource);
   const target = manualTarget || (isStoreProject
     ? '店舗の継続や地域に根ざしたお店を応援したい方'
     : isEventProject
       ? 'これまで活動を応援してきたファンの方や、ライブ体験に関心のある方'
       : isRiceStorageProject
         ? 'お米の保存状態やキッチン収納を重視する方'
+        : isAirBedProject
+          ? 'キャンプや車中泊、来客時の寝具を手軽に用意したい方'
       : buildLocalTargetUsers(category, description)[0] || 'この取り組みに関心を持つ方');
   const subjectType = isStoreProject || isEventProject ? '取り組み' : '商品';
 
   return {
     companyRecipient: companyName ? `${companyName} ご担当者様` : 'ご担当者様',
-    productName: title || 'クラウドファンディング掲載プロジェクト',
+    productName: cleanProjectTitleForMail(title) || 'クラウドファンディング掲載プロジェクト',
     appeal,
     targetUser: target,
     subjectType,
@@ -476,18 +482,24 @@ function buildMailPlaceholders(
   };
 }
 
-function pickManualAppeal(text: string) {
+function pickManualAppeal(text: string, projectSource = '') {
   if (!text) return '';
   const sentence = text
     .split(/[。！？!?]/)
     .map((value) => cleanAnalysisPhrase(value))
-    .find((value) => value.length >= 8 && value.length <= 90 && /魅力|強み|特徴|印象|見せ|伝え|背景|用途|シーン|体験|応援|安心|便利|継続/.test(value));
+    .find((value) =>
+      value.length >= 8 &&
+      value.length <= 90 &&
+      /魅力|強み|特徴|印象|見せ|伝え|背景|用途|シーン|体験|応援|安心|便利|継続/.test(value) &&
+      isPhraseCompatibleWithProject(value, projectSource)
+    );
   return sentence ? toMailSafeAppeal(sentence) : '';
 }
 
-function pickManualTarget(text: string) {
+function pickManualTarget(text: string, projectSource = '') {
   const match = text.match(/(?:ターゲット|使う人|対象|利用者|支援者|向け)\s*[:：]?\s*([^。！？!?]{3,45})/);
-  return match?.[1] ? cleanAnalysisPhrase(match[1]) : '';
+  const target = match?.[1] ? cleanAnalysisPhrase(match[1]) : '';
+  return target && isPhraseCompatibleWithProject(target, projectSource) ? target : '';
 }
 
 function cleanAnalysisPhrase(value: string) {
@@ -502,9 +514,39 @@ function toMailSafeAppeal(strength: string, title?: string | null) {
     .replace(/メール生成前に確認してください。?$/, '')
     .replace(/商品説明から読み取れる特徴を/g, '')
     .trim();
-  if (cleaned && !/確認してください/.test(cleaned)) return cleaned;
+  if (cleaned && !isBadMailPhrase(cleaned)) return cleaned;
   if (title) return `プロジェクトの目的や背景が分かりやすく伝えられている点`;
   return '取り組みの背景や想いが伝わりやすい点';
+}
+
+function ensureCompatibleAppeal(appeal: string, projectSource: string) {
+  if (!appeal || isBadMailPhrase(appeal) || !isPhraseCompatibleWithProject(appeal, projectSource)) {
+    return 'プロジェクトの目的や背景が分かりやすく伝えられている点';
+  }
+  return appeal;
+}
+
+function isPhraseCompatibleWithProject(phrase: string, projectSource: string) {
+  if (!phrase || !projectSource) return true;
+  const rules = [
+    { pattern: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/, required: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/ },
+    { pattern: /エアベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/, required: /エアベッド|ベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/ },
+    { pattern: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/, required: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/ },
+    { pattern: /焼き鳥|焼鳥|炭火|店舗|飲食|居酒屋|リフォーム|改装/, required: /焼き鳥|焼鳥|炭火|店舗|飲食|居酒屋|リフォーム|改装/ }
+  ];
+  return rules.every((rule) => !rule.pattern.test(phrase) || rule.required.test(projectSource));
+}
+
+function isBadMailPhrase(value: string) {
+  return /確認してください|未取得|TODO|カテゴリーからさがす|達成率|残り日数|支援額|支援者数|商品説明から読み取れる/.test(value);
+}
+
+function cleanProjectTitleForMail(title?: string | null) {
+  return (title || '')
+    .replace(/^Makuake[｜|]\s*/i, '')
+    .replace(/\s*[｜|]\s*Makuake（マクアケ）$/i, '')
+    .replace(/\s*[｜|]\s*Makuake$/i, '')
+    .trim();
 }
 
 function sanitizeAnalysisSource(value: string) {
@@ -516,6 +558,7 @@ function sanitizeAnalysisSource(value: string) {
     .replace(/(?:特別価格|限定価格|早割|割引|[0-9,]+円(?:税込)?|価格でご提供|ご提供)/g, '')
     .replace(/特徴\s*[:：]?\s*カテゴリーからさがす/g, '')
     .replace(/カテゴリーからさがす/g, '')
+    .replace(/商品説明から読み取れる特徴をメール生成前に確認してください。?/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -600,6 +643,7 @@ function buildLocalStrengths(description?: string | null, reason?: string | null
   const strengths = [
     source.match(/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/) ? '店舗の継続や改装の背景を、応援したくなる取り組みとして伝えやすい可能性があります。' : '',
     source.match(/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/) ? 'お米の鮮度を保ちながら、キッチンに収まりやすく分けて保存できる点を伝えやすい可能性があります。' : '',
+    source.match(/エアベッド|ベッド|寝られる|寝心地|空気|マットレス|キャンプ|車中泊|アウトドア/) ? '屋内外で使いやすく、寝心地や持ち運びやすさを訴求しやすい点を伝えやすい可能性があります。' : '',
     source.match(/軽量|コンパクト|持ち運び/) ? '持ち運びやすさを伝えやすい可能性があります。' : '',
     source.match(/防災|安全|守/) ? '安心感や備えの必要性を切り口にしやすい可能性があります。' : '',
     source.match(/便利|簡単|時短/) ? '日常の不便を減らす商品として伝えやすい可能性があります。' : ''
@@ -611,6 +655,7 @@ function buildLocalTargetUsers(category?: string | null, description?: string | 
   const source = `${category || ''} ${description || ''}`;
   if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/.test(source)) return ['地域に根ざした店舗を応援したい方', '飲食店の継続や再開を応援したい方'];
   if (/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(source)) return ['お米の保存状態やキッチン収納を重視する方', '日々の食材管理をしやすくしたい方'];
+  if (/エアベッド|ベッド|寝られる|寝心地|空気|マットレス|キャンプ|車中泊|アウトドア/.test(source)) return ['キャンプや車中泊、来客時の寝具を手軽に用意したい方', '持ち運びやすい寝具を探している方'];
   if (/防災|安全|守/.test(source)) return ['防災備えを重視する方', '大切な物を保管したい方'];
   if (/アウトドア|キャンプ|旅行/.test(source)) return ['アウトドアや旅行で使う方', '持ち運びやすさを重視する方'];
   if (/美容|ヘルス|健康/.test(source)) return ['日常ケアに関心がある方'];
