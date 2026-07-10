@@ -33,10 +33,11 @@ export class DashboardController {
       font-size: 14px;
     }
     header {
-      height: 58px;
+      min-height: 58px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
       padding: 0 24px;
       border-bottom: 1px solid var(--line);
       background: var(--panel);
@@ -45,6 +46,22 @@ export class DashboardController {
       z-index: 10;
     }
     h1 { font-size: 18px; margin: 0; }
+    .top-nav {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f4f6f8;
+    }
+    .top-nav button {
+      border-color: transparent;
+      background: transparent;
+    }
+    .top-nav button.primary {
+      background: var(--accent);
+      color: white;
+    }
     button, input, select { font: inherit; }
     button {
       border: 1px solid var(--line);
@@ -163,9 +180,11 @@ export class DashboardController {
     <h1>営業リスト詳細</h1>
     <div class="toolbar">
       <span id="pageStatus" class="status muted">読み込み中</span>
-      <button onclick="location.href='/'">URL検索</button>
-      <button class="primary" onclick="location.href='/leads-view'">営業リスト</button>
-      <button onclick="location.href='/mail-workspace'">メール作成</button>
+      <div class="top-nav">
+        <button onclick="location.href='/'">URL検索</button>
+        <button class="primary" onclick="location.href='/leads-view'">営業リスト</button>
+        <button onclick="location.href='/mail-workspace'">メール作成</button>
+      </div>
       <button class="primary" onclick="loadAll()">更新</button>
     </div>
   </header>
@@ -615,42 +634,7 @@ export class DashboardController {
       min-height: calc(100vh - 58px);
     }
     .workflow {
-      grid-column: 1 / -1;
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-      background: transparent;
-      border: 0;
-    }
-    .workflow-step {
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 8px;
-      padding: 12px;
-      min-width: 0;
-    }
-    .workflow-step strong {
-      display: block;
-      font-size: 13px;
-      margin-bottom: 4px;
-    }
-    .workflow-step span {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.5;
-    }
-    .step-label {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 22px;
-      height: 22px;
-      border-radius: 999px;
-      background: #e7f2f0;
-      color: var(--accent);
-      font-weight: 700;
-      margin-right: 6px;
+      display: none;
     }
     section {
       background: var(--panel);
@@ -855,6 +839,12 @@ export class DashboardController {
     body.mail-workspace-page [data-tab-panel="mail"] {
       display: block;
     }
+    body.url-search-page main {
+      grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
+    }
+    body.mail-workspace-page main {
+      grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
+    }
     .search-panel {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -924,9 +914,11 @@ export class DashboardController {
     <h1>URL検索</h1>
     <div class="toolbar">
       <span id="apiStatus" class="status muted">API確認中</span>
-      <button class="primary" onclick="location.href='/'">URL検索</button>
-      <button onclick="location.href='/leads-view'">営業リスト</button>
-      <button onclick="location.href='/mail-workspace'">メール作成</button>
+      <div class="top-nav">
+        <button class="primary" onclick="location.href='/'">URL検索</button>
+        <button onclick="location.href='/leads-view'">営業リスト</button>
+        <button onclick="location.href='/mail-workspace'">メール作成</button>
+      </div>
       <button onclick="loadAll()">更新</button>
     </div>
   </header>
@@ -949,7 +941,7 @@ export class DashboardController {
     <div class="left">
       <section>
         <div class="section-head">
-          <h2>1. CAMPFIRE取り込み</h2>
+          <h2>CAMPFIRE URLを探す</h2>
         </div>
         <div class="body">
           <div class="row">
@@ -957,7 +949,7 @@ export class DashboardController {
             <input id="campfireUrl" placeholder="https://camp-fire.jp/projects/.../view" />
           </div>
           <div class="toolbar">
-            <button class="primary" onclick="importCampfire()">取り込む・無料分析</button>
+            <button class="primary" onclick="importCampfire()">このURLを取り込む</button>
             <span id="importStatus" class="status"></span>
           </div>
           <div class="row" style="margin-top:16px">
@@ -993,7 +985,7 @@ export class DashboardController {
 
       <section>
         <div class="section-head">
-          <h2>2. 営業リスト</h2>
+          <h2>対象を選ぶ</h2>
         </div>
         <div class="body" style="padding:0">
           <table>
@@ -1015,7 +1007,7 @@ export class DashboardController {
     <div class="right">
       <section>
         <div class="section-head">
-          <h2>CAMPFIRE検索結果</h2>
+          <h2>検索結果</h2>
           <div class="toolbar">
             <span id="campfireCandidateCount" class="status muted">未検索</span>
             <button onclick="bulkImportVisibleCandidates()" id="bulkImportButton" disabled>表示中を一括取り込み</button>
@@ -1099,7 +1091,7 @@ export class DashboardController {
 
       <section class="tab-panel" data-tab-panel="mail">
         <div class="section-head">
-          <h2>5. メール確認・承認</h2>
+          <h2>メール作成・確認</h2>
           <div class="toolbar">
             <select id="templateKey">
               <option value="normal">通常版</option>
