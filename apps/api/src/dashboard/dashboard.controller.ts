@@ -1194,6 +1194,7 @@ export class DashboardController {
                 <th style="width:90px">状態</th>
                 <th style="width:76px">点数</th>
                 <th style="width:76px">優先度</th>
+                <th style="width:76px">URL</th>
               </tr>
             </thead>
             <tbody id="leadRows"></tbody>
@@ -1697,15 +1698,17 @@ export class DashboardController {
       const rows = leads.map((lead) => {
         const company = lead.company?.name || lead.companyId;
         const project = lead.project?.title || '案件名なし';
+        const projectUrl = lead.project?.url || '';
         return '<tr data-selected="' + (lead.id === state.selectedLeadId) + '" onclick="selectLead(\\'' + lead.id + '\\')">' +
           '<td><div class="clip">' + escapeHtml(company) + '</div></td>' +
           '<td><div class="clip">' + escapeHtml(project) + '</div><div class="muted clip">' + escapeHtml(lead.reason || '') + '</div></td>' +
           '<td><span class="badge">' + escapeHtml(labelLeadStatus(lead.status)) + '</span></td>' +
           '<td>' + Number(lead.score || 0) + '</td>' +
           '<td>' + escapeHtml(labelPriority(lead.priority)) + '</td>' +
+          '<td>' + (projectUrl ? '<a href="' + escapeAttr(projectUrl) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">開く</a>' : '-') + '</td>' +
         '</tr>';
       }).join('');
-      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="5" class="muted">まだリードがありません</td></tr>';
+      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="6" class="muted">まだリードがありません</td></tr>';
       document.getElementById('generateButton').disabled = !state.selectedLeadId;
       document.getElementById('analysisButton').disabled = !state.selectedLeadId;
       const selected = state.leads.find((lead) => lead.id === state.selectedLeadId);
