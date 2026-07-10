@@ -849,7 +849,16 @@ export class DashboardController {
       gap: 12px;
     }
     body.mail-workspace-page main {
-      grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
+      max-width: 1240px;
+      width: 100%;
+      margin: 0 auto;
+      align-content: start;
+      gap: 12px;
+    }
+    body.mail-workspace-page .left,
+    body.mail-workspace-page .right {
+      display: block;
     }
     .search-panel {
       display: grid;
