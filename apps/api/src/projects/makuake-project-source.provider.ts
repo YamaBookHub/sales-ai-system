@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import * as cheerio from 'cheerio';
-import { chromium, type Page } from 'playwright';
+import { chromium, type BrowserContext, type Page } from 'playwright';
 import { SearchCampfireProjectsDto } from './projects.dto';
 import { NormalizedImportedProject, ProjectSourceProvider } from './project-source-provider';
 
@@ -53,8 +53,9 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
           }
         })
       ).flat();
+      const enrichedItems = await enrichSearchResults(context, uniqueBy(rawItems, (item) => normalizeUrlForUnique(item.url)));
       const excluded = new Set((input.excludeUrls || []).map((url) => normalizeUrlForUnique(url)));
-      const items = sortSearchResults(uniqueBy(rawItems, (item) => normalizeUrlForUnique(item.url)), input)
+      const items = sortSearchResults(enrichedItems, input)
         .filter((item) => matchesKeyword(item, input.keyword))
         .filter((item) => !excluded.has(normalizeUrlForUnique(item.url)))
         .filter((item) => matchesNumericFilters(item, input))
@@ -188,6 +189,27 @@ async function collectSearchResultsFromPage(page: Page) {
     }
   }
   return uniqueBy(items, (item) => normalizeUrlForUnique(item.url));
+}
+
+async function enrichSearchResults(context: BrowserContext, items: MakuakeSearchResult[]) {
+  return runWithConcurrency(items, 4, async (item) => {
+    if (item.amount > 0 && item.supporterCount > 0) return item;
+    const page = await context.newPage();
+    try {
+      await page.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 25000 });
+      await page.waitForTimeout(500);
+      const text = clean((await page.locator('body').textContent({ timeout: 3000 })) || '');
+      return {
+        ...item,
+        amount: item.amount || extractAmount(text),
+        supporterCount: item.supporterCount || extractSupporterCount(text)
+      };
+    } catch {
+      return item;
+    } finally {
+      await page.close().catch(() => undefined);
+    }
+  });
 }
 
 function extractSearchResults(html: string): MakuakeSearchResult[] {
@@ -331,12 +353,17 @@ function isProjectUrl(url: string) {
 }
 
 function extractAmount(text: string) {
-  const match = text.match(/(?:応援購入総額|購入総額|支援総額|現在の支援総額)?\s*([0-9,]+)\s*円/);
+  const match =
+    text.match(/[¥￥]\s*([0-9,]+)/) ||
+    text.match(/(?:集まっている金額|応援購入総額|購入総額|支援総額|現在の支援総額)\s*[:：]?\s*([0-9,]+)\s*円/) ||
+    text.match(/([0-9,]+)\s*円/);
   return match?.[1] ? Number(match[1].replace(/,/g, '')) : 0;
 }
 
 function extractSupporterCount(text: string) {
-  const match = text.match(/([0-9,]+)\s*(?:人|名)\s*(?:の)?(?:サポーター|応援購入|購入者|支援者)?/);
+  const match =
+    text.match(/(?:寄附者|寄付者|サポーター数|支援者数|応援購入者数|サポーター|支援者|応援購入者)\s*[:：]?\s*([0-9,]+)\s*(?:人|名)?/) ||
+    text.match(/([0-9,]+)\s*(?:人|名)\s*(?:の)?(?:寄附者|寄付者|サポーター|応援購入者|購入者|支援者)/);
   return match?.[1] ? Number(match[1].replace(/,/g, '')) : 0;
 }
 
