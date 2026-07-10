@@ -105,8 +105,8 @@ export class DashboardController {
       gap: 8px;
     }
     .summary-panel { order: 1; }
-    .lead-list-main { order: 2; }
-    .filters-panel { order: 3; }
+    .filters-panel { order: 2; }
+    .lead-list-main { order: 3; }
     .collapsible-panel summary {
       min-height: 48px;
       display: flex;
@@ -844,7 +844,7 @@ export class DashboardController {
     }
     .tab-panel { display: none; }
     .tab-panel[data-active="true"] { display: block; }
-    body.url-search-page .left section:nth-of-type(2),
+    body.url-search-page .left section:not(:first-child),
     body.url-search-page .tabs,
     body.url-search-page .tab-panel,
     body.url-search-page .workflow {
@@ -879,6 +879,17 @@ export class DashboardController {
     body.mail-workspace-page .left,
     body.mail-workspace-page .right {
       display: block;
+    }
+    .mail-lead-filter {
+      display: none;
+    }
+    body.mail-workspace-page .mail-lead-filter {
+      display: block;
+    }
+    .mail-filter-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 180px;
+      gap: 8px;
     }
     .search-panel {
       display: grid;
@@ -1147,6 +1158,27 @@ export class DashboardController {
             </div>
           </div>
         </details>
+      </section>
+
+      <section class="mail-lead-filter">
+        <div class="section-head">
+          <h2>対象検索</h2>
+        </div>
+        <div class="body">
+          <div class="mail-filter-row">
+            <input id="mailLeadKeyword" placeholder="会社・案件・理由で検索" oninput="renderLeads()" />
+            <select id="mailLeadStatusFilter" onchange="renderLeads()">
+              <option value="">状態 すべて</option>
+              <option value="discovered">発見</option>
+              <option value="qualified">候補</option>
+              <option value="drafted">下書き済み</option>
+              <option value="reviewing">確認中</option>
+              <option value="approved">承認済み</option>
+              <option value="queued">送信待ち</option>
+              <option value="rejected">対象外</option>
+            </select>
+          </div>
+        </div>
       </section>
 
       <section>
@@ -1650,7 +1682,19 @@ export class DashboardController {
     }
 
     function renderLeads() {
-      const rows = state.leads.map((lead) => {
+      const keywordField = document.getElementById('mailLeadKeyword');
+      const statusField = document.getElementById('mailLeadStatusFilter');
+      const keyword = keywordField ? keywordField.value.trim().toLowerCase() : '';
+      const status = statusField ? statusField.value : '';
+      const leads = state.leads.filter((lead) => {
+        const project = lead.project || {};
+        const company = lead.company?.name || lead.companyId;
+        const haystack = [company, project.title, project.url, lead.reason].filter(Boolean).join(' ').toLowerCase();
+        if (keyword && !haystack.includes(keyword)) return false;
+        if (status && lead.status !== status) return false;
+        return true;
+      });
+      const rows = leads.map((lead) => {
         const company = lead.company?.name || lead.companyId;
         const project = lead.project?.title || '案件名なし';
         return '<tr data-selected="' + (lead.id === state.selectedLeadId) + '" onclick="selectLead(\\'' + lead.id + '\\')">' +
