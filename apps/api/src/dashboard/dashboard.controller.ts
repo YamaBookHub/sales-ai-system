@@ -1628,6 +1628,7 @@ export class DashboardController {
                 <th style="width:76px">点数</th>
                 <th style="width:76px">優先度</th>
                 <th style="width:76px">URL</th>
+                <th style="width:90px">選択</th>
               </tr>
             </thead>
             <tbody id="leadRows"></tbody>
@@ -2249,9 +2250,10 @@ export class DashboardController {
           '<td>' + Number(lead.score || 0) + '</td>' +
           '<td>' + escapeHtml(labelPriority(lead.priority)) + '</td>' +
           '<td>' + (projectUrl ? '<a href="' + escapeAttr(projectUrl) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">開く</a>' : '-') + '</td>' +
+          '<td><button class="primary" onclick="selectLeadFromButton(event, \\'' + lead.id + '\\')">' + (lead.id === state.selectedLeadId ? '選択中' : '選択') + '</button></td>' +
         '</tr>';
       }).join('');
-      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="6" class="muted">まだリードがありません</td></tr>';
+      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="7" class="muted">まだリードがありません</td></tr>';
       const mailLeadCount = document.getElementById('mailLeadCount');
       if (mailLeadCount) mailLeadCount.textContent = leads.length + '件';
       document.getElementById('generateButton').disabled = !canGenerateMail();
@@ -2272,7 +2274,8 @@ export class DashboardController {
       }
       const company = lead.company || {};
       const project = lead.project || {};
-      const mail = selectedLeadMails()[0];
+      const mails = selectedLeadMails();
+      const mail = mails[0];
       const next = document.getElementById('mailNextAction');
       if (next) next.textContent = mailNextActionText(lead, mail);
       container.innerHTML =
@@ -2280,6 +2283,7 @@ export class DashboardController {
           detailItem('企業名', company.name || lead.companyId) +
           detailItem('案件名', project.title || '未取得') +
           detailItem('状態', labelLeadStatus(lead.status)) +
+          detailItem('メール履歴', mails.length + '件') +
           detailItem('最新メール', mail ? labelMailStatus(mail.status) : '未生成') +
           detailItem('支援額', formatCurrency(project.amount)) +
           detailItem('支援者数', formatNumber(project.supporterCount) + '人') +
@@ -2572,7 +2576,7 @@ export class DashboardController {
           '<td>' + formatDate(mail.createdAt) + '</td>' +
         '</tr>';
       }).join('');
-      document.getElementById('mailRows').innerHTML = rows || '<tr><td colspan="3" class="muted">この対象のメール作成履歴はまだありません。メール生成で新規作成できます。</td></tr>';
+      document.getElementById('mailRows').innerHTML = rows || '<tr><td colspan="3" class="muted">この対象のメール作成履歴は0件です。メール生成で新規作成できます。</td></tr>';
       const selected = mails.find((mail) => mail.id === state.selectedMailId);
       document.getElementById('selectedMail').textContent = selected ? labelMailStatus(selected.status) : '未選択';
       populateMailEditor(selected);
@@ -2666,6 +2670,11 @@ export class DashboardController {
       return state.checklist
         .map((item, index) => ({ ...item, index }))
         .sort((a, b) => Number(b.checked) - Number(a.checked) || a.index - b.index);
+    }
+
+    function selectLeadFromButton(event, id) {
+      event.stopPropagation();
+      selectLead(id);
     }
 
     function selectLead(id) {
