@@ -232,10 +232,10 @@ export class OpenAiClientService {
   private extractAppeal(input: SalesMailDraftInput, aiBody: string) {
     const projectSources = [input.projectDescription, input.leadReason].filter(Boolean).join(' ');
     const candidates = [
-      this.pickSentence(projectSources, /(?:特徴|印象的|魅力|強み|可能|でき|守|使|選|持ち運|コンパクト|軽量|防災|安心|便利)/),
-      input.projectDescription,
-      input.leadReason,
-      this.pickSentence(aiBody, /(?:特徴|印象的|魅力|強み|可能|でき|守|使|選|持ち運|コンパクト|軽量|防災|安心|便利)/)
+      this.pickSentence(projectSources, /(?:特徴|印象的|魅力|強み|可能|でき|守|使|選|持ち運|コンパクト|軽量|防災|安心|便利|楽し|体験|香り|味わい)/),
+      this.firstSentence(input.projectDescription),
+      this.firstSentence(input.leadReason),
+      this.pickSentence(aiBody, /(?:特徴|印象的|魅力|強み|可能|でき|守|使|選|持ち運|コンパクト|軽量|防災|安心|便利|楽し|体験|香り|味わい)/)
     ]
       .map((value) => this.cleanPhrase(value))
       .filter(Boolean);
@@ -271,6 +271,13 @@ export class OpenAiClientService {
       .split(/[。！？!?]\s*/)
       .map((item) => item.trim())
       .find((item) => item.length >= 12 && pattern.test(item));
+  }
+
+  private firstSentence(value: string | null | undefined) {
+    return (value || '')
+      .split(/[。！？!?]\s*/)
+      .map((item) => item.trim())
+      .find(Boolean);
   }
 
   private cleanPhrase(value: string | null | undefined) {

@@ -260,9 +260,9 @@ export class DashboardController {
                 <th style="width:90px">状態</th>
                 <th style="width:70px">優先度</th>
                 <th style="width:70px">点数</th>
-                <th style="width:120px">連絡先</th>
+                <th style="width:130px">連絡/手段</th>
                 <th style="width:110px">最新メール</th>
-                <th style="width:110px">次対応</th>
+                <th style="width:150px">次対応</th>
               </tr>
             </thead>
             <tbody id="leadRows"></tbody>
@@ -398,15 +398,16 @@ export class DashboardController {
         const mail = latestMail(lead.id);
         const project = lead.project || {};
         const contact = contactSummary(lead);
+        const sendMethod = lead.sendMethod || suggestSendMethod(lead);
         return '<tr data-selected="' + (lead.id === state.selectedLeadId) + '" onclick="selectLead(\\'' + lead.id + '\\')">' +
           '<td><div class="clip">' + escapeHtml(lead.company?.name || lead.companyId) + '</div></td>' +
           '<td><div class="clip">' + escapeHtml(project.title || '案件名なし') + '</div><div class="muted clip">' + escapeHtml(project.url || '') + '</div></td>' +
           '<td><span class="badge">' + escapeHtml(labelLeadStatus(lead.status)) + '</span></td>' +
           '<td>' + escapeHtml(labelPriority(lead.priority)) + '</td>' +
           '<td>' + escapeHtml(Number(lead.score || 0)) + '</td>' +
-          '<td><span class="badge ' + (contact === '未確認' ? 'danger' : 'ok') + '">' + escapeHtml(contact) + '</span></td>' +
+          '<td><span class="badge ' + (contact === '未確認' ? 'danger' : 'ok') + '">' + escapeHtml(contact) + '</span><div class="muted clip">' + escapeHtml(sendMethod || '手段未定') + '</div></td>' +
           '<td>' + (mail ? '<span class="badge ' + mailBadgeClass(mail.status) + '">' + escapeHtml(labelMailStatus(mail.status)) + '</span>' : '<span class="badge warn">未生成</span>') + '</td>' +
-          '<td>' + escapeHtml(nextActionLabel(lead, mail)) + '</td>' +
+          '<td><div>' + escapeHtml(nextActionLabel(lead, mail)) + '</div><div class="muted">' + escapeHtml(nextActionDateLabel(lead)) + '</div></td>' +
         '</tr>';
       }).join('');
       document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="8" class="muted">条件に合うリードがありません</td></tr>';
@@ -436,6 +437,8 @@ export class DashboardController {
           detailItem('支援者数', formatNumber(project.supporterCount) + '人') +
           detailItem('連絡先', contactSummary(lead)) +
           detailItem('最新メール', mail ? labelMailStatus(mail.status) : '未生成') +
+          detailItem('送信手段', lead.sendMethod || suggestSendMethod(lead)) +
+          detailItem('次対応日', nextActionDateLabel(lead)) +
         '</div>' +
         rowBlock('案件名', project.title || '未取得') +
         rowBlock('URL', project.url ? renderLink(project.url) : '未取得', true) +
@@ -567,6 +570,18 @@ export class DashboardController {
       return '未確認';
     }
 
+    function suggestSendMethod(lead) {
+      if (lead.contactEmail) return 'メール';
+      if (lead.contactFormUrl) return '問い合わせフォーム';
+      if (lead.siteMessageUrl) return 'サイト内メッセージ';
+      return '';
+    }
+
+    function nextActionDateLabel(lead) {
+      const value = lead.nextFollowUpAt || lead.nextActionAt;
+      return value ? formatDate(value) : '日付未定';
+    }
+
     function contactDetail(lead) {
       return [
         lead.contactEmail ? 'メール: ' + escapeHtml(lead.contactEmail) : '',
@@ -608,16 +623,37 @@ export class DashboardController {
             ['medium', '中'],
             ['low', '低']
           ]) +
-          inputField('leadSendMethodEdit', '送信手段', lead.sendMethod, 'メール / フォーム / サイト内') +
+          selectField('leadSendMethodEdit', '送信手段', lead.sendMethod || suggestSendMethod(lead), [
+            ['', '未定'],
+            ['メール', 'メール'],
+            ['問い合わせフォーム', '問い合わせフォーム'],
+            ['サイト内メッセージ', 'サイト内メッセージ'],
+            ['その他', 'その他']
+          ]) +
           inputField('leadNextActionAtEdit', '次対応日時', toDateTimeLocal(lead.nextFollowUpAt || lead.nextActionAt), '', 'datetime-local') +
           inputField('leadContactEmailEdit', 'メールアドレス', lead.contactEmail) +
           inputField('leadContactFormUrlEdit', 'フォームURL', lead.contactFormUrl) +
           inputField('leadSiteMessageUrlEdit', 'サイト内メッセージURL', lead.siteMessageUrl) +
           inputField('leadBrandWebsiteUrlEdit', '公式サイト', lead.brandWebsiteUrl) +
+          inputField('leadInstagramUrlEdit', 'Instagram', lead.instagramUrl) +
+          inputField('leadTiktokUrlEdit', 'TikTok', lead.tiktokUrl) +
+          inputField('leadXUrlEdit', 'X', lead.xUrl) +
         '</div>' +
         '<div class="row">' +
-          '<label for="leadOwnerMemoEdit">メモ</label>' +
-          '<textarea id="leadOwnerMemoEdit">' + escapeHtml(lead.ownerMemo || lead.contactMemo || '') + '</textarea>' +
+          '<label for="leadContactMemoEdit">連絡先・送信メモ</label>' +
+          '<textarea id="leadContactMemoEdit">' + escapeHtml(lead.contactMemo || '') + '</textarea>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label for="leadOwnerMemoEdit">営業メモ</label>' +
+          '<textarea id="leadOwnerMemoEdit">' + escapeHtml(lead.ownerMemo || '') + '</textarea>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label for="leadBrandAnalysisMemoEdit">ブランド分析メモ</label>' +
+          '<textarea id="leadBrandAnalysisMemoEdit">' + escapeHtml(lead.brandAnalysisMemo || '') + '</textarea>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label for="leadSnsAnalysisMemoEdit">SNS分析メモ</label>' +
+          '<textarea id="leadSnsAnalysisMemoEdit">' + escapeHtml(lead.snsAnalysisMemo || '') + '</textarea>' +
         '</div>' +
         '<div class="toolbar">' +
           '<button class="primary" onclick="saveLeadEdit()">営業情報を保存</button>' +
@@ -642,8 +678,13 @@ export class DashboardController {
             contactFormUrl: value('leadContactFormUrlEdit'),
             siteMessageUrl: value('leadSiteMessageUrlEdit'),
             brandWebsiteUrl: value('leadBrandWebsiteUrlEdit'),
+            instagramUrl: value('leadInstagramUrlEdit'),
+            tiktokUrl: value('leadTiktokUrlEdit'),
+            xUrl: value('leadXUrlEdit'),
             ownerMemo: value('leadOwnerMemoEdit'),
-            contactMemo: value('leadOwnerMemoEdit')
+            contactMemo: value('leadContactMemoEdit'),
+            brandAnalysisMemo: value('leadBrandAnalysisMemoEdit'),
+            snsAnalysisMemo: value('leadSnsAnalysisMemoEdit')
           }))
         });
         setInlineStatus('leadEditStatus', '保存しました', 'ok');
