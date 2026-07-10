@@ -293,11 +293,15 @@ type MailInput = {
   projectAmount?: number | null;
   supporterCount?: number | null;
   leadReason?: string | null;
+  brandAnalysisMemo?: string | null;
+  snsAnalysisMemo?: string | null;
 };
 
 function buildMailInput(
   lead: {
     reason?: string | null;
+    brandAnalysisMemo?: string | null;
+    snsAnalysisMemo?: string | null;
     company: { name: string };
     project?: {
       title?: string | null;
@@ -320,7 +324,9 @@ function buildMailInput(
     projectDescription: lead.project?.description,
     projectAmount: lead.project?.amount,
     supporterCount: lead.project?.supporterCount,
-    leadReason: lead.reason
+    leadReason: lead.reason,
+    brandAnalysisMemo: lead.brandAnalysisMemo,
+    snsAnalysisMemo: lead.snsAnalysisMemo
   };
 }
 
@@ -330,7 +336,9 @@ function buildFreeMailDraft(input: MailInput) {
     input.projectTitle,
     input.projectCategory,
     input.projectDescription,
-    input.leadReason
+    input.leadReason,
+    input.brandAnalysisMemo,
+    input.snsAnalysisMemo
   );
   const subjectNoun = placeholders.subjectType === '取り組み' ? 'プロジェクト' : '商品';
   const body = [
@@ -362,8 +370,10 @@ function buildFreeMailDraft(input: MailInput) {
       `会社名: ${input.companyName}`,
       `プロジェクト名: ${placeholders.productName}`,
       `魅力: ${placeholders.appeal}`,
-      `想定読者: ${placeholders.targetUser}`
-    ],
+      `想定読者: ${placeholders.targetUser}`,
+      input.brandAnalysisMemo ? `ブランド分析メモ: ${input.brandAnalysisMemo}` : '',
+      input.snsAnalysisMemo ? `SNS分析メモ: ${input.snsAnalysisMemo}` : ''
+    ].filter(Boolean),
     assumptions: ['OpenAI APIを使わず、無料分析で作成した置換項目から本文を作成しています。'],
     riskFlags: ['送信前に、会社名・商品名・商品の魅力が相手の案件と合っているか確認してください。'],
     usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, costUsd: 0 },
@@ -387,22 +397,27 @@ function buildMailPlaceholders(
   title?: string | null,
   category?: string | null,
   description?: string | null,
-  reason?: string | null
+  reason?: string | null,
+  brandAnalysisMemo?: string | null,
+  snsAnalysisMemo?: string | null
 ) {
-  const source = sanitizeAnalysisSource(`${title || ''} ${category || ''} ${description || ''} ${reason || ''}`);
+  const manualAnalysis = sanitizeAnalysisSource(`${brandAnalysisMemo || ''} ${snsAnalysisMemo || ''}`);
+  const source = sanitizeAnalysisSource(`${title || ''} ${category || ''} ${description || ''} ${reason || ''} ${manualAnalysis}`);
   const isStoreProject = /飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業|地域/.test(source);
   const isEventProject = /ライブ|コンサート|音楽|バンド|ファン|周年|結成|記念|イベント|公演|ツアー|フェス|アーティスト/.test(source);
-  const strength = buildLocalStrengths(description, reason)[0] || '';
-  const appeal = isStoreProject
+  const strength = buildLocalStrengths(description, [reason, manualAnalysis].filter(Boolean).join(' '))[0] || '';
+  const manualAppeal = pickManualAppeal(manualAnalysis);
+  const manualTarget = pickManualTarget(manualAnalysis);
+  const appeal = manualAppeal || (isStoreProject
     ? '長年親しまれてきた店舗をより利用しやすい形で継続しようとされている点'
     : isEventProject
       ? '節目となる企画をファンの方々と一緒に盛り上げようとされている点'
-      : toMailSafeAppeal(strength, title);
-  const target = isStoreProject
+      : toMailSafeAppeal(strength, title));
+  const target = manualTarget || (isStoreProject
     ? '店舗の継続や地域に根ざしたお店を応援したい方'
     : isEventProject
       ? 'これまで活動を応援してきたファンの方や、ライブ体験に関心のある方'
-      : buildLocalTargetUsers(category, description)[0] || 'この取り組みに関心を持つ方';
+      : buildLocalTargetUsers(category, description)[0] || 'この取り組みに関心を持つ方');
   const subjectType = isStoreProject || isEventProject ? '取り組み' : '商品';
 
   return {
@@ -413,6 +428,26 @@ function buildMailPlaceholders(
     subjectType,
     caution: '達成率、残り日数、支援額、支援者数、カテゴリ名は魅力文には入れません。'
   };
+}
+
+function pickManualAppeal(text: string) {
+  if (!text) return '';
+  const sentence = text
+    .split(/[。！？!?]/)
+    .map((value) => cleanAnalysisPhrase(value))
+    .find((value) => value.length >= 8 && value.length <= 90 && /魅力|強み|特徴|印象|見せ|伝え|背景|用途|シーン|体験|応援|安心|便利|継続/.test(value));
+  return sentence ? toMailSafeAppeal(sentence) : '';
+}
+
+function pickManualTarget(text: string) {
+  const match = text.match(/(?:ターゲット|使う人|対象|利用者|支援者|向け)\s*[:：]?\s*([^。！？!?]{3,45})/);
+  return match?.[1] ? cleanAnalysisPhrase(match[1]) : '';
+}
+
+function cleanAnalysisPhrase(value: string) {
+  return sanitizeAnalysisSource(value)
+    .replace(/^(商品の魅力|特徴|強み|ターゲット|使う人|対象|利用者|支援者)\s*[:：]\s*/, '')
+    .trim();
 }
 
 function toMailSafeAppeal(strength: string, title?: string | null) {

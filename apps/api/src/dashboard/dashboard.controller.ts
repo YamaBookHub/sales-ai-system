@@ -3170,22 +3170,22 @@ export class DashboardController {
     async function saveLeadManagement() {
       if (!state.selectedLeadId) return;
       setStatus('leadSaveStatus', '保存中', 'warn');
-      const payload = compactPayload({
+      const payload = {
         contactEmail: fieldValue('leadContactEmail'),
         contactFormUrl: fieldValue('leadContactFormUrl'),
         siteMessageUrl: fieldValue('leadSiteMessageUrl'),
         contactMemo: fieldValue('leadContactMemo'),
         sendMethod: fieldValue('leadSendMethod'),
-        sentAt: dateTimeValue('leadSentAt'),
-        nextFollowUpAt: dateTimeValue('leadNextFollowUpAt'),
-        nextActionAt: dateTimeValue('leadNextFollowUpAt'),
+        sentAt: dateTimeValue('leadSentAt') || undefined,
+        nextFollowUpAt: dateTimeValue('leadNextFollowUpAt') || undefined,
+        nextActionAt: dateTimeValue('leadNextFollowUpAt') || undefined,
         brandWebsiteUrl: fieldValue('leadBrandWebsiteUrl'),
         instagramUrl: fieldValue('leadInstagramUrl'),
         tiktokUrl: fieldValue('leadTiktokUrl'),
         xUrl: fieldValue('leadXUrl'),
         brandAnalysisMemo: fieldValue('leadBrandAnalysisMemo'),
         snsAnalysisMemo: fieldValue('leadSnsAnalysisMemo')
-      });
+      };
       try {
         await api('/api/leads/' + state.selectedLeadId, {
           method: 'PATCH',

@@ -11,6 +11,8 @@ export type SalesMailDraftInput = {
   projectAmount?: number | null;
   supporterCount?: number | null;
   leadReason?: string | null;
+  brandAnalysisMemo?: string | null;
+  snsAnalysisMemo?: string | null;
 };
 
 export type SalesMailDraftOutput = {
@@ -167,7 +169,9 @@ export class OpenAiClientService {
         supporterCount: input.supporterCount,
         description: this.truncate(input.projectDescription, maxDescriptionLength)
       },
-      leadReason: this.sanitizeSourceText(input.leadReason)
+      leadReason: this.sanitizeSourceText(input.leadReason),
+      brandAnalysisMemo: this.sanitizeSourceText(input.brandAnalysisMemo),
+      snsAnalysisMemo: this.sanitizeSourceText(input.snsAnalysisMemo)
     };
   }
 
@@ -265,7 +269,9 @@ export class OpenAiClientService {
   }
 
   private extractTargetUser(input: SalesMailDraftInput, aiBody: string) {
-    const source = `${input.projectCategory || ''} ${input.projectTitle || ''} ${input.projectDescription || ''} ${aiBody || ''}`;
+    const source = `${input.projectCategory || ''} ${input.projectTitle || ''} ${input.projectDescription || ''} ${input.brandAnalysisMemo || ''} ${input.snsAnalysisMemo || ''} ${aiBody || ''}`;
+    const manualTarget = this.pickManualTarget(source);
+    if (manualTarget) return manualTarget;
     if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|浜松町|創業/.test(source)) {
       return '店舗の継続や地域に根ざしたお店を応援したい方';
     }
@@ -277,7 +283,7 @@ export class OpenAiClientService {
   }
 
   private projectSubjectType(input: SalesMailDraftInput) {
-    const source = `${input.projectTitle || ''} ${input.projectDescription || ''} ${input.projectCategory || ''}`;
+    const source = `${input.projectTitle || ''} ${input.projectDescription || ''} ${input.projectCategory || ''} ${input.brandAnalysisMemo || ''} ${input.snsAnalysisMemo || ''}`;
     if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|地域|支援/.test(source)) {
       return '取り組み';
     }
@@ -286,17 +292,22 @@ export class OpenAiClientService {
 
   private sourceBundle(input: SalesMailDraftInput, aiBody: string) {
     return {
-      description: this.sanitizeSourceText(input.projectDescription),
+      description: this.sanitizeSourceText([input.projectDescription, input.brandAnalysisMemo, input.snsAnalysisMemo].filter(Boolean).join(' ')),
       aiBody: this.sanitizeSourceText(aiBody)
     };
   }
 
   private specialCaseAppeal(input: SalesMailDraftInput) {
-    const source = `${input.projectTitle || ''} ${input.projectDescription || ''}`;
+    const source = `${input.projectTitle || ''} ${input.projectDescription || ''} ${input.brandAnalysisMemo || ''} ${input.snsAnalysisMemo || ''}`;
     if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|浜松町|創業/.test(source)) {
       return '長年親しまれてきた店舗をより利用しやすい形で継続しようとされている点';
     }
     return '';
+  }
+
+  private pickManualTarget(text: string) {
+    const match = text.match(/(?:ターゲット|使う人|対象|利用者|支援者|向け)\s*[:：]?\s*([^。！？!?]{3,45})/);
+    return match?.[1] ? this.cleanPhrase(match[1]) : '';
   }
 
   private sanitizeSourceText(value: string | null | undefined) {
