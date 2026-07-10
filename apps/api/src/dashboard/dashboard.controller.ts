@@ -1333,11 +1333,16 @@ export class DashboardController {
       padding: 10px 12px;
     }
     .direct-import,
-    .quick-search {
+    .quick-search,
+    .source-selector {
       display: grid;
       gap: 8px;
       align-items: center;
       max-width: 980px;
+    }
+    .source-selector {
+      grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+      justify-content: start;
     }
     .direct-import {
       grid-template-columns: minmax(320px, 720px) 180px;
@@ -1440,6 +1445,7 @@ export class DashboardController {
     }
     .search-block .direct-import,
     .search-block .quick-search,
+    .search-block .source-selector,
     .search-block .search-filter-row,
     .search-block .search-actions {
       grid-column: 2;
@@ -1626,7 +1632,7 @@ export class DashboardController {
     @media (max-width: 980px) {
       main, .workflow, .split, .grid-2, .detail-grid, .compact-summary, .mail-create-bar, .mail-editor-grid, .next-action-strip, .info-columns { grid-template-columns: 1fr; }
       header { padding: 0 14px; }
-      .direct-import, .quick-search, .search-filter-row, .mail-filter-row, .result-filter-panel, .search-block { grid-template-columns: 1fr; }
+      .direct-import, .quick-search, .source-selector, .search-filter-row, .mail-filter-row, .result-filter-panel, .search-block { grid-template-columns: 1fr; }
       .search-actions { flex-wrap: wrap; }
       .display-filter .result-filter-panel {
         position: static;
@@ -1636,6 +1642,7 @@ export class DashboardController {
       }
       .search-block .direct-import,
       .search-block .quick-search,
+      .search-block .source-selector,
       .search-block .search-filter-row,
       .search-block .search-actions {
         grid-column: 1;
@@ -1676,12 +1683,23 @@ export class DashboardController {
       <section class="search-console">
         <details class="search-drawer">
           <summary>
-            <span>検索条件・URL取り込み</span>
+            <span>取得元・URL取り込み</span>
             <span class="muted"><span class="when-closed">開く</span><span class="when-open">閉じる</span></span>
           </summary>
           <div class="body">
             <div class="search-block">
-              <div class="search-block-title">URLを直接取り込む</div>
+              <div class="search-block-title">取得元</div>
+              <div class="source-selector">
+                <select id="sourcePlatform" onchange="onSourcePlatformChange()">
+                  <option value="campfire">CAMPFIRE</option>
+                  <option value="makuake">Makuake（準備中）</option>
+                  <option value="greenfunding">GREEN FUNDING（準備中）</option>
+                </select>
+                <span id="sourcePlatformStatus" class="status muted">CAMPFIREの募集中プロジェクトに対応</span>
+              </div>
+            </div>
+            <div class="search-block">
+              <div class="search-block-title">URL直接取り込み</div>
               <div class="direct-import">
                 <input id="campfireUrl" placeholder="https://camp-fire.jp/projects/.../view" />
                 <button class="primary" onclick="importCampfire()">このURLを取り込む</button>
@@ -1689,7 +1707,7 @@ export class DashboardController {
               </div>
             </div>
             <div class="search-block">
-              <div class="search-block-title">CAMPFIREから候補を探す</div>
+              <div class="search-block-title">候補を探す</div>
               <div class="quick-search">
                 <input id="campfireSearchKeyword" placeholder="キーワード・商品名で候補検索" />
               </div>
@@ -1773,7 +1791,7 @@ export class DashboardController {
     <div class="right">
       <section>
         <div class="section-head">
-          <h2>CAMPFIRE候補一覧</h2>
+          <h2>候補URL一覧</h2>
           <div class="toolbar">
             <span id="campfireCandidateCount" class="status muted">未検索</span>
             <details class="display-filter">
@@ -2024,6 +2042,40 @@ export class DashboardController {
       element.className = 'status ' + type;
     }
 
+    function selectedSourcePlatform() {
+      return document.getElementById('sourcePlatform')?.value || 'campfire';
+    }
+
+    function sourcePlatformLabel(value = selectedSourcePlatform()) {
+      const labels = {
+        campfire: 'CAMPFIRE',
+        makuake: 'Makuake',
+        greenfunding: 'GREEN FUNDING'
+      };
+      return labels[value] || value;
+    }
+
+    function onSourcePlatformChange() {
+      const platform = selectedSourcePlatform();
+      const urlInput = document.getElementById('campfireUrl');
+      if (urlInput) {
+        urlInput.placeholder = platform === 'campfire'
+          ? 'https://camp-fire.jp/projects/.../view'
+          : sourcePlatformLabel(platform) + 'のプロジェクトURL（準備中）';
+      }
+      if (platform === 'campfire') {
+        setStatus('sourcePlatformStatus', 'CAMPFIREの募集中プロジェクトに対応', 'muted');
+        return;
+      }
+      setStatus('sourcePlatformStatus', sourcePlatformLabel(platform) + 'は取得元として準備中です', 'warn');
+    }
+
+    function ensureSupportedSourcePlatform(statusId) {
+      if (selectedSourcePlatform() === 'campfire') return true;
+      setStatus(statusId, sourcePlatformLabel() + 'は準備中です。現在はCAMPFIREのみ検索・取り込みできます。', 'warn');
+      return false;
+    }
+
     function startCampfireSearchTimer(hasProfileProjectSearch) {
       stopCampfireSearchTimer();
       state.campfireSearchStartedAt = Date.now();
@@ -2073,6 +2125,7 @@ export class DashboardController {
         renderLeadDetail();
         if (state.selectedLeadId) void loadAiAnalysis();
         if (!state.campfireCategories.length) void loadCampfireCategories();
+        onSourcePlatformChange();
         setStatus('apiStatus', 'API接続OK', 'ok');
       } catch (error) {
         setStatus('apiStatus', error.message, 'error');
@@ -2096,6 +2149,7 @@ export class DashboardController {
     }
 
     async function importCampfire() {
+      if (!ensureSupportedSourcePlatform('importStatus')) return;
       const url = document.getElementById('campfireUrl').value.trim();
       if (!url) return setStatus('importStatus', 'URLを入力してください', 'warn');
       setStatus('importStatus', '取り込み中', 'warn');
@@ -2114,6 +2168,7 @@ export class DashboardController {
     }
 
     async function searchCampfireCandidates() {
+      if (!ensureSupportedSourcePlatform('campfireSearchStatusText')) return;
       const profileProjectRange = rangeFieldValue('campfireSearchProfileProjectRange');
       const hasProfileProjectSearch = profileProjectRange.min !== null || profileProjectRange.max !== null;
       const desiredLimit = numberFieldValue('campfireFetchLimit') || 10;
@@ -2870,7 +2925,7 @@ export class DashboardController {
           '<div class="detail-value">' + escapeHtml(project.title || '案件名なし') + '</div>' +
         '</div>' +
         '<div class="row">' +
-          '<label>CAMPFIRE URL</label>' +
+          '<label>プロジェクトURL</label>' +
           '<div class="detail-value">' + renderLink(project.url) + '</div>' +
         '</div>' +
         '<div class="row">' +
