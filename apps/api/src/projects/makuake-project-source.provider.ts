@@ -44,7 +44,7 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
       await page.waitForTimeout(1200);
       const html = await page.content();
       const excluded = new Set((input.excludeUrls || []).map((url) => normalizeUrlForUnique(url)));
-      const items = extractSearchResults(html)
+      const items = sortSearchResults(extractSearchResults(html), input)
         .filter((item) => !excluded.has(normalizeUrlForUnique(item.url)))
         .filter((item) => matchesNumericFilters(item, input))
         .slice(0, normalizeLimit(input.limit));
@@ -215,8 +215,14 @@ function matchesNumericFilters(item: MakuakeSearchResult, input: SearchCampfireP
   if (typeof input.amountMax === 'number' && item.amount > input.amountMax) return false;
   if (typeof input.supporterMin === 'number' && item.supporterCount < input.supporterMin) return false;
   if (typeof input.supporterMax === 'number' && item.supporterCount > input.supporterMax) return false;
-  if (input.status === 'endingSoon' && (item.daysLeft === null || item.daysLeft > 7)) return false;
   return true;
+}
+
+function sortSearchResults(items: MakuakeSearchResult[], input: SearchCampfireProjectsDto) {
+  if (input.status !== 'endingSoon') return items;
+  return [...items]
+    .filter((item) => typeof item.daysLeft === 'number')
+    .sort((a, b) => Number(a.daysLeft) - Number(b.daysLeft));
 }
 
 function validateMakuakeUrl(value: string) {

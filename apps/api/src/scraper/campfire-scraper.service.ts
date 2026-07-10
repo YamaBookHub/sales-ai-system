@@ -121,8 +121,9 @@ export class CampfireScraperService {
       const items = hasProfileProjectFilter(input)
         ? await collectSearchResultsMatchingProfileRange(page, input, resultLimit, excludedUrls)
         : await collectSearchResults(page, resultLimit, excludedUrls, input);
-      writeSearchCache(cacheKey, items);
-      return { items, total: items.length };
+      const sortedItems = sortSearchResults(items, input).slice(0, resultLimit);
+      writeSearchCache(cacheKey, sortedItems);
+      return { items: sortedItems, total: sortedItems.length };
     } finally {
       await browser.close();
     }
@@ -374,8 +375,15 @@ function mergeSearchResults(
 function matchesSearchStatus(item: CampfireSearchResult, input: CampfireSearchInput) {
   if (!input.status) return true;
   if (input.status === 'active') return item.isActive;
-  if (input.status === 'endingSoon') return item.isActive && item.daysLeft !== null && item.daysLeft <= 7;
+  if (input.status === 'endingSoon') return item.isActive && item.daysLeft !== null;
   return true;
+}
+
+function sortSearchResults(items: CampfireSearchResult[], input: CampfireSearchInput) {
+  if (input.status !== 'endingSoon') return items;
+  return [...items]
+    .filter((item) => item.isActive && typeof item.daysLeft === 'number')
+    .sort((a, b) => Number(a.daysLeft) - Number(b.daysLeft));
 }
 
 async function enrichWithProjectPageProfileCount(context: BrowserContext, item: CampfireSearchResult) {

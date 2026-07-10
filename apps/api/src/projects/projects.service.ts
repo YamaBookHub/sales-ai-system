@@ -68,7 +68,7 @@ export class ProjectsService {
     const result = await provider.search({ ...dto, excludeUrls });
     if (dto.status === 'endingSoon') {
       return {
-        items: result.items.filter((item) => typeof item.daysLeft === 'number' && item.daysLeft <= 7)
+        items: sortEndingSoon(result.items).slice(0, normalizeResultLimit(dto.limit))
       };
     }
     return result;
@@ -377,6 +377,16 @@ function clampConcurrency(value: number | undefined, min: number, max: number, f
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(min, Math.min(max, Math.floor(number)));
+}
+
+function normalizeResultLimit(value?: number) {
+  return [10, 50, 100].includes(Number(value)) ? Number(value) : 10;
+}
+
+function sortEndingSoon<T extends { daysLeft?: number | null; isActive?: boolean }>(items: T[]) {
+  return [...items]
+    .filter((item) => item.isActive !== false && typeof item.daysLeft === 'number')
+    .sort((a, b) => Number(a.daysLeft) - Number(b.daysLeft));
 }
 
 async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<void>) {

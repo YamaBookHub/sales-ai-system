@@ -1770,7 +1770,7 @@ export class DashboardController {
                 </select>
                 <select id="campfireSearchStatus">
                   <option value="active">募集中のみ</option>
-                  <option value="endingSoon">終了間近のみ</option>
+                  <option value="endingSoon">終了間近順</option>
                 </select>
                 <select id="campfireSearchProfileProjectRange">
                   <option value="">過去プロジェクト すべて</option>
@@ -2115,6 +2115,7 @@ export class DashboardController {
       const sourceChanged = state.currentSourcePlatform && state.currentSourcePlatform !== platform;
       const urlInput = document.getElementById('campfireUrl');
       const categorySearch = document.getElementById('campfireSearchCategory');
+      const searchStatus = document.getElementById('campfireSearchStatus');
       const profileSearch = document.getElementById('campfireSearchProfileProjectRange');
       const profileDisplay = document.getElementById('campfireDisplayProfileProjectRange');
       if (urlInput) {
@@ -2131,6 +2132,11 @@ export class DashboardController {
         categorySearch.disabled = platform !== 'campfire';
         categorySearch.style.display = platform === 'campfire' ? '' : 'none';
         if (platform !== 'campfire') categorySearch.value = '';
+      }
+      if (searchStatus) {
+        searchStatus.disabled = !['campfire', 'makuake'].includes(platform);
+        searchStatus.style.display = ['campfire', 'makuake'].includes(platform) ? '' : 'none';
+        if (!['campfire', 'makuake'].includes(platform)) searchStatus.value = 'active';
       }
       if (profileDisplay) {
         profileDisplay.disabled = platform !== 'campfire';
@@ -2274,7 +2280,7 @@ export class DashboardController {
             profileProjectMin: profileProjectRange.min,
             profileProjectMax: profileProjectRange.max,
             limit: desiredLimit,
-            status: fieldValue('campfireSearchStatus') || 'active',
+            status: ['campfire', 'makuake'].includes(source) ? (fieldValue('campfireSearchStatus') || 'active') : 'active',
             excludeUrls: knownCampfireUrls()
           }))
         });
