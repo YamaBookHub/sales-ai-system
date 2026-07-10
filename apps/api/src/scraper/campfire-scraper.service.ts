@@ -120,7 +120,7 @@ export class CampfireScraperService {
       const excludedUrls = buildExcludedUrlSet(input.excludeUrls);
       const items = hasProfileProjectFilter(input)
         ? await collectSearchResultsMatchingProfileRange(page, input, resultLimit, excludedUrls)
-        : await collectSearchResults(page, resultLimit, excludedUrls);
+        : await collectSearchResults(page, resultLimit, excludedUrls, input);
       writeSearchCache(cacheKey, items);
       return { items, total: items.length };
     } finally {
@@ -243,26 +243,26 @@ function extractSearchResults(html: string): CampfireSearchResult[] {
   return uniqueBy(links, (item) => normalizeUrlForUnique(item.url));
 }
 
-async function collectSearchResults(page: Page, limit: number, excludedUrls = new Set<string>()) {
+async function collectSearchResults(page: Page, limit: number, excludedUrls = new Set<string>(), input: CampfireSearchInput = {}) {
   let items: CampfireSearchResult[] = [];
   let unchangedCount = 0;
 
   for (let attempt = 0; attempt < 8 && items.length < limit; attempt += 1) {
     const beforeCount = items.length;
-    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
+    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input);
 
     if (items.length >= limit) break;
 
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
     await page.waitForTimeout(500);
-    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
+    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input);
 
     if (items.length >= limit) break;
 
     const clickedMore = await clickNextSearchResults(page);
     if (clickedMore) {
       await page.waitForTimeout(700);
-      items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
+      items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input);
     }
 
     unchangedCount = items.length === beforeCount ? unchangedCount + 1 : 0;
@@ -280,14 +280,14 @@ async function collectSearchResultsMatchingProfileRange(page: Page, input: Campf
   const maxCandidates = Math.min(Math.max(limit * 10, 100), 300);
   for (let attempt = 0; attempt < 20 && matched.length < limit && items.length < maxCandidates; attempt += 1) {
     const beforeCount = items.length;
-    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
+    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input);
     matched = await collectProfileMatchesFromCandidates(page.context(), items, input, checkedUrls, matched, limit);
 
     if (matched.length >= limit || items.length >= maxCandidates) break;
 
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
     await page.waitForTimeout(350);
-    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
+    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input);
     matched = await collectProfileMatchesFromCandidates(page.context(), items, input, checkedUrls, matched, limit);
 
     if (matched.length >= limit || items.length >= maxCandidates) break;
@@ -295,7 +295,7 @@ async function collectSearchResultsMatchingProfileRange(page: Page, input: Campf
     const clickedMore = await clickNextSearchResults(page);
     if (clickedMore) {
       await page.waitForTimeout(700);
-      items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
+      items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input);
       matched = await collectProfileMatchesFromCandidates(page.context(), items, input, checkedUrls, matched, limit);
     }
 
@@ -351,12 +351,23 @@ function buildExcludedUrlSet(urls?: string[]) {
 function mergeSearchResults(
   current: CampfireSearchResult[],
   next: CampfireSearchResult[],
-  excludedUrls: Set<string>
+  excludedUrls: Set<string>,
+  input: CampfireSearchInput = {}
 ) {
   return uniqueBy(
-    [...current, ...next.filter((item) => !excludedUrls.has(normalizeUrlForUnique(item.url)))],
+    [
+      ...current,
+      ...next.filter((item) => !excludedUrls.has(normalizeUrlForUnique(item.url)) && matchesSearchStatus(item, input))
+    ],
     (item) => normalizeUrlForUnique(item.url)
   );
+}
+
+function matchesSearchStatus(item: CampfireSearchResult, input: CampfireSearchInput) {
+  if (!input.status) return true;
+  if (input.status === 'active') return item.isActive;
+  if (input.status === 'endingSoon') return item.isActive && item.daysLeft !== null && item.daysLeft <= 7;
+  return true;
 }
 
 async function enrichWithProjectPageProfileCount(context: BrowserContext, item: CampfireSearchResult) {

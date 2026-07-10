@@ -1329,7 +1329,7 @@ export class DashboardController {
       justify-content: start;
     }
     .quick-search {
-      grid-template-columns: minmax(320px, 720px) 84px 84px;
+      grid-template-columns: minmax(320px, 720px);
       justify-content: start;
     }
     .search-filter-row {
@@ -1338,6 +1338,16 @@ export class DashboardController {
       gap: 8px;
       padding-top: 0;
       justify-content: start;
+    }
+    .search-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      max-width: 980px;
+    }
+    .search-actions .status {
+      min-width: 180px;
     }
     .direct-import .status,
     .quick-search .status {
@@ -1415,7 +1425,8 @@ export class DashboardController {
     }
     .search-block .direct-import,
     .search-block .quick-search,
-    .search-block .search-filter-row {
+    .search-block .search-filter-row,
+    .search-block .search-actions {
       grid-column: 2;
     }
     details[open] .when-closed,
@@ -1601,6 +1612,7 @@ export class DashboardController {
       main, .workflow, .split, .grid-2, .detail-grid, .compact-summary, .mail-create-bar, .mail-editor-grid, .next-action-strip, .info-columns { grid-template-columns: 1fr; }
       header { padding: 0 14px; }
       .direct-import, .quick-search, .search-filter-row, .mail-filter-row, .result-filter-panel, .search-block { grid-template-columns: 1fr; }
+      .search-actions { flex-wrap: wrap; }
       .display-filter .result-filter-panel {
         position: static;
         width: auto;
@@ -1609,7 +1621,8 @@ export class DashboardController {
       }
       .search-block .direct-import,
       .search-block .quick-search,
-      .search-block .search-filter-row {
+      .search-block .search-filter-row,
+      .search-block .search-actions {
         grid-column: 1;
       }
     }
@@ -1664,9 +1677,6 @@ export class DashboardController {
               <div class="search-block-title">CAMPFIREから候補を探す</div>
               <div class="quick-search">
                 <input id="campfireSearchKeyword" placeholder="キーワード・商品名で候補検索" />
-                <button class="primary" onclick="searchCampfireCandidates()">検索</button>
-                <button onclick="clearCampfireSearch()">クリア</button>
-                <span id="campfireSearchStatusText" class="status"></span>
               </div>
               <div class="search-filter-row">
                 <select id="campfireSearchCategory">
@@ -1686,6 +1696,11 @@ export class DashboardController {
                   <option value="30:99">30〜99件</option>
                   <option value="100:">100件以上</option>
                 </select>
+              </div>
+              <div class="search-actions">
+                <button class="primary" onclick="searchCampfireCandidates()">検索</button>
+                <button onclick="clearCampfireSearch()">クリア</button>
+                <span id="campfireSearchStatusText" class="status"></span>
               </div>
             </div>
           </div>
@@ -1789,6 +1804,7 @@ export class DashboardController {
               </div>
             </details>
             <button onclick="bulkImportVisibleCandidates()" id="bulkImportButton" disabled>表示中を一括取り込み</button>
+            <span id="bulkImportStatus" class="status"></span>
           </div>
         </div>
         <div class="body">
@@ -2095,6 +2111,7 @@ export class DashboardController {
             profileProjectMin: profileProjectRange.min,
             profileProjectMax: profileProjectRange.max,
             limit: desiredLimit,
+            status: 'active',
             excludeUrls: knownCampfireUrls()
           }))
         });
@@ -2176,15 +2193,21 @@ export class DashboardController {
       const entries = getVisibleCandidateEntries();
       const importableEntries = entries.filter(({ item }) => isCandidateImportable(item));
       if (!importableEntries.length) {
-        return setStatus('importStatus', '表示中に取り込める候補はありません', 'warn');
+        return setStatus('bulkImportStatus', '表示中に取り込める候補はありません', 'warn');
       }
       const ok = window.confirm('表示中の未取込候補 ' + importableEntries.length + '件を取り込みます。登録済み・取込済みは取り込みません。よろしいですか？');
       if (!ok) return;
       let successCount = 0;
       let failedCount = 0;
-      setStatus('importStatus', '一括取り込み中 0/' + importableEntries.length, 'warn');
-      for (let index = 0; index < importableEntries.length; index += 1) {
-        const candidate = importableEntries[index].item;
+      let completedCount = 0;
+      let nextIndex = 0;
+      const concurrency = Math.min(4, importableEntries.length);
+      setStatus('bulkImportStatus', '一括取り込み中 0/' + importableEntries.length, 'warn');
+      const runNext = async () => {
+        const entryIndex = nextIndex;
+        nextIndex += 1;
+        if (entryIndex >= importableEntries.length) return;
+        const candidate = importableEntries[entryIndex].item;
         try {
           document.getElementById('campfireUrl').value = candidate.url;
           setCandidateImportStatus(candidate, 'importing', '取り込み中');
@@ -2197,16 +2220,18 @@ export class DashboardController {
           await api('/api/ai/leads/' + result.lead.id + '/analyze', { method: 'POST' });
           setCandidateImportStatus(candidate, 'imported', '取り込み済み', result.lead.id);
           successCount += 1;
-          setStatus('importStatus', '一括取り込み中 ' + (index + 1) + '/' + importableEntries.length, 'warn');
         } catch (error) {
           setCandidateImportStatus(candidate, 'failed', error.message);
           failedCount += 1;
-          setStatus('importStatus', '一括取り込み中 ' + (index + 1) + '/' + importableEntries.length + '（失敗 ' + failedCount + '件）', 'warn');
         }
+        completedCount += 1;
+        setStatus('bulkImportStatus', '一括取り込み中 ' + completedCount + '/' + importableEntries.length + (failedCount ? '（失敗 ' + failedCount + '件）' : ''), 'warn');
         renderCampfireCandidates();
-      }
+        await runNext();
+      };
+      await Promise.all(Array.from({ length: concurrency }, () => runNext()));
       setStatus(
-        'importStatus',
+        'bulkImportStatus',
         '一括取り込み完了: 取込 ' + successCount + '件 / 失敗 ' + failedCount + '件',
         failedCount ? 'warn' : 'ok'
       );
