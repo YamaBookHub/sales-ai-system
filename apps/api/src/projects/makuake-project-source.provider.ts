@@ -125,7 +125,7 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
       await page.goto(normalizedUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
       await page.waitForTimeout(1200);
       const html = await page.content();
-      const scraped = extractProject(html, normalizedUrl);
+      const scraped = extractProject(html, normalizedUrl, await readVisibleText(page));
       const memberStats = await scrapeMemberStats(page, scraped.memberUrl);
       const enriched = { ...scraped, memberStats };
 
@@ -250,7 +250,7 @@ async function enrichSearchResults(context: BrowserContext, items: MakuakeSearch
     try {
       await page.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 25000 });
       await page.waitForTimeout(500);
-      const text = clean((await page.locator('body').textContent({ timeout: 3000 })) || '');
+      const text = await readVisibleText(page);
       return {
         ...item,
         amount: item.amount || extractAmount(text),
@@ -292,12 +292,12 @@ function extractSearchResults(html: string): MakuakeSearchResult[] {
   return uniqueBy(items, (item) => normalizeUrlForUnique(item.url));
 }
 
-function extractProject(html: string, url: string): ScrapedMakuakeProject {
+function extractProject(html: string, url: string, visibleText = ''): ScrapedMakuakeProject {
   const $ = cheerio.load(html);
   const title = clean($('meta[property="og:title"]').attr('content') || $('h1').first().text() || $('title').text());
   if (!title) throw new BadRequestException('Makuakeプロジェクト名を取得できませんでした。');
   const description = clean($('meta[property="og:description"]').attr('content') || $('[class*="description"], [class*="story"], main').first().text()).slice(0, 1600);
-  const pageText = clean($('body').text());
+  const pageText = visibleText || clean($('body').text());
   const externalUrls = extractExternalUrls($, url);
   const memberUrl = extractMemberUrl($, url);
   return {
@@ -414,9 +414,17 @@ function isProjectUrl(url: string) {
 function extractAmount(text: string) {
   const match =
     extractNumberAfterLabels(text, ['応援購入総額', '集まっている金額', '現在の支援総額', '購入総額', '支援総額'], ['円']) ||
-    text.match(/[¥￥]\s*([0-9,]+)/) ||
+    matchYenAmount(text) ||
     text.match(/([0-9,]+)\s*円/);
   return match?.[1] ? Number(match[1].replace(/,/g, '')) : 0;
+}
+
+function matchYenAmount(text: string) {
+  const commaAmountMatch = text.match(/[¥￥]\s*([0-9]{1,3}(?:,[0-9]{3})+)(?:円|[0-9]{1,3}\s*日|[0-9]{1,6}\s*%|$)/);
+  if (commaAmountMatch?.[1]) return commaAmountMatch;
+  const match = text.match(/[¥￥]\s*([0-9]+?)(?:円|(?=[0-9]{1,3}\s*日)|(?=[0-9]{1,6}\s*%))/);
+  if (match?.[1]) return match;
+  return text.match(/[¥￥]\s*([0-9]{1,3}(?:,[0-9]{3})+)/);
 }
 
 function extractSupporterCount(text: string) {
@@ -511,6 +519,13 @@ async function scrapeMemberStats(projectPage: Page, memberUrl: string): Promise<
   } finally {
     await page.close().catch(() => undefined);
   }
+}
+
+async function readVisibleText(page: Page) {
+  const text = await page
+    .evaluate(() => document.body?.innerText || document.body?.textContent || '')
+    .catch(() => '');
+  return clean(text);
 }
 
 function extractMemberStats(html: string, url: string): MakuakeMemberStats {
