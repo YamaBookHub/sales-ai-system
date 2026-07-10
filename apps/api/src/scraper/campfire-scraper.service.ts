@@ -5,6 +5,8 @@ import { chromium, type Page } from 'playwright';
 const CAMPFIRE_ORIGIN = 'https://camp-fire.jp';
 const DEFAULT_SEARCH_RESULT_LIMIT = 10;
 const SEARCH_RESULT_LIMITS = [10, 50, 100];
+const CAMPFIRE_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36';
 
 export type ScrapedCampfireProject = {
   projectUrl: string;
@@ -85,10 +87,8 @@ export class CampfireScraperService {
     const browser = await chromium.launch({ headless: true });
 
     try {
-      const page = await browser.newPage({
-        userAgent:
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36'
-      });
+      const context = await browser.newContext({ userAgent: CAMPFIRE_USER_AGENT });
+      const page = await context.newPage();
       await openPage(page, buildCampfireSearchUrl());
       const html = await page.content();
       return { items: mergeCategoryOptions(extractCategoryOptions(html)) };
@@ -103,10 +103,8 @@ export class CampfireScraperService {
     const browser = await chromium.launch({ headless: true });
 
     try {
-      const page = await browser.newPage({
-        userAgent:
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36'
-      });
+      const context = await browser.newContext({ userAgent: CAMPFIRE_USER_AGENT });
+      const page = await context.newPage();
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const resultLimit = normalizeSearchLimit(input.limit);
       const items = hasProfileProjectFilter(input)
@@ -123,10 +121,8 @@ export class CampfireScraperService {
     const browser = await chromium.launch({ headless: true });
 
     try {
-      const page = await browser.newPage({
-        userAgent:
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36'
-      });
+      const context = await browser.newContext({ userAgent: CAMPFIRE_USER_AGENT });
+      const page = await context.newPage();
       await openPage(page, url);
       const html = await page.content();
       const project = extractProject(html, url);
