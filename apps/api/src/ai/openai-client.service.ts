@@ -199,30 +199,94 @@ export class OpenAiClientService {
     },
     input: SalesMailDraftInput
   ) {
-    const formattedBody = this.formatMailBody(draft.body);
-    const bodyParts = formattedBody.split(/\n+/).map((part) => part.trim()).filter(Boolean);
-    const bodyText = bodyParts.join('\n');
-    const expectedHeader = `${input.companyName} ご担当者様`;
-    const startsWithCompany = bodyText.startsWith(input.companyName);
-    const hasRecipient = bodyText.includes('ご担当者様') || bodyText.includes('ご担当者 様');
-    const closing = 'もし何かお力になれそうな機会がございましたら、お気軽にご連絡いただけますと幸いです。';
-    let body = formattedBody;
-
-    if (!startsWithCompany) {
-      body = `${expectedHeader}\n\n${body}`;
-    } else if (!hasRecipient) {
-      body = body.replace(input.companyName, expectedHeader);
-    }
-
-    if (!body.endsWith(closing)) {
-      body = `${body}\n\n${closing}`;
-    }
-
     return {
       ...draft,
       subject: this.expectedSubject(),
-      body: this.formatMailBody(body)
+      body: this.composeStableMailBody(input, draft.body)
     };
+  }
+
+  private composeStableMailBody(input: SalesMailDraftInput, aiBody: string) {
+    const companyName = this.cleanPhrase(input.companyName) || 'ご担当者';
+    const productName = this.cleanPhrase(input.projectTitle) || '貴社プロジェクト';
+    const appeal = this.extractAppeal(input, aiBody);
+    const targetUser = this.extractTargetUser(input, aiBody);
+
+    return [
+      `${companyName} ご担当者様`,
+      'お世話になっております。\n株式会社第弐ヴォヌールの山本と申します。',
+      `CAMPFIREにて、貴社の「${productName}」を拝見しました。`,
+      `${this.withPointSuffix(appeal)}がとても印象的で、${targetUser}にとって、実際の使用シーンをイメージしやすい商品だと感じました。`,
+      '弊社では、クラウドファンディング支援およびSNSマーケティング支援を行っております。',
+      '実績としては、SNS運用で1か月総再生400万回超、クラウドファンディング領域では、担当商品で3,500万円規模の売上実績がございます。',
+      '商品の魅力を伝える見せ方や、売上につながる導線づくりの面でもお手伝いしております。',
+      'もし何かお力になれそうな機会がございましたら、お気軽にご連絡いただけますと幸いです。'
+    ].join('\n\n');
+  }
+
+  private withPointSuffix(value: string) {
+    const cleaned = this.cleanPhrase(value);
+    return cleaned.endsWith('点') ? cleaned : `${cleaned}という点`;
+  }
+
+  private extractAppeal(input: SalesMailDraftInput, aiBody: string) {
+    const projectSources = [input.projectDescription, input.leadReason].filter(Boolean).join(' ');
+    const candidates = [
+      this.pickSentence(projectSources, /(?:特徴|印象的|魅力|強み|可能|でき|守|使|選|持ち運|コンパクト|軽量|防災|安心|便利)/),
+      input.projectDescription,
+      input.leadReason,
+      this.pickSentence(aiBody, /(?:特徴|印象的|魅力|強み|可能|でき|守|使|選|持ち運|コンパクト|軽量|防災|安心|便利)/)
+    ]
+      .map((value) => this.cleanPhrase(value))
+      .filter(Boolean);
+    const selected = candidates[0] || '商品の特徴や利用シーンが分かりやすい';
+    return this.toAppealPhrase(this.trimJapaneseSentence(selected, 72))
+      .replace(/という点$/, '')
+      .replace(/点が魅力です$/, '点')
+      .replace(/点が印象的です$/, '点');
+  }
+
+  private toAppealPhrase(value: string) {
+    return value
+      .replace(/できます$/, 'できる点')
+      .replace(/可能です$/, '可能な点')
+      .replace(/守ります$/, '守れる点')
+      .replace(/使えます$/, '使える点')
+      .replace(/選択可能です$/, '選択できる点')
+      .replace(/です$/, 'である点')
+      .replace(/ます$/, 'る点');
+  }
+
+  private extractTargetUser(input: SalesMailDraftInput, aiBody: string) {
+    const source = `${input.projectCategory || ''} ${input.projectDescription || ''} ${input.leadReason || ''} ${aiBody || ''}`;
+    if (/防災|金庫|保管|守|安全|貴重品|書類/.test(source)) return '防災備えや大切な物の保管を重視する方';
+    if (/アウトドア|キャンプ|旅行|屋外|持ち運/.test(source)) return '屋外や移動先での使いやすさを重視する方';
+    if (/美容|健康|ヘルス|ケア/.test(source)) return '日常のケアや健康意識を大切にする方';
+    if (/子ども|学習|教育|学校|本/.test(source)) return 'お子さまやご家族の暮らしを大切にする方';
+    return '商品に関心を持つお客様';
+  }
+
+  private pickSentence(value: string, pattern: RegExp) {
+    return value
+      .split(/[。！？!?]\s*/)
+      .map((item) => item.trim())
+      .find((item) => item.length >= 12 && pattern.test(item));
+  }
+
+  private cleanPhrase(value: string | null | undefined) {
+    return (value || '')
+      .replace(/\s+/g, ' ')
+      .replace(/^[・、。]+/, '')
+      .replace(/[。]+$/, '')
+      .trim();
+  }
+
+  private trimJapaneseSentence(value: string, maxLength: number) {
+    const cleaned = this.cleanPhrase(value);
+    if (cleaned.length <= maxLength) return cleaned;
+    const sliced = cleaned.slice(0, maxLength);
+    const punctuation = Math.max(sliced.lastIndexOf('、'), sliced.lastIndexOf('。'));
+    return (punctuation > 24 ? sliced.slice(0, punctuation) : sliced).trim();
   }
 
   private formatMailBody(value: string) {

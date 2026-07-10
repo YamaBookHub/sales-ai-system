@@ -911,6 +911,30 @@ export class DashboardController {
       line-height: 1.7;
       color: #26323a;
     }
+    .info-columns {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .info-card {
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fbfcfd;
+      padding: 10px;
+      min-width: 0;
+    }
+    .info-card h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+    }
+    .info-card ul {
+      margin: 0;
+      padding-left: 18px;
+      line-height: 1.7;
+    }
+    .info-card li + li {
+      margin-top: 4px;
+    }
     .list-block {
       display: grid;
       gap: 6px;
@@ -1280,7 +1304,7 @@ export class DashboardController {
     }
     a:hover { text-decoration: underline; }
     @media (max-width: 980px) {
-      main, .workflow, .split, .grid-2, .detail-grid, .compact-summary, .mail-create-bar, .mail-editor-grid, .next-action-strip { grid-template-columns: 1fr; }
+      main, .workflow, .split, .grid-2, .detail-grid, .compact-summary, .mail-create-bar, .mail-editor-grid, .next-action-strip, .info-columns { grid-template-columns: 1fr; }
       header { padding: 0 14px; }
       .direct-import, .quick-search, .search-filter-row, .mail-filter-row, .result-filter-panel, .search-block { grid-template-columns: 1fr; }
       .search-block .direct-import,
@@ -2194,13 +2218,7 @@ export class DashboardController {
         '</div>' +
         (!isMailDraft && readiness.reason ? '<div class="notice"><strong>' + escapeHtml(readiness.label || 'メール生成判断') + '</strong>' + escapeHtml(readiness.reason) + '</div>' : '') +
         (!isMailDraft ? '<div class="row"><label>分析まとめ</label><div class="detail-text">' + escapeHtml(output.summary || '未生成') + '</div></div>' : '') +
-        (!isMailDraft ? renderListSection('不足している情報', output.missingInfo) : '') +
-        (!isMailDraft ? renderListSection('次に確認すること', output.nextChecks) : '') +
-        (!isMailDraft ? renderListSection('商品の魅力・強み', output.productStrengths) : '') +
-        (!isMailDraft ? renderListSection('使う人', output.targetUsers) : '') +
-        (!isMailDraft ? renderListSection('営業の切り口', output.salesAngles) : '') +
-        (!isMailDraft ? renderListSection('SNSでの見せ方', output.snsIdeas) : '') +
-        (!isMailDraft ? renderListSection('メール作成の注意', output.mailAdvice) : '') +
+        (!isMailDraft ? renderAnalysisCards(output) : '') +
         renderListSection('使用した事実', output.factsUsed) +
         renderListSection(isMailDraft ? 'AIの推測' : '補足', output.assumptions) +
         renderListSection('注意点', output.riskFlags) +
@@ -2261,6 +2279,24 @@ export class DashboardController {
           '<div class="detail-text">' + escapeHtml(project.description || '未取得') + '</div>' +
         '</div>' +
         renderLeadManagementForm(lead);
+    }
+
+    function renderAnalysisCards(output) {
+      return '<div class="info-columns">' +
+        infoCard('商品の魅力', output.productStrengths) +
+        infoCard('SNS訴求', output.snsIdeas) +
+        infoCard('メール材料', output.mailAdvice) +
+        infoCard('使う人', output.targetUsers) +
+        infoCard('次に確認', output.nextChecks) +
+        infoCard('不足情報', output.missingInfo) +
+      '</div>';
+    }
+
+    function infoCard(title, items) {
+      const values = Array.isArray(items) ? items : [];
+      return '<div class="info-card"><h3>' + escapeHtml(title) + '</h3>' +
+        (values.length ? '<ul>' + values.map((item) => '<li>' + escapeHtml(item) + '</li>').join('') + '</ul>' : '<div class="muted">未生成</div>') +
+      '</div>';
     }
 
     function renderLeadAlerts(lead) {
