@@ -522,6 +522,7 @@ export class DashboardController {
               detailItem('費用', latest.provider === 'local' ? '無料分析' : 'AI生成') +
             '</div>' +
             rowBlock('分析まとめ', output.summary || '未生成') +
+            renderPlaceholderAnalysis(output.mailPlaceholders) +
             listBlock('商品の魅力・強み', output.productStrengths) +
             listBlock('SNSでの見せ方', output.snsIdeas) +
             listBlock('次に確認すること', output.nextChecks) +
@@ -782,6 +783,22 @@ export class DashboardController {
       const items = Array.isArray(values) ? values : [];
       return '<div class="row"><label>' + escapeHtml(label) + '</label><div class="detail-text">' +
         (items.length ? items.map((item) => '・' + escapeHtml(item)).join('<br>') : '未生成') +
+      '</div></div>';
+    }
+
+    function renderPlaceholderAnalysis(placeholders) {
+      if (!placeholders || typeof placeholders !== 'object') return '';
+      const rows = [
+        ['【企業名＋ご担当者】', placeholders.companyRecipient],
+        ['【商品名】', placeholders.productName],
+        ['【商品の魅力・特徴・強み】', placeholders.appeal],
+        ['【使う人】', placeholders.targetUser],
+        ['文脈', placeholders.subjectType],
+        ['注意', placeholders.caution]
+      ].filter(([, value]) => value);
+      if (!rows.length) return '';
+      return '<div class="row"><label>メール差し込み分析</label><div class="detail-text">' +
+        rows.map(([label, value]) => escapeHtml(label) + ': ' + escapeHtml(value)).join('<br>') +
       '</div></div>';
     }
 
@@ -2651,6 +2668,7 @@ export class DashboardController {
         '</div>' +
         (!isMailDraft && readiness.reason ? '<div class="notice"><strong>' + escapeHtml(readiness.label || 'メール生成判断') + '</strong>' + escapeHtml(readiness.reason) + '</div>' : '') +
         (!isMailDraft ? '<div class="row"><label>分析まとめ</label><div class="detail-text">' + escapeHtml(output.summary || '未生成') + '</div></div>' : '') +
+        (!isMailDraft ? renderPlaceholderAnalysis(output.mailPlaceholders) : '') +
         (!isMailDraft ? renderAnalysisCards(output) : '') +
         renderListSection('使用した事実', output.factsUsed) +
         renderListSection(isMailDraft ? 'AIの推測' : '補足', output.assumptions) +
@@ -2724,6 +2742,22 @@ export class DashboardController {
         infoCard('次に確認', output.nextChecks) +
         infoCard('不足情報', output.missingInfo) +
       '</div>';
+    }
+
+    function renderPlaceholderAnalysis(placeholders) {
+      if (!placeholders || typeof placeholders !== 'object') return '';
+      const rows = [
+        ['【企業名＋ご担当者】', placeholders.companyRecipient],
+        ['【商品名】', placeholders.productName],
+        ['【商品の魅力・特徴・強み】', placeholders.appeal],
+        ['【使う人】', placeholders.targetUser],
+        ['文脈', placeholders.subjectType],
+        ['注意', placeholders.caution]
+      ].filter(([, value]) => value);
+      if (!rows.length) return '';
+      return '<div class="row"><label>メール差し込み分析</label><div class="detail-text">' +
+        rows.map(([label, value]) => escapeHtml(label) + ': ' + escapeHtml(value)).join('<br>') +
+      '</div></div>';
     }
 
     function infoCard(title, items) {

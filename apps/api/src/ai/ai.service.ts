@@ -41,6 +41,7 @@ export class AiService {
       missingInfo: buildMissingInfo(lead, project),
       nextChecks: buildNextChecks(lead, project),
       mailAdvice: buildMailAdvice(project?.category, project?.description, lead.reason),
+      mailPlaceholders: buildMailPlaceholders(lead.company.name, project?.title, project?.category, project?.description, lead.reason),
       factsUsed,
       assumptions: ['OpenAI APIを使わない無料分析のため、商品説明から読み取れる範囲で整理しています。'],
       riskFlags: ['メール生成前に、会社名・商品名・商品特徴が相手と合っているか確認してください。']
@@ -229,6 +230,45 @@ function buildLocalSummary(companyName?: string, title?: string | null, category
   const supporterText = typeof supporters === 'number' && supporters > 0 ? `支援者は${supporters.toLocaleString()}人` : '';
   const metrics = [amountText, supporterText].filter(Boolean).join('、');
   return `${companyName || '対象企業'}の${categoryText}${projectText}を確認しました。${metrics ? `${metrics}で、` : ''}商品特徴と利用シーンを整理したうえで、メール生成前に訴求の方向性を確認します。`;
+}
+
+function buildMailPlaceholders(
+  companyName?: string | null,
+  title?: string | null,
+  category?: string | null,
+  description?: string | null,
+  reason?: string | null
+) {
+  const source = sanitizeAnalysisSource(`${title || ''} ${category || ''} ${description || ''} ${reason || ''}`);
+  const isStoreProject = /飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業|地域/.test(source);
+  const appeal = isStoreProject
+    ? '長年親しまれてきた店舗をより利用しやすい形で継続しようとされている点'
+    : buildLocalStrengths(description, reason)[0]?.replace(/可能性があります。$/, '点') || '特徴や利用シーンが分かりやすい点';
+  const target = isStoreProject
+    ? '店舗の継続や地域に根ざしたお店を応援したい方'
+    : buildLocalTargetUsers(category, description)[0] || '商品に関心を持つお客様';
+  const subjectType = isStoreProject ? '取り組み' : '商品';
+
+  return {
+    companyRecipient: companyName ? `${companyName} ご担当者様` : 'ご担当者様',
+    productName: title || 'CAMPFIRE掲載プロジェクト',
+    appeal,
+    targetUser: target,
+    subjectType,
+    caution: '達成率、残り日数、支援額、支援者数、カテゴリ名は魅力文には入れません。'
+  };
+}
+
+function sanitizeAnalysisSource(value: string) {
+  return value
+    .replace(/達成率\s*[:：]?\s*[0-9,]+%?/g, '')
+    .replace(/残り日数\s*[:：]?\s*[0-9,]+日?/g, '')
+    .replace(/支援額\s*[:：]?\s*[0-9,]+円?/g, '')
+    .replace(/支援者数\s*[:：]?\s*[0-9,]+人?/g, '')
+    .replace(/特徴\s*[:：]?\s*カテゴリーからさがす/g, '')
+    .replace(/カテゴリーからさがす/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function classifyReplyText(body: string): {
