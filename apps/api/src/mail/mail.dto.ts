@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from 'class-validator';
 
 export class CreateMailDraftDto {
   @IsUUID()
@@ -48,4 +48,24 @@ export class RejectMailDto {
   @IsOptional()
   @IsString()
   reason?: string;
+}
+
+export class MarkMailSentDto {
+  @IsOptional()
+  @IsDateString()
+  sentAt?: string;
+}
+
+export class CreateMailReplyDto {
+  @IsOptional()
+  @IsString()
+  fromEmail?: string;
+
+  @IsString()
+  @MinLength(1)
+  body!: string;
+
+  @IsOptional()
+  @IsDateString()
+  receivedAt?: string;
 }

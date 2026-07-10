@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { EmailStatus } from '@prisma/client';
 import { ok } from '../common/api-response';
-import { CreateMailDraftDto, RejectMailDto, UpdateMailChecklistDto, UpdateMailDto } from './mail.dto';
+import { CreateMailDraftDto, CreateMailReplyDto, MarkMailSentDto, RejectMailDto, UpdateMailChecklistDto, UpdateMailDto } from './mail.dto';
 import { MailService } from './mail.service';
 
 @Controller('mails')
@@ -56,6 +56,16 @@ export class MailController {
   @Post(':id/queue')
   async queue(@Param('id') id: string) {
     return ok(await this.mail.queue(id));
+  }
+
+  @Post(':id/mark-sent')
+  async markSent(@Param('id') id: string, @Body() dto: MarkMailSentDto) {
+    return ok(await this.mail.markSent(id, dto));
+  }
+
+  @Post(':id/replies')
+  async recordReply(@Param('id') id: string, @Body() dto: CreateMailReplyDto) {
+    return ok(await this.mail.recordReply(id, dto));
   }
 
   @Post(':id/retry')

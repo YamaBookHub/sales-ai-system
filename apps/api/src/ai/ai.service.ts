@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { LeadStatus, ReplyCategory } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { GenerateMailDto } from './ai.dto';
 import { OpenAiClientService } from './openai-client.service';
@@ -155,19 +156,39 @@ export class AiService {
   }
 
   async classifyReply(replyId: string) {
-    const reply = await this.prisma.emailReply.findUnique({ where: { id: replyId } });
+    const reply = await this.prisma.emailReply.findUnique({
+      where: { id: replyId },
+      include: { email: true }
+    });
 
     if (!reply) {
       throw new NotFoundException('Reply not found');
     }
 
-    return this.prisma.emailReply.update({
-      where: { id: replyId },
-      data: {
-        category: 'unknown',
-        confidence: 0,
-        summary: 'TODO: AI reply classification is not connected yet.'
+    const classification = classifyReplyText(reply.bodyText || reply.body);
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedReply = await tx.emailReply.update({
+        where: { id: replyId },
+        data: {
+          category: classification.category,
+          confidence: classification.confidence,
+          summary: classification.summary,
+          nextAction: classification.nextAction
+        }
+      });
+
+      if (reply.email.leadId) {
+        await tx.salesLead.update({
+          where: { id: reply.email.leadId },
+          data: {
+            status: classification.leadStatus,
+            nextActionAt: classification.nextActionAt
+          }
+        });
       }
+
+      return { reply: updatedReply, classification };
     });
   }
 
@@ -208,6 +229,81 @@ function buildLocalSummary(companyName?: string, title?: string | null, category
   const supporterText = typeof supporters === 'number' && supporters > 0 ? `支援者は${supporters.toLocaleString()}人` : '';
   const metrics = [amountText, supporterText].filter(Boolean).join('、');
   return `${companyName || '対象企業'}の${categoryText}${projectText}を確認しました。${metrics ? `${metrics}で、` : ''}商品特徴と利用シーンを整理したうえで、メール生成前に訴求の方向性を確認します。`;
+}
+
+function classifyReplyText(body: string): {
+  category: ReplyCategory;
+  confidence: number;
+  summary: string;
+  nextAction: string;
+  leadStatus: LeadStatus;
+  nextActionAt?: Date;
+} {
+  const text = body.replace(/\s+/g, ' ').trim();
+  const lower = text.toLowerCase();
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  if (/配信停止|停止|不要|unsubscribe|今後.*不要/.test(lower)) {
+    return {
+      category: 'unsubscribe',
+      confidence: 0.9,
+      summary: '配信停止または今後不要の返信です。',
+      nextAction: '対象外にし、以後の連絡を止める。',
+      leadStatus: 'rejected'
+    };
+  }
+
+  if (/打ち合わせ|商談|面談|日程|候補日|zoom|ミーティング|meeting/.test(lower)) {
+    return {
+      category: 'meeting_request',
+      confidence: 0.86,
+      summary: '面談または日程調整につながる返信です。',
+      nextAction: '日程候補または調整リンクを送る。',
+      leadStatus: 'meeting_candidate',
+      nextActionAt: tomorrow
+    };
+  }
+
+  if (/資料|詳しく|詳細|料金|費用|教えて|知りたい|興味|検討/.test(lower)) {
+    return {
+      category: 'need_info',
+      confidence: 0.78,
+      summary: '追加情報や資料を求めている可能性があります。',
+      nextAction: '質問に回答し、必要なら資料や説明を送る。',
+      leadStatus: 'replied',
+      nextActionAt: tomorrow
+    };
+  }
+
+  if (/興味ありません|不要です|結構です|お断り|予算.*ない|時期.*違/.test(lower)) {
+    return {
+      category: 'not_interested',
+      confidence: 0.82,
+      summary: '現時点では見送りまたは不要の返信です。',
+      nextAction: '無理に追わず、必要なら時期を空けて再確認する。',
+      leadStatus: 'no_response'
+    };
+  }
+
+  if (/自動返信|不在|休暇|auto.?reply|out of office/.test(lower)) {
+    return {
+      category: 'auto_reply',
+      confidence: 0.88,
+      summary: '自動返信の可能性があります。',
+      nextAction: '通常返信を待ち、必要なら数日後に確認する。',
+      leadStatus: 'contacted',
+      nextActionAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+    };
+  }
+
+  return {
+    category: 'unknown',
+    confidence: 0.4,
+    summary: text.slice(0, 120) || '返信内容を確認してください。',
+    nextAction: '返信内容を確認し、次対応を判断する。',
+    leadStatus: 'replied',
+    nextActionAt: tomorrow
+  };
 }
 
 function buildLocalStrengths(description?: string | null, reason?: string | null) {

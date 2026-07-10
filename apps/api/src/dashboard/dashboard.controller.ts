@@ -1426,6 +1426,16 @@ export class DashboardController {
                 <button onclick="rejectMail()" id="rejectButton" disabled>棄却</button>
                 <button onclick="approveMail()" id="approveButton" disabled>承認</button>
                 <button onclick="queueMail()" id="queueButton" disabled>キュー投入</button>
+                <button onclick="markMailSent()" id="markSentButton" disabled>送信済みにする</button>
+              </div>
+              <div class="row">
+                <label for="replyBody">返信記録</label>
+                <input id="replyFromEmail" placeholder="返信元メールアドレス 任意" />
+                <textarea id="replyBody" style="min-height:110px" placeholder="返信内容を貼り付け"></textarea>
+                <div class="toolbar">
+                  <button onclick="recordReply()" id="replyButton" disabled>返信を記録</button>
+                  <span id="replyStatus" class="status"></span>
+                </div>
               </div>
             </div>
           </div>
@@ -1756,6 +1766,44 @@ export class DashboardController {
 
     async function queueMail() {
       await transitionMail('queue', 'キュー投入済み');
+    }
+
+    async function markMailSent() {
+      if (!state.selectedMailId) return;
+      setStatus('mailStatus', '送信済みに更新中', 'warn');
+      try {
+        await api('/api/mails/' + state.selectedMailId + '/mark-sent', {
+          method: 'POST',
+          body: JSON.stringify({})
+        });
+        setStatus('mailStatus', '送信済みにしました', 'ok');
+        await loadAll();
+        selectMail(state.selectedMailId);
+      } catch (error) {
+        setStatus('mailStatus', error.message, 'error');
+      }
+    }
+
+    async function recordReply() {
+      if (!state.selectedMailId) return;
+      const body = fieldValue('replyBody');
+      if (!body) return setStatus('replyStatus', '返信内容を入力してください', 'warn');
+      setStatus('replyStatus', '返信を記録中', 'warn');
+      try {
+        const result = await api('/api/mails/' + state.selectedMailId + '/replies', {
+          method: 'POST',
+          body: JSON.stringify({
+            fromEmail: fieldValue('replyFromEmail') || undefined,
+            body
+          })
+        });
+        document.getElementById('replyBody').value = '';
+        setStatus('replyStatus', '返信を記録しました: ' + labelReplyCategory(result.classification.category), 'ok');
+        await loadAll();
+        selectMail(state.selectedMailId);
+      } catch (error) {
+        setStatus('replyStatus', error.message, 'error');
+      }
     }
 
     async function transitionMail(action, message) {
@@ -2285,6 +2333,8 @@ export class DashboardController {
       document.getElementById('rejectButton').disabled = !mail || !['in_review', 'approved'].includes(mail.status);
       document.getElementById('approveButton').disabled = !mail || mail.status !== 'in_review' || !state.checklistComplete;
       document.getElementById('queueButton').disabled = !mail || mail.status !== 'approved' || !state.checklistComplete;
+      document.getElementById('markSentButton').disabled = !mail || !['approved', 'queued'].includes(mail.status);
+      document.getElementById('replyButton').disabled = !mail || !['queued', 'sent'].includes(mail.status);
     }
 
     function formatDate(value) {
@@ -2315,6 +2365,19 @@ export class DashboardController {
         reply_classification: '返信分類',
         next_action: '次アクション'
       })[type] || type || '未設定';
+    }
+
+    function labelReplyCategory(category) {
+      return ({
+        interested: '興味あり',
+        need_info: '資料・詳細希望',
+        meeting_request: '商談希望',
+        not_interested: '見送り',
+        unsubscribe: '配信停止',
+        auto_reply: '自動返信',
+        complaint: 'クレーム',
+        unknown: '要確認'
+      })[category] || category || '要確認';
     }
 
     function labelLeadStatus(status) {
