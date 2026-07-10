@@ -32,7 +32,7 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
   readonly baseUrl = MAKUAKE_ORIGIN;
 
   async categories() {
-    return { items: MAKUAKE_CATEGORIES };
+    return { items: [] };
   }
 
   async search(input: SearchCampfireProjectsDto) {
@@ -137,7 +137,7 @@ type ScrapedMakuakeProject = {
 
 function buildMakuakeSearchUrl(input: SearchCampfireProjectsDto) {
   const url = new URL('/search', MAKUAKE_ORIGIN);
-  const keyword = [input.keyword, normalizePresetCategory(input.category)].filter(Boolean).join(' ').trim();
+  const keyword = (input.keyword || '').trim();
   if (keyword) url.searchParams.set('keyword', keyword);
   return url.toString();
 }
@@ -276,11 +276,6 @@ function normalizeLimit(value?: number) {
   return [10, 50, 100].includes(Number(value)) ? Number(value) : 10;
 }
 
-function normalizePresetCategory(value?: string) {
-  if (!value?.startsWith('preset:')) return '';
-  return value.replace(/^preset:/, '').trim();
-}
-
 function firstUsefulLine(text: string) {
   return text.split(/\s+/).find((line) => line.length >= 6 && line.length <= 80) || '';
 }
@@ -308,4 +303,3 @@ function uniqueBy<T>(items: T[], getKey: (item: T) => string) {
     return true;
   });
 }
-

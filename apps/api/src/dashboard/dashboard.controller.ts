@@ -1760,7 +1760,7 @@ export class DashboardController {
                 <input id="campfireSearchKeyword" placeholder="キーワード・商品名で候補検索" />
               </div>
               <div class="search-filter-row">
-                <select id="campfireSearchCategory">
+                <select id="campfireSearchCategory" data-campfire-only="true">
                   <option value="">カテゴリを取得中</option>
                 </select>
                 <select id="campfireFetchLimit">
@@ -2110,6 +2110,7 @@ export class DashboardController {
       const platform = selectedSourcePlatform();
       const sourceChanged = state.currentSourcePlatform && state.currentSourcePlatform !== platform;
       const urlInput = document.getElementById('campfireUrl');
+      const categorySearch = document.getElementById('campfireSearchCategory');
       const profileSearch = document.getElementById('campfireSearchProfileProjectRange');
       const profileDisplay = document.getElementById('campfireDisplayProfileProjectRange');
       if (urlInput) {
@@ -2121,6 +2122,11 @@ export class DashboardController {
       if (profileSearch) {
         profileSearch.disabled = platform !== 'campfire';
         if (platform !== 'campfire') profileSearch.value = '';
+      }
+      if (categorySearch) {
+        categorySearch.disabled = platform !== 'campfire';
+        categorySearch.style.display = platform === 'campfire' ? '' : 'none';
+        if (platform !== 'campfire') categorySearch.value = '';
       }
       if (profileDisplay) {
         profileDisplay.disabled = platform !== 'campfire';
@@ -2136,7 +2142,7 @@ export class DashboardController {
       if (platform === 'campfire' || platform === 'makuake') {
         const note = platform === 'campfire'
           ? '募集中プロジェクト、カテゴリ、過去PJ条件に対応'
-          : '募集中プロジェクト、キーワード、カテゴリに対応（過去PJ条件は対象外）';
+          : '募集中プロジェクト、キーワード検索に対応（カテゴリ・過去PJ条件は対象外）';
         setStatus('sourcePlatformStatus', sourcePlatformLabel(platform) + 'の' + note, 'muted');
         return;
       }
@@ -2207,6 +2213,12 @@ export class DashboardController {
 
     async function loadCampfireCategories() {
       const select = document.getElementById('campfireSearchCategory');
+      if (selectedSourcePlatform() !== 'campfire') {
+        state.campfireCategories = [];
+        select.innerHTML = '<option value="">カテゴリなし</option>';
+        select.value = '';
+        return;
+      }
       try {
         const result = await api('/api/projects/categories?source=' + encodeURIComponent(selectedSourcePlatform()));
         state.campfireCategories = result.items || [];
@@ -2254,7 +2266,7 @@ export class DashboardController {
           body: JSON.stringify(compactPayload({
             source,
             keyword: fieldValue('campfireSearchKeyword'),
-            category: fieldValue('campfireSearchCategory'),
+            category: source === 'campfire' ? fieldValue('campfireSearchCategory') : '',
             profileProjectMin: profileProjectRange.min,
             profileProjectMax: profileProjectRange.max,
             limit: desiredLimit,
