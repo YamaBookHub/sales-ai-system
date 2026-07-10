@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post, Query } from '@nestjs/common';
 import { ProjectStatus } from '@prisma/client';
 import { ok } from '../common/api-response';
-import { CreateProjectDto, ImportCampfireProjectDto, ImportProjectDto, SearchCampfireProjectsDto, SearchProjectsDto } from './projects.dto';
+import { BulkImportProjectsDto, CreateProjectDto, ImportCampfireProjectDto, ImportProjectDto, SearchCampfireProjectsDto, SearchProjectsDto } from './projects.dto';
 import { ProjectsService } from './projects.service';
 
 @Controller('projects')
@@ -19,13 +19,18 @@ export class ProjectsController {
   }
 
   @Post('import/campfire')
-  async importCampfire(@Body() dto: ImportCampfireProjectDto) {
-    return ok(await this.projects.importCampfire(dto));
+  async importCampfire(@Body() dto: ImportCampfireProjectDto, @Headers('x-operator-email') operatorEmail?: string) {
+    return ok(await this.projects.importCampfire(dto, { operatorEmail }));
   }
 
   @Post('import')
-  async importProject(@Body() dto: ImportProjectDto) {
-    return ok(await this.projects.importProject(dto));
+  async importProject(@Body() dto: ImportProjectDto, @Headers('x-operator-email') operatorEmail?: string) {
+    return ok(await this.projects.importProject(dto, { operatorEmail }));
+  }
+
+  @Post('bulk-import')
+  async bulkImport(@Body() dto: BulkImportProjectsDto, @Headers('x-operator-email') operatorEmail?: string) {
+    return ok(await this.projects.bulkImport(dto, { operatorEmail }));
   }
 
   @Get('categories/campfire')

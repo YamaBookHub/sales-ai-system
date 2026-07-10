@@ -1,5 +1,5 @@
 import { ProjectStatus } from '@prisma/client';
-import { IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 
 export type ProjectSource = 'campfire' | 'makuake' | 'green_funding';
 
@@ -46,6 +46,28 @@ export class ImportProjectDto extends ImportCampfireProjectDto {
   @IsString()
   @MinLength(1)
   source!: ProjectSource;
+}
+
+export class BulkImportProjectsDto {
+  @IsString()
+  @MinLength(1)
+  source!: ProjectSource;
+
+  @IsArray()
+  @IsString({ each: true })
+  urls!: string[];
+
+  @IsOptional()
+  @IsInt()
+  importConcurrency?: number;
+
+  @IsOptional()
+  @IsInt()
+  analysisConcurrency?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  analyze?: boolean;
 }
 
 export class SearchCampfireProjectsDto {

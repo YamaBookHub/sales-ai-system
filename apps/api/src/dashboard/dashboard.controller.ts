@@ -374,9 +374,10 @@ export class DashboardController {
     const state = { leads: [], mails: [], aiGenerations: [], selectedLeadId: null };
 
     async function api(path, options = {}) {
+      const operatorEmail = window.localStorage.getItem('salesAiSystem.operatorEmail') || '';
       const response = await fetch(path, {
         ...options,
-        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+        headers: { 'Content-Type': 'application/json', ...(operatorEmail ? { 'X-Operator-Email': operatorEmail } : {}), ...(options.headers || {}) }
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.message || payload.error?.message || 'APIエラー');
@@ -2048,9 +2049,10 @@ export class DashboardController {
     const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
 
     async function api(path, options = {}) {
+      const operatorEmail = window.localStorage.getItem('salesAiSystem.operatorEmail') || '';
       const response = await fetch(path, {
         ...options,
-        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+        headers: { 'Content-Type': 'application/json', ...(operatorEmail ? { 'X-Operator-Email': operatorEmail } : {}), ...(options.headers || {}) }
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -2293,74 +2295,43 @@ export class DashboardController {
       }
       const ok = window.confirm('表示中の未取込候補 ' + importableEntries.length + '件を取り込みます。登録済み・取込済みは取り込みません。よろしいですか？');
       if (!ok) return;
-      let successCount = 0;
-      let failedCount = 0;
-      let completedCount = 0;
-      let analyzedCount = 0;
-      let analysisFailedCount = 0;
-      const importResults = [];
-      const importConcurrency = Math.min(4, importableEntries.length);
-      const analysisConcurrency = Math.min(6, importableEntries.length);
-      setStatus('bulkImportStatus', '一括取り込み中 0/' + importableEntries.length, 'warn');
-      await runWithConcurrency(importableEntries, importConcurrency, async ({ item: candidate }) => {
-        try {
-          document.getElementById('campfireUrl').value = candidate.url;
-          setCandidateImportStatus(candidate, 'importing', '取り込み中');
-          renderCampfireCandidates();
-          const result = await api('/api/projects/import', {
-            method: 'POST',
-            body: JSON.stringify({ source: selectedSourcePlatform(), url: candidate.url })
-          });
-          state.selectedLeadId = result.lead.id;
-          importResults.push({ candidate, leadId: result.lead.id });
-          setCandidateImportStatus(candidate, 'imported', '取り込み済み・分析待ち', result.lead.id);
-          successCount += 1;
-        } catch (error) {
-          setCandidateImportStatus(candidate, 'failed', error.message);
-          failedCount += 1;
-        }
-        completedCount += 1;
-        setStatus('bulkImportStatus', '一括取り込み中 ' + completedCount + '/' + importableEntries.length + (failedCount ? '（失敗 ' + failedCount + '件）' : ''), 'warn');
-        renderCampfireCandidates();
-      });
-
-      if (importResults.length) {
-        setStatus('bulkImportStatus', 'AI分析中 0/' + importResults.length, 'warn');
-        await runWithConcurrency(importResults, analysisConcurrency, async ({ candidate, leadId }) => {
-          try {
-            setCandidateImportStatus(candidate, 'imported', 'AI分析中', leadId);
-            renderCampfireCandidates();
-            await api('/api/ai/leads/' + leadId + '/analyze', { method: 'POST' });
-            setCandidateImportStatus(candidate, 'imported', '取り込み・AI分析済み', leadId);
-            analyzedCount += 1;
-          } catch (error) {
-            setCandidateImportStatus(candidate, 'imported', '取り込み済み / AI分析失敗: ' + error.message, leadId);
-            analysisFailedCount += 1;
-          }
-          setStatus('bulkImportStatus', 'AI分析中 ' + (analyzedCount + analysisFailedCount) + '/' + importResults.length + (analysisFailedCount ? '（分析失敗 ' + analysisFailedCount + '件）' : ''), 'warn');
-          renderCampfireCandidates();
-        });
-      }
-      setStatus(
-        'bulkImportStatus',
-        '一括取り込み完了: 取込 ' + successCount + '件 / 取込失敗 ' + failedCount + '件 / AI分析 ' + analyzedCount + '件' + (analysisFailedCount ? ' / AI分析失敗 ' + analysisFailedCount + '件' : ''),
-        failedCount || analysisFailedCount ? 'warn' : 'ok'
-      );
-      await loadAll();
+      importableEntries.forEach(({ item }) => setCandidateImportStatus(item, 'importing', 'サーバー側で取り込み中'));
       renderCampfireCandidates();
-    }
-
-    async function runWithConcurrency(items, concurrency, worker) {
-      let nextIndex = 0;
-      const safeConcurrency = Math.max(1, Math.min(concurrency, items.length));
-      const runNext = async () => {
-        const index = nextIndex;
-        nextIndex += 1;
-        if (index >= items.length) return;
-        await worker(items[index], index);
-        await runNext();
-      };
-      await Promise.all(Array.from({ length: safeConcurrency }, () => runNext()));
+      setStatus('bulkImportStatus', 'サーバー側で一括取り込み・AI分析中', 'warn');
+      try {
+        const result = await api('/api/projects/bulk-import', {
+          method: 'POST',
+          body: JSON.stringify({
+            source: selectedSourcePlatform(),
+            urls: importableEntries.map(({ item }) => item.url),
+            analyze: true,
+            importConcurrency: 4,
+            analysisConcurrency: 3
+          })
+        });
+        const resultByUrl = Object.fromEntries((result.items || []).map((item) => [item.url, item]));
+        importableEntries.forEach(({ item }) => {
+          const row = resultByUrl[item.url];
+          if (!row) return setCandidateImportStatus(item, 'failed', '結果を確認できませんでした');
+          if (row.status === 'imported') {
+            setCandidateImportStatus(item, 'imported', '取り込み・AI分析済み', row.leadId);
+            state.selectedLeadId = row.leadId || state.selectedLeadId;
+          } else {
+            setCandidateImportStatus(item, 'failed', row.message || '取り込みに失敗しました');
+          }
+        });
+        setStatus(
+          'bulkImportStatus',
+          '一括取り込み完了: 取込 ' + result.imported + '件 / 取込失敗 ' + result.failed + '件 / AI分析 ' + result.analyzed + '件' + (result.analysisFailed ? ' / AI分析失敗 ' + result.analysisFailed + '件' : ''),
+          result.failed || result.analysisFailed ? 'warn' : 'ok'
+        );
+        await loadAll();
+        renderCampfireCandidates();
+      } catch (error) {
+        importableEntries.forEach(({ item }) => setCandidateImportStatus(item, 'failed', error.message));
+        setStatus('bulkImportStatus', error.message, 'error');
+        renderCampfireCandidates();
+      }
     }
 
     async function analyzeLead(options = {}) {
