@@ -1400,14 +1400,16 @@ export class DashboardController {
     async function loadAll() {
       try {
         const [leads, mails] = await Promise.all([
-          api('/api/leads?limit=50'),
-          api('/api/mails?limit=50')
+          api('/api/leads?limit=200'),
+          api('/api/mails?limit=200')
         ]);
         state.leads = leads.items || [];
         state.mails = mails.items || [];
+        const selectedMail = ensureSelectedMailForLead();
         renderLeads();
         renderMailLeadSummary();
         renderMails();
+        populateMailEditor(selectedMail);
         renderLeadDetail();
         if (state.selectedLeadId) void loadAiAnalysis();
         if (!state.campfireCategories.length) void loadCampfireCategories();
@@ -2000,12 +2002,16 @@ export class DashboardController {
       if (!state.selectedLeadId) {
         document.getElementById('mailRows').innerHTML = '<tr><td colspan="3" class="muted">対象を選択すると、その企業・案件のメール作成履歴が表示されます</td></tr>';
         document.getElementById('selectedMail').textContent = '未選択';
+        populateMailEditor(null);
         renderRejectReason(null);
         updateMailButtons(null);
         return;
       }
       if (state.selectedMailId && !mails.some((mail) => mail.id === state.selectedMailId)) {
         state.selectedMailId = null;
+      }
+      if (!state.selectedMailId && mails.length) {
+        state.selectedMailId = mails[0].id;
       }
       const rows = mails.map((mail) => {
         return '<tr data-selected="' + (mail.id === state.selectedMailId) + '" onclick="selectMail(\\'' + mail.id + '\\')">' +
@@ -2017,6 +2023,7 @@ export class DashboardController {
       document.getElementById('mailRows').innerHTML = rows || '<tr><td colspan="3" class="muted">この対象のメール作成履歴はまだありません。メール生成で新規作成できます。</td></tr>';
       const selected = mails.find((mail) => mail.id === state.selectedMailId);
       document.getElementById('selectedMail').textContent = selected ? labelMailStatus(selected.status) : '未選択';
+      populateMailEditor(selected);
       renderRejectReason(selected);
       updateMailButtons(selected);
     }
@@ -2031,16 +2038,35 @@ export class DashboardController {
     function selectedLeadMails() {
       if (!state.selectedLeadId) return [];
       return state.mails
-        .filter((mail) => mail.leadId === state.selectedLeadId)
+        .filter((mail) => mail.leadId === state.selectedLeadId || mail.lead?.id === state.selectedLeadId)
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+
+    function ensureSelectedMailForLead() {
+      if (!state.selectedLeadId) {
+        state.selectedMailId = null;
+        return null;
+      }
+      const mails = selectedLeadMails();
+      const current = mails.find((mail) => mail.id === state.selectedMailId);
+      if (current) return current;
+      const latest = mails[0] || null;
+      state.selectedMailId = latest?.id || null;
+      return latest;
+    }
+
+    function populateMailEditor(mail) {
+      const subject = document.getElementById('subject');
+      const body = document.getElementById('body');
+      if (subject) subject.value = mail?.subject || '';
+      if (body) body.value = mail?.body || '';
     }
 
     function clearMailEditor() {
       state.selectedMailId = null;
       state.checklist = [];
       state.checklistComplete = false;
-      document.getElementById('subject').value = '';
-      document.getElementById('body').value = '';
+      populateMailEditor(null);
       document.getElementById('selectedMail').textContent = '未選択';
       renderRejectReason(null);
       renderChecklist();
@@ -2082,8 +2108,7 @@ export class DashboardController {
     function selectLead(id) {
       state.selectedLeadId = id;
       state.aiGenerations = [];
-      const latestMail = selectedLeadMails()[0];
-      state.selectedMailId = latestMail?.id || null;
+      const latestMail = ensureSelectedMailForLead();
       state.checklist = [];
       state.checklistComplete = false;
       renderLeads();
@@ -2150,10 +2175,12 @@ export class DashboardController {
       state.selectedMailId = id;
       state.checklist = [];
       state.checklistComplete = false;
-      const mail = state.mails.find((item) => item.id === id);
-      if (!mail) return;
-      document.getElementById('subject').value = mail.subject || '';
-      document.getElementById('body').value = mail.body || '';
+      const mail = selectedLeadMails().find((item) => item.id === id) || state.mails.find((item) => item.id === id);
+      if (!mail) {
+        clearMailEditor();
+        return;
+      }
+      populateMailEditor(mail);
       renderMails();
       renderChecklist();
       void loadChecklist();
