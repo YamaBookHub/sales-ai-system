@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ProjectStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CampfireScraperService } from '../scraper/campfire-scraper.service';
-import { CreateProjectDto, ImportCampfireProjectDto, SearchCampfireProjectsDto } from './projects.dto';
+import { CreateProjectDto, ImportCampfireProjectDto, ImportProjectDto, ProjectSource, SearchCampfireProjectsDto, SearchProjectsDto } from './projects.dto';
 
 @Injectable()
 export class ProjectsService {
@@ -37,6 +37,12 @@ export class ProjectsService {
     });
   }
 
+  searchProjects(dto: SearchProjectsDto) {
+    const source = normalizeProjectSource(dto.source);
+    if (source === 'campfire') return this.searchCampfire(dto);
+    throw unsupportedProjectSource(source);
+  }
+
   async searchCampfire(dto: SearchCampfireProjectsDto) {
     const existingProjects = await this.prisma.crowdfundingProject.findMany({
       where: { url: { contains: 'camp-fire.jp' } },
@@ -52,6 +58,18 @@ export class ProjectsService {
 
   campfireCategories() {
     return this.campfireScraper.categories();
+  }
+
+  categories(source = 'campfire') {
+    const normalizedSource = normalizeProjectSource(source);
+    if (normalizedSource === 'campfire') return this.campfireCategories();
+    throw unsupportedProjectSource(normalizedSource);
+  }
+
+  importProject(dto: ImportProjectDto) {
+    const source = normalizeProjectSource(dto.source);
+    if (source === 'campfire') return this.importCampfire(dto);
+    throw unsupportedProjectSource(source);
   }
 
   async importCampfire(dto: ImportCampfireProjectDto) {
@@ -194,6 +212,26 @@ export class ProjectsService {
       }
     };
   }
+}
+
+function normalizeProjectSource(source?: string): ProjectSource {
+  const normalized = (source || 'campfire').trim().toLowerCase().replace('-', '_');
+  if (normalized === 'campfire' || normalized === 'makuake' || normalized === 'green_funding') {
+    return normalized;
+  }
+  throw new BadRequestException(`未対応の取得元です: ${source || '未指定'}`);
+}
+
+function unsupportedProjectSource(source: ProjectSource) {
+  return new BadRequestException(`${sourceLabel(source)}は準備中です。現在はCAMPFIREのみ検索・取り込みできます。`);
+}
+
+function sourceLabel(source: ProjectSource) {
+  return ({
+    campfire: 'CAMPFIRE',
+    makuake: 'Makuake',
+    green_funding: 'GREEN FUNDING'
+  })[source];
 }
 
 function parseInteger(value: string) {

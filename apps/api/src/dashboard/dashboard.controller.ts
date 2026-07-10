@@ -286,8 +286,9 @@ export class DashboardController {
           <table>
             <thead>
               <tr>
-                <th style="width:18%">会社</th>
+                <th style="width:16%">会社</th>
                 <th>案件</th>
+                <th style="width:92px">取得元</th>
                 <th style="width:90px">状態</th>
                 <th style="width:70px">優先度</th>
                 <th style="width:70px">点数</th>
@@ -435,6 +436,7 @@ export class DashboardController {
         return '<tr data-selected="' + (lead.id === state.selectedLeadId) + '" onclick="selectLead(\\'' + lead.id + '\\')">' +
           '<td><div class="clip">' + escapeHtml(lead.company?.name || lead.companyId) + '</div></td>' +
           '<td><div class="clip">' + escapeHtml(project.title || '案件名なし') + '</div><div class="muted clip">' + escapeHtml(project.url || '') + '</div></td>' +
+          '<td><span class="badge">' + escapeHtml(projectPlatformLabel(project)) + '</span></td>' +
           '<td><span class="badge">' + escapeHtml(labelLeadStatus(lead.status)) + '</span></td>' +
           '<td>' + escapeHtml(labelPriority(lead.priority)) + '</td>' +
           '<td>' + escapeHtml(Number(lead.score || 0)) + '</td>' +
@@ -443,7 +445,7 @@ export class DashboardController {
           '<td><div>' + escapeHtml(nextActionLabel(lead, mail)) + '</div><div class="muted">' + escapeHtml(nextActionDateLabel(lead)) + '</div></td>' +
         '</tr>';
       }).join('');
-      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="8" class="muted">条件に合うリードがありません</td></tr>';
+      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="9" class="muted">条件に合うリードがありません</td></tr>';
       document.getElementById('listCount').textContent = filteredLeads().length + '件';
     }
 
@@ -463,6 +465,7 @@ export class DashboardController {
       container.innerHTML =
         '<div class="detail-grid">' +
           detailItem('企業名', lead.company?.name || lead.companyId) +
+          detailItem('取得元', projectPlatformLabel(project)) +
           detailItem('状態', labelLeadStatus(lead.status)) +
           detailItem('優先度', labelPriority(lead.priority)) +
           detailItem('点数', Number(lead.score || 0)) +
@@ -545,6 +548,7 @@ export class DashboardController {
         const haystack = [
           lead.company?.name,
           project.title,
+          projectPlatformLabel(project),
           project.url,
           project.description,
           lead.reason,
@@ -873,6 +877,24 @@ export class DashboardController {
     function formatNumber(value) {
       const number = Number(value || 0);
       return Number.isFinite(number) ? number.toLocaleString('ja-JP') : '0';
+    }
+
+    function projectPlatformLabel(project) {
+      if (project?.platform?.name) return project.platform.name;
+      const type = project?.platform?.type;
+      if (type) {
+        return ({
+          campfire: 'CAMPFIRE',
+          makuake: 'Makuake',
+          green_funding: 'GREEN FUNDING',
+          other: 'その他'
+        })[type] || type;
+      }
+      const url = project?.url || '';
+      if (url.includes('camp-fire.jp')) return 'CAMPFIRE';
+      if (url.includes('makuake.com')) return 'Makuake';
+      if (url.includes('greenfunding.jp')) return 'GREEN FUNDING';
+      return '未取得';
     }
 
     function labelLeadStatus(status) {
@@ -1693,7 +1715,7 @@ export class DashboardController {
                 <select id="sourcePlatform" onchange="onSourcePlatformChange()">
                   <option value="campfire">CAMPFIRE</option>
                   <option value="makuake">Makuake（準備中）</option>
-                  <option value="greenfunding">GREEN FUNDING（準備中）</option>
+                  <option value="green_funding">GREEN FUNDING（準備中）</option>
                 </select>
                 <span id="sourcePlatformStatus" class="status muted">CAMPFIREの募集中プロジェクトに対応</span>
               </div>
@@ -1773,8 +1795,9 @@ export class DashboardController {
           <table>
             <thead>
               <tr>
-                <th style="width:24%">会社</th>
+                <th style="width:22%">会社</th>
                 <th>案件</th>
+                <th style="width:92px">取得元</th>
                 <th style="width:90px">状態</th>
                 <th style="width:76px">点数</th>
                 <th style="width:76px">優先度</th>
@@ -2050,7 +2073,7 @@ export class DashboardController {
       const labels = {
         campfire: 'CAMPFIRE',
         makuake: 'Makuake',
-        greenfunding: 'GREEN FUNDING'
+        green_funding: 'GREEN FUNDING'
       };
       return labels[value] || value;
     }
@@ -2135,7 +2158,7 @@ export class DashboardController {
     async function loadCampfireCategories() {
       const select = document.getElementById('campfireSearchCategory');
       try {
-        const result = await api('/api/projects/categories/campfire');
+        const result = await api('/api/projects/categories?source=' + encodeURIComponent(selectedSourcePlatform()));
         state.campfireCategories = result.items || [];
         select.innerHTML = '<option value="">すべてのカテゴリ</option>' +
           state.campfireCategories.map((item) => {
@@ -2154,9 +2177,9 @@ export class DashboardController {
       if (!url) return setStatus('importStatus', 'URLを入力してください', 'warn');
       setStatus('importStatus', '取り込み中', 'warn');
       try {
-        const result = await api('/api/projects/import/campfire', {
+        const result = await api('/api/projects/import', {
           method: 'POST',
-          body: JSON.stringify({ url })
+          body: JSON.stringify({ source: selectedSourcePlatform(), url })
         });
         state.selectedLeadId = result.lead.id;
         setStatus('importStatus', '取り込み完了。AI分析中', 'warn');
@@ -2175,9 +2198,10 @@ export class DashboardController {
       startCampfireSearchTimer(hasProfileProjectSearch);
       document.getElementById('campfireCandidateCount').textContent = '検索中';
       try {
-        const result = await api('/api/projects/search/campfire', {
+        const result = await api('/api/projects/search', {
           method: 'POST',
           body: JSON.stringify(compactPayload({
+            source: selectedSourcePlatform(),
             keyword: fieldValue('campfireSearchKeyword'),
             category: fieldValue('campfireSearchCategory'),
             profileProjectMin: profileProjectRange.min,
@@ -2244,9 +2268,9 @@ export class DashboardController {
       renderCampfireCandidates();
       setStatus('importStatus', '取り込み中', 'warn');
       try {
-        const result = await api('/api/projects/import/campfire', {
+        const result = await api('/api/projects/import', {
           method: 'POST',
-          body: JSON.stringify({ url: candidate.url })
+          body: JSON.stringify({ source: selectedSourcePlatform(), url: candidate.url })
         });
         state.selectedLeadId = result.lead.id;
         setCandidateImportStatus(candidate, 'imported', '取り込み済み', result.lead.id);
@@ -2283,9 +2307,9 @@ export class DashboardController {
           document.getElementById('campfireUrl').value = candidate.url;
           setCandidateImportStatus(candidate, 'importing', '取り込み中');
           renderCampfireCandidates();
-          const result = await api('/api/projects/import/campfire', {
+          const result = await api('/api/projects/import', {
             method: 'POST',
-            body: JSON.stringify({ url: candidate.url })
+            body: JSON.stringify({ source: selectedSourcePlatform(), url: candidate.url })
           });
           state.selectedLeadId = result.lead.id;
           importResults.push({ candidate, leadId: result.lead.id });
@@ -2576,7 +2600,7 @@ export class DashboardController {
       const leads = state.leads.filter((lead) => {
         const project = lead.project || {};
         const company = lead.company?.name || lead.companyId;
-        const haystack = [company, project.title, project.url, lead.reason].filter(Boolean).join(' ').toLowerCase();
+        const haystack = [company, project.title, projectPlatformLabel(project), project.url, lead.reason].filter(Boolean).join(' ').toLowerCase();
         if (keyword && !haystack.includes(keyword)) return false;
         if (status && lead.status !== status) return false;
         return true;
@@ -2588,6 +2612,7 @@ export class DashboardController {
         return '<tr data-selected="' + (lead.id === state.selectedLeadId) + '" onclick="selectLead(\\'' + lead.id + '\\')">' +
           '<td><div class="clip">' + escapeHtml(company) + '</div></td>' +
           '<td><div class="clip">' + escapeHtml(project) + '</div><div class="muted clip">' + escapeHtml(lead.reason || '') + '</div></td>' +
+          '<td><span class="badge">' + escapeHtml(projectPlatformLabel(lead.project || {})) + '</span></td>' +
           '<td><span class="badge">' + escapeHtml(labelLeadStatus(lead.status)) + '</span></td>' +
           '<td>' + Number(lead.score || 0) + '</td>' +
           '<td>' + escapeHtml(labelPriority(lead.priority)) + '</td>' +
@@ -2595,7 +2620,7 @@ export class DashboardController {
           '<td><button class="primary" onclick="selectLeadFromButton(event, \\'' + lead.id + '\\')">' + (lead.id === state.selectedLeadId ? '選択中' : '選択') + '</button></td>' +
         '</tr>';
       }).join('');
-      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="7" class="muted">まだリードがありません</td></tr>';
+      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="8" class="muted">まだリードがありません</td></tr>';
       const mailLeadCount = document.getElementById('mailLeadCount');
       if (mailLeadCount) mailLeadCount.textContent = leads.length + '件';
       document.getElementById('generateButton').disabled = !canGenerateMail();
@@ -2624,6 +2649,7 @@ export class DashboardController {
         '<div class="detail-grid">' +
           detailItem('企業名', company.name || lead.companyId) +
           detailItem('案件名', project.title || '未取得') +
+          detailItem('取得元', projectPlatformLabel(project)) +
           detailItem('状態', labelLeadStatus(lead.status)) +
           detailItem('メール履歴', mails.length + '件') +
           detailItem('最新メール', mail ? labelMailStatus(mail.status) : '未生成') +
@@ -2912,6 +2938,7 @@ export class DashboardController {
         renderLeadAlerts(lead) +
         '<div class="detail-grid">' +
           detailItem('企業名', company.name || lead.companyId) +
+          detailItem('取得元', projectPlatformLabel(project)) +
           detailItem('カテゴリ', project.category || '未取得') +
           detailItem('支援額', formatCurrency(project.amount)) +
           detailItem('支援者数', formatNumber(project.supporterCount) + '人') +
@@ -3418,6 +3445,24 @@ export class DashboardController {
         complaint: 'クレーム',
         unknown: '要確認'
       })[category] || category || '要確認';
+    }
+
+    function projectPlatformLabel(project) {
+      if (project?.platform?.name) return project.platform.name;
+      const type = project?.platform?.type;
+      if (type) {
+        return ({
+          campfire: 'CAMPFIRE',
+          makuake: 'Makuake',
+          green_funding: 'GREEN FUNDING',
+          other: 'その他'
+        })[type] || type;
+      }
+      const url = project?.url || '';
+      if (url.includes('camp-fire.jp')) return 'CAMPFIRE';
+      if (url.includes('makuake.com')) return 'Makuake';
+      if (url.includes('greenfunding.jp')) return 'GREEN FUNDING';
+      return '未取得';
     }
 
     function labelLeadStatus(status) {

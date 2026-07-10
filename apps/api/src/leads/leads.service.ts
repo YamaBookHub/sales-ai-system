@@ -16,7 +16,11 @@ export class LeadsService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: { company: true, project: true, scores: { orderBy: { createdAt: 'desc' }, take: 1 } }
+        include: {
+          company: true,
+          project: { include: { platform: true } },
+          scores: { orderBy: { createdAt: 'desc' }, take: 1 }
+        }
       }),
       this.prisma.salesLead.count({ where })
     ]);
@@ -38,7 +42,11 @@ export class LeadsService {
   async get(id: string) {
     const lead = await this.prisma.salesLead.findUnique({
       where: { id },
-      include: { company: true, project: true, scores: { orderBy: { createdAt: 'desc' }, take: 1 } }
+      include: {
+        company: true,
+        project: { include: { platform: true } },
+        scores: { orderBy: { createdAt: 'desc' }, take: 1 }
+      }
     });
 
     if (!lead) {

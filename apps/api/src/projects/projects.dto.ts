@@ -1,6 +1,8 @@
 import { ProjectStatus } from '@prisma/client';
 import { IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 
+export type ProjectSource = 'campfire' | 'makuake' | 'green_funding';
+
 export class CreateProjectDto {
   @IsUUID()
   platformId!: string;
@@ -38,6 +40,12 @@ export class ImportCampfireProjectDto {
   @IsString()
   @MinLength(1)
   url!: string;
+}
+
+export class ImportProjectDto extends ImportCampfireProjectDto {
+  @IsString()
+  @MinLength(1)
+  source!: ProjectSource;
 }
 
 export class SearchCampfireProjectsDto {
@@ -85,4 +93,10 @@ export class SearchCampfireProjectsDto {
   @IsArray()
   @IsString({ each: true })
   excludeUrls?: string[];
+}
+
+export class SearchProjectsDto extends SearchCampfireProjectsDto {
+  @IsOptional()
+  @IsString()
+  source?: ProjectSource;
 }
