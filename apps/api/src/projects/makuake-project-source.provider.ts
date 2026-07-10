@@ -40,11 +40,16 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
     try {
       const context = await browser.newContext({ userAgent: MAKUAKE_USER_AGENT });
       const page = await context.newPage();
-      await page.goto(buildMakuakeSearchUrl(input), { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.waitForTimeout(1200);
-      const html = await page.content();
+      const rawItems: MakuakeSearchResult[] = [];
+      for (const url of buildMakuakeSearchUrls(input)) {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        await page.waitForTimeout(900);
+        rawItems.push(...(await collectSearchResultsFromPage(page)));
+        if (uniqueBy(rawItems, (item) => normalizeUrlForUnique(item.url)).length >= normalizeLimit(input.limit)) break;
+      }
       const excluded = new Set((input.excludeUrls || []).map((url) => normalizeUrlForUnique(url)));
-      const items = sortSearchResults(extractSearchResults(html), input)
+      const items = sortSearchResults(uniqueBy(rawItems, (item) => normalizeUrlForUnique(item.url)), input)
+        .filter((item) => matchesKeyword(item, input.keyword))
         .filter((item) => !excluded.has(normalizeUrlForUnique(item.url)))
         .filter((item) => matchesNumericFilters(item, input))
         .slice(0, normalizeLimit(input.limit));
@@ -149,11 +154,30 @@ type MakuakeMemberStats = {
   description: string;
 };
 
-function buildMakuakeSearchUrl(input: SearchCampfireProjectsDto) {
-  const url = new URL('/search', MAKUAKE_ORIGIN);
+function buildMakuakeSearchUrls(input: SearchCampfireProjectsDto) {
   const keyword = (input.keyword || '').trim();
-  if (keyword) url.searchParams.set('keyword', keyword);
-  return url.toString();
+  const urls: string[] = [];
+  if (keyword) {
+    const searchUrl = new URL('/search', MAKUAKE_ORIGIN);
+    searchUrl.searchParams.set('keyword', keyword);
+    urls.push(searchUrl.toString());
+  }
+  urls.push(
+    new URL('/discover', MAKUAKE_ORIGIN).toString(),
+    new URL('/project', MAKUAKE_ORIGIN).toString(),
+    new URL('/', MAKUAKE_ORIGIN).toString()
+  );
+  return uniqueBy(urls, (url) => url);
+}
+
+async function collectSearchResultsFromPage(page: Page) {
+  const items: MakuakeSearchResult[] = [];
+  for (let index = 0; index < 4; index += 1) {
+    items.push(...extractSearchResults(await page.content()));
+    await page.evaluate(() => window.scrollBy(0, Math.round(window.innerHeight * 0.85))).catch(() => undefined);
+    await page.waitForTimeout(350);
+  }
+  return uniqueBy(items, (item) => normalizeUrlForUnique(item.url));
 }
 
 function extractSearchResults(html: string): MakuakeSearchResult[] {
@@ -261,6 +285,17 @@ function matchesNumericFilters(item: MakuakeSearchResult, input: SearchCampfireP
   return true;
 }
 
+function matchesKeyword(item: MakuakeSearchResult, keyword?: string) {
+  const value = clean(keyword);
+  if (!value) return true;
+  const haystack = `${item.title} ${item.summary} ${item.category}`.toLowerCase();
+  return value
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => haystack.includes(word));
+}
+
 function sortSearchResults(items: MakuakeSearchResult[], input: SearchCampfireProjectsDto) {
   if (input.status !== 'endingSoon') return items;
   return [...items]
@@ -297,7 +332,11 @@ function extractSupporterCount(text: string) {
 
 function extractDaysLeft(text: string) {
   const match = text.match(/(?:残り|あと)\s*([0-9]+)\s*日/);
-  return match?.[1] ? Number(match[1]) : null;
+  if (match?.[1]) return Number(match[1]);
+  const compactCardMatch = text.match(/(?:^|\s|円)\s*([0-9]{1,3})\s*日\s+[0-9]{1,3}\s*%/);
+  if (compactCardMatch?.[1]) return Number(compactCardMatch[1]);
+  const daysBeforeRateMatch = text.match(/([0-9]{1,3})\s*日\s*(?:達成率|[0-9]{1,3}\s*%)/);
+  return daysBeforeRateMatch?.[1] ? Number(daysBeforeRateMatch[1]) : null;
 }
 
 function extractCategory(text: string) {
