@@ -91,19 +91,8 @@ export class AiService {
       throw new ConflictException('この営業対象には既存メールがあります。履歴からメールを選択して編集・レビューしてください。');
     }
 
-    const aiInput = {
-      templateKey: dto.templateKey,
-      tone: dto.tone,
-      companyName: lead.company.name,
-      projectTitle: lead.project?.title,
-      projectUrl: lead.project?.url,
-      projectCategory: lead.project?.category,
-      projectDescription: lead.project?.description,
-      projectAmount: lead.project?.amount,
-      supporterCount: lead.project?.supporterCount,
-      leadReason: lead.reason
-    };
-    const draft = await this.openAi.createSalesMailDraft(aiInput);
+    const aiInput = buildMailInput(lead, dto);
+    const draft = buildFreeMailDraft(aiInput);
 
     const result = await this.prisma.$transaction(async (tx) => {
       const email = await tx.outreachEmail.create({
@@ -126,10 +115,80 @@ export class AiService {
           leadId: lead.id,
           emailId: email.id,
           type: 'email_draft',
+          provider: 'local',
+          model: draft.model,
+          promptVersion: 'v2_local_sales_mail',
+          inputJson: { leadId, ...aiInput },
+          outputJson: {
+            subject: draft.subject,
+            body: draft.body,
+            factsUsed: draft.factsUsed,
+            assumptions: draft.assumptions,
+            riskFlags: draft.riskFlags
+          },
+          latencyMs: draft.latencyMs,
+          tokenInput: 0,
+          tokenOutput: 0,
+          costUsd: 0
+        }
+      });
+
+      return { email, aiGeneration };
+    });
+
+    return {
+      email: result.email,
+      aiGenerationId: result.aiGeneration.id,
+      factsUsed: draft.factsUsed,
+      assumptions: draft.assumptions,
+      riskFlags: draft.riskFlags
+    };
+  }
+
+  async polishMail(mailId: string) {
+    const email = await this.prisma.outreachEmail.findUnique({
+      where: { id: mailId },
+      include: {
+        lead: { include: { company: true, project: true } }
+      }
+    });
+
+    if (!email || !email.lead) {
+      throw new NotFoundException('Mail not found');
+    }
+    const lead = email.lead;
+
+    if (!['draft', 'rejected'].includes(email.status)) {
+      throw new ConflictException('AIで整えられるのは下書きまたは棄却後のメールだけです。');
+    }
+
+    const aiInput = buildMailInput(lead, {
+      templateKey: email.templateKey || 'normal',
+      tone: 'low_sales_pressure'
+    });
+    const draft = await this.openAi.createSalesMailDraft(aiInput);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updatedEmail = await tx.outreachEmail.update({
+        where: { id: email.id },
+        data: {
+          subject: draft.subject,
+          body: draft.body,
+          status: 'draft',
+          failedReason: null,
+          events: { create: { type: 'generated', payload: { source: 'openai_polish' } } }
+        }
+      });
+
+      const aiGeneration = await tx.aiGeneration.create({
+        data: {
+          leadId: lead.id,
+          emailId: updatedEmail.id,
+          type: 'email_draft',
           provider: 'openai',
           model: draft.model,
-          promptVersion: 'v2_openai_sales_mail',
-          inputJson: { leadId, ...aiInput },
+          promptVersion: 'v2_openai_sales_mail_polish',
+          inputJson: { leadId: lead.id, mailId, ...aiInput },
           outputJson: {
             subject: draft.subject,
             body: draft.body,
@@ -144,7 +203,7 @@ export class AiService {
         }
       });
 
-      return { email, aiGeneration };
+      return { email: updatedEmail, aiGeneration };
     });
 
     return {
@@ -221,6 +280,97 @@ export class AiService {
 
     return { items, total: items.length };
   }
+}
+
+type MailInput = {
+  templateKey: string;
+  tone?: string;
+  companyName: string;
+  projectTitle?: string | null;
+  projectUrl?: string | null;
+  projectCategory?: string | null;
+  projectDescription?: string | null;
+  projectAmount?: number | null;
+  supporterCount?: number | null;
+  leadReason?: string | null;
+};
+
+function buildMailInput(
+  lead: {
+    reason?: string | null;
+    company: { name: string };
+    project?: {
+      title?: string | null;
+      url?: string | null;
+      category?: string | null;
+      description?: string | null;
+      amount?: number | null;
+      supporterCount?: number | null;
+    } | null;
+  },
+  dto: GenerateMailDto
+): MailInput {
+  return {
+    templateKey: dto.templateKey,
+    tone: dto.tone,
+    companyName: lead.company.name,
+    projectTitle: lead.project?.title,
+    projectUrl: lead.project?.url,
+    projectCategory: lead.project?.category,
+    projectDescription: lead.project?.description,
+    projectAmount: lead.project?.amount,
+    supporterCount: lead.project?.supporterCount,
+    leadReason: lead.reason
+  };
+}
+
+function buildFreeMailDraft(input: MailInput) {
+  const placeholders = buildMailPlaceholders(
+    input.companyName,
+    input.projectTitle,
+    input.projectCategory,
+    input.projectDescription,
+    input.leadReason
+  );
+  const subjectNoun = placeholders.subjectType === '取り組み' ? 'プロジェクト' : '商品';
+  const body = [
+    `${placeholders.companyRecipient}`,
+    '',
+    'お世話になっております。',
+    '株式会社第弐ヴォヌールの山本と申します。',
+    '',
+    `CAMPFIREにて、貴社の「${placeholders.productName}」を拝見しました。`,
+    '',
+    `${placeholders.appeal}がとても印象的で、`,
+    `${placeholders.targetUser}にとって、実際の${placeholders.subjectType}の魅力をイメージしやすい内容だと感じました。`,
+    '',
+    '弊社では、クラウドファンディング支援およびSNSマーケティング支援を行っております。',
+    '',
+    '実績としては、SNS運用で1か月総再生400万回超、',
+    'クラウドファンディング領域では、担当商品で3,500万円規模の売上実績がございます。',
+    '',
+    `${subjectNoun}の魅力を伝える見せ方や、売上につながる導線づくりの面でもお手伝いしております。`,
+    '',
+    'もし何かお力になれそうな機会がございましたら、',
+    'お気軽にご連絡いただけますと幸いです。'
+  ].join('\n');
+
+  return {
+    subject: 'CAMPFIREでのプロジェクトを拝見しご連絡いたしました',
+    body,
+    factsUsed: [
+      `会社名: ${input.companyName}`,
+      `プロジェクト名: ${placeholders.productName}`,
+      `魅力: ${placeholders.appeal}`,
+      `想定読者: ${placeholders.targetUser}`
+    ],
+    assumptions: ['OpenAI APIを使わず、無料分析で作成した置換項目から本文を作成しています。'],
+    riskFlags: ['送信前に、会社名・商品名・商品の魅力が相手の案件と合っているか確認してください。'],
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, costUsd: 0 },
+    model: 'local-template-v2',
+    latencyMs: 0,
+    rawOutput: { placeholders }
+  };
 }
 
 function buildLocalSummary(companyName?: string, title?: string | null, category?: string | null, amount?: number | null, supporters?: number | null) {

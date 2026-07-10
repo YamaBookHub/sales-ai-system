@@ -1808,7 +1808,7 @@ export class DashboardController {
                   <option value="normal">通常版</option>
                   <option value="sns_video_ad">SNS動画・広告版</option>
                 </select>
-                <button class="primary" id="generateButton" onclick="generateMail()" disabled>新規メール生成</button>
+                <button class="primary" id="generateButton" onclick="generateMail()" disabled>無料メール生成</button>
                 <span id="generateHelp" class="status muted">対象を選択してください</span>
               </div>
             </div>
@@ -1830,6 +1830,7 @@ export class DashboardController {
             <div class="mail-stage-head">
               <h3>3. 本文編集</h3>
               <div class="toolbar">
+                <button onclick="polishMail()" id="polishButton" disabled>AIで整える</button>
                 <button class="primary" onclick="saveMail()" id="saveButton" disabled>保存</button>
               </div>
             </div>
@@ -2184,7 +2185,7 @@ export class DashboardController {
         setStatus('mailStatus', message, 'warn');
         return;
       }
-      setStatus('mailStatus', '生成中', 'warn');
+      setStatus('mailStatus', '無料メール生成中（OpenAI API未使用）', 'warn');
       try {
         const templateKey = document.getElementById('templateKey').value;
         const result = await api('/api/ai/leads/' + state.selectedLeadId + '/email-draft', {
@@ -2192,7 +2193,30 @@ export class DashboardController {
           body: JSON.stringify({ templateKey, tone: 'low_sales_pressure' })
         });
         state.selectedMailId = result.email.id;
-        setStatus('mailStatus', 'メール生成完了', 'ok');
+        setStatus('mailStatus', '無料メール生成完了（OpenAI API未使用）', 'ok');
+        await loadAll();
+        await loadAiAnalysis();
+        selectMail(state.selectedMailId);
+        switchTab('mail');
+      } catch (error) {
+        setStatus('mailStatus', error.message, 'error');
+      }
+    }
+
+    async function polishMail() {
+      const mail = currentSelectedMail();
+      if (!mail) return;
+      if (!['draft', 'rejected'].includes(mail.status)) {
+        setStatus('mailStatus', 'AIで整えられるのは下書きまたは棄却後のメールだけです。', 'warn');
+        return;
+      }
+      const confirmed = window.confirm('OpenAI APIを使って本文を整えます。少額のAPI料金が発生します。実行しますか？');
+      if (!confirmed) return;
+      setStatus('mailStatus', 'AIで本文を整えています（OpenAI API使用）', 'warn');
+      try {
+        const result = await api('/api/ai/mails/' + mail.id + '/polish', { method: 'POST' });
+        state.selectedMailId = result.email.id;
+        setStatus('mailStatus', 'AI整形が完了しました。本文を確認してください。', 'ok');
         await loadAll();
         await loadAiAnalysis();
         selectMail(state.selectedMailId);
@@ -3069,6 +3093,12 @@ export class DashboardController {
             : 'メール未生成です。ここから新規作成できます';
       }
       document.getElementById('saveButton').disabled = !mail;
+      document.getElementById('polishButton').disabled = !mail || !['draft', 'rejected'].includes(mail.status);
+      document.getElementById('polishButton').title = !mail
+        ? '先にメールを選択してください'
+        : ['draft', 'rejected'].includes(mail.status)
+          ? 'OpenAI APIを使って本文を整えます'
+          : '承認・送信フロー中のメールはAI整形できません';
       document.getElementById('reviewButton').disabled = !mail || mail.status !== 'draft';
       document.getElementById('reReviewButton').disabled = !mail || mail.status !== 'rejected';
       document.getElementById('rejectButton').disabled = !mail || !['in_review', 'approved'].includes(mail.status);

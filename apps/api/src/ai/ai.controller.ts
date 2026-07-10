@@ -22,6 +22,11 @@ export class AiController {
     return ok(await this.ai.analyzeLead(leadId));
   }
 
+  @Post('mails/:mailId/polish')
+  async polishMail(@Param('mailId') mailId: string) {
+    return ok(await this.ai.polishMail(mailId));
+  }
+
   @Get('leads/:leadId/generations')
   async listLeadGenerations(@Param('leadId') leadId: string) {
     return ok(await this.ai.listLeadGenerations(leadId));
