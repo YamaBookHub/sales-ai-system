@@ -1732,11 +1732,11 @@ export class DashboardController {
         <div class="body mail-flow">
           <div class="mail-stage">
             <div class="mail-stage-head">
-              <h3>1. 対象案件</h3>
-              <span id="mailNextAction" class="status muted">対象を選択してください</span>
+              <h3>選択中の営業対象</h3>
+              <span id="mailNextAction" class="status muted"></span>
             </div>
             <div class="mail-stage-body">
-              <div id="mailLeadSummary">対象を選択してください</div>
+              <div id="mailLeadSummary">上の営業対象一覧から、メールを作成・確認する案件を選択してください。</div>
             </div>
           </div>
 
@@ -2265,9 +2265,9 @@ export class DashboardController {
       if (!container) return;
       const lead = state.leads.find((item) => item.id === state.selectedLeadId);
       if (!lead) {
-        container.innerHTML = '対象を選択してください';
+        container.innerHTML = '<div class="muted">上の営業対象一覧から、メールを作成・確認する案件を選択してください。</div>';
         const next = document.getElementById('mailNextAction');
-        if (next) next.textContent = '対象を選択してください';
+        if (next) next.textContent = '';
         return;
       }
       const company = lead.company || {};
