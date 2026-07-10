@@ -163,7 +163,9 @@ export class DashboardController {
     <h1>営業リスト詳細</h1>
     <div class="toolbar">
       <span id="pageStatus" class="status muted">読み込み中</span>
-      <button onclick="location.href='/'">メイン画面</button>
+      <button onclick="location.href='/'">URL検索</button>
+      <button class="primary" onclick="location.href='/leads-view'">営業リスト</button>
+      <button onclick="location.href='/mail-workspace'">メール作成</button>
       <button class="primary" onclick="loadAll()">更新</button>
     </div>
   </header>
@@ -532,6 +534,16 @@ export class DashboardController {
 </html>`;
   }
 
+  @Get('mail-workspace')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  mailWorkspace() {
+    return this.index()
+      .replace('<body class="url-search-page">', '<body class="mail-workspace-page">')
+      .replace('<h1>URL検索</h1>', '<h1>メール作成</h1>')
+      .replace('<button class="primary" onclick="location.href=\'/\'">URL検索</button>', '<button onclick="location.href=\'/\'">URL検索</button>')
+      .replace('<button onclick="location.href=\'/mail-workspace\'">メール作成</button>', '<button class="primary" onclick="location.href=\'/mail-workspace\'">メール作成</button>');
+  }
+
   @Get()
   @Header('Content-Type', 'text/html; charset=utf-8')
   index() {
@@ -605,7 +617,7 @@ export class DashboardController {
     .workflow {
       grid-column: 1 / -1;
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
       background: transparent;
       border: 0;
@@ -828,6 +840,21 @@ export class DashboardController {
     }
     .tab-panel { display: none; }
     .tab-panel[data-active="true"] { display: block; }
+    body.url-search-page .left section:nth-of-type(2),
+    body.url-search-page .tabs,
+    body.url-search-page .tab-panel {
+      display: none;
+    }
+    body.mail-workspace-page .left section:first-child,
+    body.mail-workspace-page .right > section:first-child,
+    body.mail-workspace-page .tabs,
+    body.mail-workspace-page [data-tab-panel="detail"],
+    body.mail-workspace-page [data-tab-panel="ai"] {
+      display: none;
+    }
+    body.mail-workspace-page [data-tab-panel="mail"] {
+      display: block;
+    }
     .search-panel {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -892,36 +919,30 @@ export class DashboardController {
     }
   </style>
 </head>
-<body>
+<body class="url-search-page">
   <header>
-    <h1>Sales AI System</h1>
+    <h1>URL検索</h1>
     <div class="toolbar">
       <span id="apiStatus" class="status muted">API確認中</span>
-      <button onclick="location.href='/leads-view'">営業リスト詳細</button>
+      <button class="primary" onclick="location.href='/'">URL検索</button>
+      <button onclick="location.href='/leads-view'">営業リスト</button>
+      <button onclick="location.href='/mail-workspace'">メール作成</button>
       <button onclick="loadAll()">更新</button>
     </div>
   </header>
   <main>
     <section class="workflow" aria-label="業務ステップ">
       <div class="workflow-step">
-        <strong><span class="step-label">1</span>取り込む</strong>
-        <span>CAMPFIRE URLを入れて案件を登録</span>
+        <strong><span class="step-label">1</span>URL検索</strong>
+        <span>手入力・検索・一覧表示・取り込み</span>
       </div>
       <div class="workflow-step">
-        <strong><span class="step-label">2</span>選ぶ</strong>
-        <span>営業リストから優先案件を選択</span>
+        <strong><span class="step-label">2</span>営業リスト</strong>
+        <span>状態、詳細、無料分析を確認</span>
       </div>
       <div class="workflow-step">
-        <strong><span class="step-label">3</span>見る</strong>
-        <span>商品・実行者・支援状況を確認</span>
-      </div>
-      <div class="workflow-step">
-        <strong><span class="step-label">4</span>作る</strong>
-        <span>無料分析を見て必要な時だけメール生成</span>
-      </div>
-      <div class="workflow-step">
-        <strong><span class="step-label">5</span>確認する</strong>
-        <span>本文チェック、レビュー、承認、キュー投入</span>
+        <strong><span class="step-label">3</span>メール作成</strong>
+        <span>生成、本文確認、レビュー、承認</span>
       </div>
     </section>
 
@@ -997,6 +1018,7 @@ export class DashboardController {
           <h2>CAMPFIRE検索結果</h2>
           <div class="toolbar">
             <span id="campfireCandidateCount" class="status muted">未検索</span>
+            <button onclick="bulkImportVisibleCandidates()" id="bulkImportButton" disabled>表示中を一括取り込み</button>
           </div>
         </div>
         <div class="body">
@@ -1278,6 +1300,33 @@ export class DashboardController {
       await importCampfire();
     }
 
+    async function bulkImportVisibleCandidates() {
+      const entries = getVisibleCandidateEntries();
+      if (!entries.length) return;
+      const ok = window.confirm('表示中の' + entries.length + '件を取り込みます。よろしいですか？');
+      if (!ok) return;
+      setStatus('importStatus', '一括取り込み中 0/' + entries.length, 'warn');
+      for (let index = 0; index < entries.length; index += 1) {
+        const candidate = entries[index].item;
+        try {
+          document.getElementById('campfireUrl').value = candidate.url;
+          const result = await api('/api/projects/import/campfire', {
+            method: 'POST',
+            body: JSON.stringify({ url: candidate.url })
+          });
+          state.selectedLeadId = result.lead.id;
+          await api('/api/ai/leads/' + result.lead.id + '/analyze', { method: 'POST' });
+          setStatus('importStatus', '一括取り込み中 ' + (index + 1) + '/' + entries.length, 'warn');
+        } catch (error) {
+          setStatus('importStatus', '一括取り込みで停止: ' + error.message, 'error');
+          await loadAll();
+          return;
+        }
+      }
+      setStatus('importStatus', '一括取り込み完了 ' + entries.length + '件', 'ok');
+      await loadAll();
+    }
+
     async function analyzeLead(options = {}) {
       if (!state.selectedLeadId) return;
       document.getElementById('aiAnalysis').innerHTML = '<div class="status warn">無料分析中</div>';
@@ -1462,13 +1511,11 @@ export class DashboardController {
       const container = document.getElementById('campfireCandidates');
       if (!state.campfireCandidates.length) {
         container.innerHTML = '<div class="muted">左の検索欄で候補URLを探すと、ここに表示されます。</div>';
+        document.getElementById('bulkImportButton').disabled = true;
         return;
       }
-      const limit = numberFieldValue('campfireResultLimit') || 10;
-      const filteredCandidates = state.campfireCandidates
-        .map((item, originalIndex) => ({ item, originalIndex }))
-        .filter(({ item }) => matchesCampfireDisplayFilters(item));
-      const visibleCandidates = filteredCandidates.slice(0, limit);
+      const visibleCandidates = getVisibleCandidateEntries();
+      document.getElementById('bulkImportButton').disabled = !visibleCandidates.length;
       document.getElementById('campfireCandidateCount').textContent =
         '表示 ' + visibleCandidates.length + '件 / 取得 ' + state.campfireCandidates.length + '件';
       if (!visibleCandidates.length) {
@@ -1492,6 +1539,14 @@ export class DashboardController {
         '</div>';
       }).join('');
       container.innerHTML = '<div class="candidate-list">' + items + '</div>';
+    }
+
+    function getVisibleCandidateEntries() {
+      const limit = numberFieldValue('campfireResultLimit') || 10;
+      return state.campfireCandidates
+        .map((item, originalIndex) => ({ item, originalIndex }))
+        .filter(({ item }) => matchesCampfireDisplayFilters(item))
+        .slice(0, limit);
     }
 
     function matchesCampfireDisplayFilters(item) {
