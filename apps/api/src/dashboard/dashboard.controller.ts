@@ -944,10 +944,10 @@ export class DashboardController {
       display: block;
     }
     body.url-search-page .left {
-      order: 2;
+      order: 1;
     }
     body.url-search-page .right {
-      order: 1;
+      order: 2;
     }
     body.url-search-page .search-console {
       border-radius: 4px;
@@ -985,10 +985,9 @@ export class DashboardController {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
-      margin-bottom: 12px;
     }
     .display-filter {
-      margin-bottom: 12px;
+      margin-top: 10px;
     }
     .display-filter .result-filter-panel {
       margin-top: 10px;
@@ -1181,6 +1180,9 @@ export class DashboardController {
           </div>
         </div>
         <div class="body">
+          <div id="campfireCandidates">
+            <div class="muted">検索すると候補URLがここに表示されます。</div>
+          </div>
           <details class="display-filter">
             <summary>一覧の表示条件</summary>
             <div class="result-filter-panel">
@@ -1223,9 +1225,6 @@ export class DashboardController {
               </select>
             </div>
           </details>
-          <div id="campfireCandidates">
-            <div class="muted">検索すると候補URLがここに表示されます。</div>
-          </div>
         </div>
       </section>
 
