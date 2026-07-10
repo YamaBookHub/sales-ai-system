@@ -104,6 +104,22 @@ export class DashboardController {
       grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(150px, 180px));
       gap: 8px;
     }
+    .lead-list-main { order: 1; }
+    .filters-panel { order: 2; }
+    .summary-panel { order: 3; }
+    .collapsible-panel summary {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 16px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .collapsible-panel details[open] summary {
+      border-bottom: 1px solid var(--line);
+    }
     .stats {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -189,60 +205,7 @@ export class DashboardController {
     </div>
   </header>
   <main>
-    <section>
-      <div class="section-head">
-        <h2>状態サマリー</h2>
-      </div>
-      <div class="body">
-        <div class="stats" id="stats"></div>
-      </div>
-    </section>
-
-    <section>
-      <div class="section-head">
-        <h2>検索・絞り込み</h2>
-      </div>
-      <div class="body">
-        <div class="filters">
-          <input id="keyword" placeholder="会社・案件・URL・メモで検索" oninput="render()" />
-          <select id="statusFilter" onchange="render()">
-            <option value="">状態 すべて</option>
-            <option value="discovered">発見</option>
-            <option value="qualified">候補</option>
-            <option value="drafted">下書き済み</option>
-            <option value="reviewing">確認中</option>
-            <option value="approved">承認済み</option>
-            <option value="queued">送信待ち</option>
-            <option value="contacted">連絡済み</option>
-            <option value="replied">返信あり</option>
-            <option value="meeting_candidate">商談候補</option>
-            <option value="rejected">対象外</option>
-          </select>
-          <select id="priorityFilter" onchange="render()">
-            <option value="">優先度 すべて</option>
-            <option value="high">高</option>
-            <option value="medium">中</option>
-            <option value="low">低</option>
-          </select>
-          <select id="contactFilter" onchange="render()">
-            <option value="">連絡先 すべて</option>
-            <option value="has">連絡先あり</option>
-            <option value="none">連絡先なし</option>
-          </select>
-          <select id="mailFilter" onchange="render()">
-            <option value="">メール すべて</option>
-            <option value="none">未生成</option>
-            <option value="draft">下書き</option>
-            <option value="in_review">確認待ち</option>
-            <option value="approved">承認済み</option>
-            <option value="queued">送信待ち</option>
-            <option value="sent">送信済み</option>
-          </select>
-        </div>
-      </div>
-    </section>
-
-    <div class="split">
+    <div class="split lead-list-main">
       <section>
         <div class="section-head">
           <h2>営業リスト</h2>
@@ -279,6 +242,65 @@ export class DashboardController {
         </div>
       </section>
     </div>
+
+    <section class="filters-panel collapsible-panel">
+      <details>
+        <summary>
+          <span>検索・絞り込み</span>
+          <span class="muted">必要な時だけ開く</span>
+        </summary>
+        <div class="body">
+          <div class="filters">
+            <input id="keyword" placeholder="会社・案件・URL・メモで検索" oninput="render()" />
+            <select id="statusFilter" onchange="render()">
+              <option value="">状態 すべて</option>
+              <option value="discovered">発見</option>
+              <option value="qualified">候補</option>
+              <option value="drafted">下書き済み</option>
+              <option value="reviewing">確認中</option>
+              <option value="approved">承認済み</option>
+              <option value="queued">送信待ち</option>
+              <option value="contacted">連絡済み</option>
+              <option value="replied">返信あり</option>
+              <option value="meeting_candidate">商談候補</option>
+              <option value="rejected">対象外</option>
+            </select>
+            <select id="priorityFilter" onchange="render()">
+              <option value="">優先度 すべて</option>
+              <option value="high">高</option>
+              <option value="medium">中</option>
+              <option value="low">低</option>
+            </select>
+            <select id="contactFilter" onchange="render()">
+              <option value="">連絡先 すべて</option>
+              <option value="has">連絡先あり</option>
+              <option value="none">連絡先なし</option>
+            </select>
+            <select id="mailFilter" onchange="render()">
+              <option value="">メール すべて</option>
+              <option value="none">未生成</option>
+              <option value="draft">下書き</option>
+              <option value="in_review">確認待ち</option>
+              <option value="approved">承認済み</option>
+              <option value="queued">送信待ち</option>
+              <option value="sent">送信済み</option>
+            </select>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="summary-panel collapsible-panel">
+      <details>
+        <summary>
+          <span>状態サマリー</span>
+          <span class="muted">必要な時だけ開く</span>
+        </summary>
+        <div class="body">
+          <div class="stats" id="stats"></div>
+        </div>
+      </details>
+    </section>
   </main>
   <script>
     const state = { leads: [], mails: [], selectedLeadId: null };
