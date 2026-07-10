@@ -391,13 +391,19 @@ function buildMailPlaceholders(
 ) {
   const source = sanitizeAnalysisSource(`${title || ''} ${category || ''} ${description || ''} ${reason || ''}`);
   const isStoreProject = /飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業|地域/.test(source);
+  const isEventProject = /ライブ|コンサート|音楽|バンド|ファン|周年|結成|記念|イベント|公演|ツアー|フェス|アーティスト/.test(source);
+  const strength = buildLocalStrengths(description, reason)[0] || '';
   const appeal = isStoreProject
     ? '長年親しまれてきた店舗をより利用しやすい形で継続しようとされている点'
-    : buildLocalStrengths(description, reason)[0]?.replace(/可能性があります。$/, '点') || '特徴や利用シーンが分かりやすい点';
+    : isEventProject
+      ? '節目となる企画をファンの方々と一緒に盛り上げようとされている点'
+      : toMailSafeAppeal(strength, title);
   const target = isStoreProject
     ? '店舗の継続や地域に根ざしたお店を応援したい方'
-    : buildLocalTargetUsers(category, description)[0] || '商品に関心を持つお客様';
-  const subjectType = isStoreProject ? '取り組み' : '商品';
+    : isEventProject
+      ? 'これまで活動を応援してきたファンの方や、ライブ体験に関心のある方'
+      : buildLocalTargetUsers(category, description)[0] || 'この取り組みに関心を持つ方';
+  const subjectType = isStoreProject || isEventProject ? '取り組み' : '商品';
 
   return {
     companyRecipient: companyName ? `${companyName} ご担当者様` : 'ご担当者様',
@@ -407,6 +413,17 @@ function buildMailPlaceholders(
     subjectType,
     caution: '達成率、残り日数、支援額、支援者数、カテゴリ名は魅力文には入れません。'
   };
+}
+
+function toMailSafeAppeal(strength: string, title?: string | null) {
+  const cleaned = strength
+    .replace(/可能性があります。?$/, '点')
+    .replace(/メール生成前に確認してください。?$/, '')
+    .replace(/商品説明から読み取れる特徴を/g, '')
+    .trim();
+  if (cleaned && !/確認してください/.test(cleaned)) return cleaned;
+  if (title) return `プロジェクトの目的や背景が分かりやすく伝えられている点`;
+  return '取り組みの背景や想いが伝わりやすい点';
 }
 
 function sanitizeAnalysisSource(value: string) {
@@ -504,7 +521,7 @@ function buildLocalStrengths(description?: string | null, reason?: string | null
     source.match(/防災|安全|守/) ? '安心感や備えの必要性を切り口にしやすい可能性があります。' : '',
     source.match(/便利|簡単|時短/) ? '日常の不便を減らす商品として伝えやすい可能性があります。' : ''
   ].filter(Boolean);
-  return strengths.length ? strengths : ['商品説明から読み取れる特徴をメール生成前に確認してください。'];
+  return strengths.length ? strengths : ['プロジェクトの背景や目的が伝わりやすい点を確認できます。'];
 }
 
 function buildLocalTargetUsers(category?: string | null, description?: string | null) {

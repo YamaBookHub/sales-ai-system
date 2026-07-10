@@ -2497,6 +2497,7 @@ export class DashboardController {
           detailItem('次にやること', mailNextActionText(lead, mail)) +
         '</div>' +
         rowBlock('URL', project.url ? renderLink(project.url) : '未取得', true) +
+        renderPlaceholderAnalysis(latestProjectAnalysisOutput().mailPlaceholders) +
         rowBlock('商品説明', project.description || '未取得');
     }
 
