@@ -1715,7 +1715,7 @@ export class DashboardController {
               <div class="source-selector">
                 <select id="sourcePlatform" onchange="onSourcePlatformChange()">
                   <option value="campfire">CAMPFIRE</option>
-                  <option value="makuake">Makuake（準備中）</option>
+                  <option value="makuake">Makuake</option>
                   <option value="green_funding">GREEN FUNDING（準備中）</option>
                 </select>
                 <span id="sourcePlatformStatus" class="status muted">CAMPFIREの募集中プロジェクトに対応</span>
@@ -2084,20 +2084,21 @@ export class DashboardController {
       const platform = selectedSourcePlatform();
       const urlInput = document.getElementById('campfireUrl');
       if (urlInput) {
-        urlInput.placeholder = platform === 'campfire'
-          ? 'https://camp-fire.jp/projects/.../view'
-          : sourcePlatformLabel(platform) + 'のプロジェクトURL（準備中）';
+        urlInput.placeholder = ({
+          campfire: 'https://camp-fire.jp/projects/.../view',
+          makuake: 'https://www.makuake.com/project/.../'
+        })[platform] || sourcePlatformLabel(platform) + 'のプロジェクトURL（準備中）';
       }
-      if (platform === 'campfire') {
-        setStatus('sourcePlatformStatus', 'CAMPFIREの募集中プロジェクトに対応', 'muted');
+      if (platform === 'campfire' || platform === 'makuake') {
+        setStatus('sourcePlatformStatus', sourcePlatformLabel(platform) + 'の募集中プロジェクトに対応', 'muted');
         return;
       }
       setStatus('sourcePlatformStatus', sourcePlatformLabel(platform) + 'は取得元として準備中です', 'warn');
     }
 
     function ensureSupportedSourcePlatform(statusId) {
-      if (selectedSourcePlatform() === 'campfire') return true;
-      setStatus(statusId, sourcePlatformLabel() + 'は準備中です。現在はCAMPFIREのみ検索・取り込みできます。', 'warn');
+      if (['campfire', 'makuake'].includes(selectedSourcePlatform())) return true;
+      setStatus(statusId, sourcePlatformLabel() + 'は準備中です。現在はCAMPFIRE/Makuakeのみ検索・取り込みできます。', 'warn');
       return false;
     }
 

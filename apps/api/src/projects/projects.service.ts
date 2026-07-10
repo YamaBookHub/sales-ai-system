@@ -3,6 +3,7 @@ import { ProjectStatus } from '@prisma/client';
 import { AiService } from '../ai/ai.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CampfireProjectSourceProvider } from './campfire-project-source.provider';
+import { MakuakeProjectSourceProvider } from './makuake-project-source.provider';
 import { NormalizedImportedProject, ProjectSourceProvider } from './project-source-provider';
 import { BulkImportProjectsDto, CreateProjectDto, ImportCampfireProjectDto, ImportProjectDto, ProjectSource, SearchCampfireProjectsDto, SearchProjectsDto } from './projects.dto';
 
@@ -11,7 +12,8 @@ export class ProjectsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
-    private readonly campfireProvider: CampfireProjectSourceProvider
+    private readonly campfireProvider: CampfireProjectSourceProvider,
+    private readonly makuakeProvider: MakuakeProjectSourceProvider
   ) {}
 
   async list(page = 1, limit = 20, status?: ProjectStatus) {
@@ -296,6 +298,7 @@ export class ProjectsService {
   private providerFor(source?: string): ProjectSourceProvider {
     const normalizedSource = normalizeProjectSource(source);
     if (normalizedSource === 'campfire') return this.campfireProvider;
+    if (normalizedSource === 'makuake') return this.makuakeProvider;
     throw unsupportedProjectSource(normalizedSource);
   }
 
