@@ -2594,9 +2594,19 @@ export class DashboardController {
 
     function selectedLeadMails() {
       if (!state.selectedLeadId) return [];
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
       return state.mails
-        .filter((mail) => mail.leadId === state.selectedLeadId || mail.lead?.id === state.selectedLeadId)
+        .filter((mail) => {
+          if (sameId(mail.leadId, state.selectedLeadId) || sameId(mail.lead?.id, state.selectedLeadId)) return true;
+          if (lead && sameId(mail.companyId, lead.companyId)) return true;
+          if (lead && sameId(mail.company?.id, lead.companyId)) return true;
+          return false;
+        })
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+
+    function sameId(left, right) {
+      return String(left || '').trim().toLowerCase() === String(right || '').trim().toLowerCase();
     }
 
     function canGenerateMail() {
@@ -2680,20 +2690,37 @@ export class DashboardController {
     function selectLead(id) {
       state.selectedLeadId = id;
       state.aiGenerations = [];
-      const latestMail = ensureSelectedMailForLead();
       state.checklist = [];
       state.checklistComplete = false;
+      const latestMail = ensureSelectedMailForLead();
       renderLeads();
-      renderMailLeadSummary();
+      renderSelectedMailWorkspace();
       if (latestMail) {
         selectMail(latestMail.id);
       } else {
         clearMailEditor();
         renderMails();
       }
+      renderSelectedMailWorkspace();
       renderLeadDetail();
       renderAiAnalysis();
       void loadAiAnalysis();
+    }
+
+    function renderSelectedMailWorkspace() {
+      renderMailLeadSummary();
+      renderMails();
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      const mail = currentSelectedMail();
+      const selectedLead = document.getElementById('selectedLead');
+      const selectedMail = document.getElementById('selectedMail');
+      if (selectedLead) selectedLead.textContent = lead ? (lead.company?.name || lead.companyId || lead.id) : '未選択';
+      if (selectedMail) selectedMail.textContent = mail ? labelMailStatus(mail.status) : '未選択';
+      const generateHelp = document.getElementById('generateHelp');
+      if (generateHelp && lead) {
+        const count = selectedLeadMails().length;
+        generateHelp.textContent = count ? 'メール履歴 ' + count + '件。下の履歴から選択してください' : 'メール履歴0件。新規メールを生成できます';
+      }
     }
 
     function switchTab(tab) {
@@ -2910,6 +2937,10 @@ export class DashboardController {
 
     function detailItem(label, value) {
       return '<div class="detail-item"><div class="detail-label">' + escapeHtml(label) + '</div><div class="detail-value">' + escapeHtml(value || '未取得') + '</div></div>';
+    }
+
+    function rowBlock(label, value, html = false) {
+      return '<div class="row"><label>' + escapeHtml(label) + '</label><div class="detail-text">' + (html ? value : escapeHtml(value || '未取得')) + '</div></div>';
     }
 
     function formInput(id, label, value, placeholder = '', type = 'text') {
