@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import * as cheerio from 'cheerio';
-import { chromium } from 'playwright';
+import { chromium, type Page } from 'playwright';
 import { SearchCampfireProjectsDto } from './projects.dto';
 import { NormalizedImportedProject, ProjectSourceProvider } from './project-source-provider';
 
@@ -64,6 +64,8 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
       await page.waitForTimeout(1200);
       const html = await page.content();
       const scraped = extractProject(html, normalizedUrl);
+      const memberStats = await scrapeMemberStats(page, scraped.memberUrl);
+      const enriched = { ...scraped, memberStats };
 
       return {
         source: this.source,
@@ -73,30 +75,31 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
           baseUrl: this.baseUrl
         },
         company: {
-          name: scraped.executorName || 'Makuake実行者名未取得',
-          websiteUrl: scraped.websiteUrl || undefined,
-          inquiryUrl: scraped.inquiryUrl || undefined,
-          memo: scraped.executorName ? `Makuake executor: ${scraped.executorName}` : undefined
+          name: enriched.executorName || memberStats.name || 'Makuake実行者名未取得',
+          websiteUrl: enriched.websiteUrl || undefined,
+          inquiryUrl: enriched.inquiryUrl || undefined,
+          memo: buildCompanyMemo(enriched)
         },
         project: {
-          title: scraped.title,
-          url: scraped.url,
-          status: scraped.isEnded ? 'ended' : 'active',
-          amount: scraped.amount,
-          supporterCount: scraped.supporterCount,
-          description: scraped.description || undefined,
-          category: scraped.category || undefined,
-          thumbnailUrl: scraped.thumbnailUrl || undefined,
+          title: enriched.title,
+          url: enriched.url,
+          status: enriched.isEnded ? 'ended' : 'active',
+          amount: enriched.amount,
+          supporterCount: enriched.supporterCount,
+          description: enriched.description || undefined,
+          category: enriched.category || undefined,
+          thumbnailUrl: enriched.thumbnailUrl || undefined,
           scrapedAt: new Date()
         },
         lead: {
           source: 'makuake_import',
-          reason: buildImportReason(scraped),
-          brandWebsiteUrl: scraped.websiteUrl || undefined,
-          contactFormUrl: scraped.inquiryUrl || undefined,
-          contactMemo: buildAutoUrlMemo(scraped.externalUrls)
+          reason: buildImportReason(enriched),
+          brandWebsiteUrl: enriched.websiteUrl || undefined,
+          contactFormUrl: enriched.inquiryUrl || undefined,
+          contactMemo: buildAutoUrlMemo(enriched),
+          brandAnalysisMemo: buildMemberAnalysisMemo(enriched)
         },
-        raw: scraped
+        raw: enriched
       };
     } finally {
       await browser.close();
@@ -133,6 +136,17 @@ type ScrapedMakuakeProject = {
   websiteUrl: string;
   inquiryUrl: string;
   externalUrls: string[];
+  memberUrl: string;
+  memberStats: MakuakeMemberStats;
+};
+
+type MakuakeMemberStats = {
+  url: string;
+  name: string;
+  totalAmount: number | null;
+  projectCount: number | null;
+  supporterCount: number | null;
+  description: string;
 };
 
 function buildMakuakeSearchUrl(input: SearchCampfireProjectsDto) {
@@ -174,6 +188,7 @@ function extractProject(html: string, url: string): ScrapedMakuakeProject {
   const description = clean($('meta[property="og:description"]').attr('content') || $('[class*="description"], [class*="story"], main').first().text()).slice(0, 1600);
   const pageText = clean($('body').text());
   const externalUrls = extractExternalUrls($, url);
+  const memberUrl = extractMemberUrl($, url);
   return {
     title,
     url,
@@ -187,7 +202,9 @@ function extractProject(html: string, url: string): ScrapedMakuakeProject {
     thumbnailUrl: $('meta[property="og:image"]').attr('content') || '',
     websiteUrl: externalUrls.find((item) => !/makuake\.com|twitter\.com|x\.com|instagram\.com|facebook\.com|youtube\.com/.test(item)) || '',
     inquiryUrl: externalUrls.find((item) => /contact|inquiry|お問い合わせ/.test(item)) || '',
-    externalUrls
+    externalUrls,
+    memberUrl,
+    memberStats: emptyMemberStats(memberUrl)
   };
 }
 
@@ -201,13 +218,39 @@ function buildImportReason(scraped: ScrapedMakuakeProject) {
   const values = [
     scraped.amount ? `応援購入総額: ${scraped.amount.toLocaleString()}円` : '',
     scraped.daysLeft !== null ? `残り日数: ${scraped.daysLeft}日` : '',
+    scraped.memberStats.projectCount !== null ? `実行者プロジェクト数: ${scraped.memberStats.projectCount}件` : '',
+    scraped.memberStats.supporterCount !== null ? `実行者サポーター数: ${scraped.memberStats.supporterCount.toLocaleString()}人` : '',
     scraped.category ? `カテゴリ: ${scraped.category}` : ''
   ].filter(Boolean);
   return values.join(' / ') || 'Makuake import';
 }
 
-function buildAutoUrlMemo(externalUrls: string[]) {
-  return externalUrls.length ? `Makuakeページから自動取得したURL: ${externalUrls.slice(0, 8).join(' / ')}` : undefined;
+function buildCompanyMemo(scraped: ScrapedMakuakeProject) {
+  const stats = scraped.memberStats;
+  const lines = [
+    scraped.executorName ? `Makuake executor: ${scraped.executorName}` : '',
+    stats.totalAmount !== null ? `Makuake応援購入総額: ${stats.totalAmount.toLocaleString()}円` : '',
+    stats.projectCount !== null ? `Makuakeプロジェクト数: ${stats.projectCount}件` : '',
+    stats.supporterCount !== null ? `Makuakeサポーター数: ${stats.supporterCount.toLocaleString()}人` : '',
+    stats.url ? `Makuake member URL: ${stats.url}` : ''
+  ].filter(Boolean);
+  return lines.join('\n') || undefined;
+}
+
+function buildMemberAnalysisMemo(scraped: ScrapedMakuakeProject) {
+  const stats = scraped.memberStats;
+  const lines = [
+    stats.projectCount !== null ? `Makuake実行者の累計プロジェクト数: ${stats.projectCount}件` : '',
+    stats.totalAmount !== null ? `Makuake実行者の応援購入総額: ${stats.totalAmount.toLocaleString()}円` : '',
+    stats.supporterCount !== null ? `Makuake実行者の累計サポーター数: ${stats.supporterCount.toLocaleString()}人` : '',
+    stats.description ? `実行者紹介: ${stats.description.slice(0, 240)}` : ''
+  ].filter(Boolean);
+  return lines.join('\n') || undefined;
+}
+
+function buildAutoUrlMemo(scraped: ScrapedMakuakeProject) {
+  const urls = uniqueBy([scraped.memberUrl, ...scraped.externalUrls].filter(Boolean), normalizeUrlForUnique);
+  return urls.length ? `Makuakeページから自動取得したURL: ${urls.slice(0, 8).join(' / ')}` : undefined;
 }
 
 function matchesNumericFilters(item: MakuakeSearchResult, input: SearchCampfireProjectsDto) {
@@ -269,6 +312,80 @@ function extractExternalUrls($: cheerio.CheerioAPI, currentUrl: string) {
       .filter((url) => url && url !== currentUrl),
     (url) => normalizeUrlForUnique(url)
   ).slice(0, 20);
+}
+
+function extractMemberUrl($: cheerio.CheerioAPI, currentUrl: string) {
+  const href = $('a[href*="/member/index/"]').first().attr('href') || '';
+  return href ? absolutize(href) : inferMemberUrlFromText($('body').html() || '', currentUrl);
+}
+
+function inferMemberUrlFromText(html: string, currentUrl: string) {
+  const match = html.match(/\/member\/index\/[0-9]+/);
+  if (match?.[0]) return absolutize(match[0]);
+  try {
+    const current = new URL(currentUrl);
+    const memberId = current.searchParams.get('member_id');
+    return memberId ? absolutize(`/member/index/${memberId}/#project`) : '';
+  } catch {
+    return '';
+  }
+}
+
+async function scrapeMemberStats(projectPage: Page, memberUrl: string): Promise<MakuakeMemberStats> {
+  if (!memberUrl) return emptyMemberStats('');
+  const page = await projectPage.context().newPage();
+  try {
+    await page.goto(memberUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(800);
+    return extractMemberStats(await page.content(), memberUrl);
+  } catch {
+    return emptyMemberStats(memberUrl);
+  } finally {
+    await page.close().catch(() => undefined);
+  }
+}
+
+function extractMemberStats(html: string, url: string): MakuakeMemberStats {
+  const $ = cheerio.load(html);
+  const text = clean($('body').text());
+  return {
+    url,
+    name: clean($('h1,h2,[class*="name"],[class*="Name"]').first().text()).slice(0, 80),
+    totalAmount: extractLabeledNumber(text, ['応援購入総額', '購入総額']),
+    projectCount: extractLabeledNumber(text, ['プロジェクト数']),
+    supporterCount: extractLabeledNumber(text, ['サポーター数', '応援購入者数']),
+    description: extractMemberDescription($, text)
+  };
+}
+
+function emptyMemberStats(url: string): MakuakeMemberStats {
+  return {
+    url,
+    name: '',
+    totalAmount: null,
+    projectCount: null,
+    supporterCount: null,
+    description: ''
+  };
+}
+
+function extractLabeledNumber(text: string, labels: string[]) {
+  for (const label of labels) {
+    const index = text.indexOf(label);
+    if (index < 0) continue;
+    const nearby = text.slice(index, index + 80);
+    const match = nearby.match(/([0-9,]+)\s*(?:円|件|人)?/);
+    if (match?.[1]) return Number(match[1].replace(/,/g, ''));
+  }
+  return null;
+}
+
+function extractMemberDescription($: cheerio.CheerioAPI, text: string) {
+  const candidates = [
+    clean($('[class*="profile"], [class*="Profile"], [class*="description"], [class*="Description"], [class*="introduction"], [class*="Introduction"]').first().text()),
+    text.match(/サポーター数\s*[0-9,]+人\s*(.{40,500})/)?.[1] || ''
+  ];
+  return candidates.find((value) => value && value.length >= 30)?.slice(0, 600) || '';
 }
 
 function absolutize(value: string) {
