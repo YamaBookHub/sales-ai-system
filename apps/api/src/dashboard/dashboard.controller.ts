@@ -194,6 +194,21 @@ export class DashboardController {
       max-height: 180px;
       overflow: auto;
     }
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 8px;
+      font: inherit;
+      line-height: 1.7;
+      resize: vertical;
+      min-height: 82px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
     footer {
@@ -202,7 +217,7 @@ export class DashboardController {
       font-size: 12px;
     }
     @media (max-width: 1100px) {
-      .filters, .stats, .split, .detail-grid, .detail-shell { grid-template-columns: 1fr; }
+      .filters, .stats, .split, .detail-grid, .detail-shell, .form-grid { grid-template-columns: 1fr; }
       th { position: static; }
     }
   </style>
@@ -325,8 +340,11 @@ export class DashboardController {
   <script>
     const state = { leads: [], mails: [], aiGenerations: [], selectedLeadId: null };
 
-    async function api(path) {
-      const response = await fetch(path);
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        ...options,
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+      });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.message || payload.error?.message || 'APIエラー');
       return payload.data;
@@ -426,7 +444,8 @@ export class DashboardController {
         rowBlock('連絡先メモ', contactDetail(lead), true) +
         rowBlock('ブランド/SNS', snsDetail(lead), true) +
         rowBlock('次にやること', nextActionLabel(lead, mail)) +
-        rowBlock('最新メール件名', mail?.subject || '未生成');
+        rowBlock('最新メール件名', mail?.subject || '未生成') +
+        renderLeadEditPanel(lead);
     }
 
     async function loadLeadAnalysis() {
@@ -566,8 +585,92 @@ export class DashboardController {
       ].filter(Boolean).join('<br>') || '未取得';
     }
 
+    function renderLeadEditPanel(lead) {
+      return '<div class="row">' +
+        '<label>営業管理</label>' +
+        '<div class="form-grid">' +
+          selectField('leadStatusEdit', '状態', lead.status, [
+            ['discovered', '発見'],
+            ['qualified', '候補'],
+            ['drafted', '下書き済み'],
+            ['reviewing', '確認中'],
+            ['approved', '承認済み'],
+            ['queued', '送信待ち'],
+            ['contacted', '連絡済み'],
+            ['replied', '返信あり'],
+            ['meeting_candidate', '商談候補'],
+            ['rejected', '対象外'],
+            ['no_response', '返信なし'],
+            ['archived', 'アーカイブ']
+          ]) +
+          selectField('leadPriorityEdit', '優先度', lead.priority, [
+            ['high', '高'],
+            ['medium', '中'],
+            ['low', '低']
+          ]) +
+          inputField('leadSendMethodEdit', '送信手段', lead.sendMethod, 'メール / フォーム / サイト内') +
+          inputField('leadNextActionAtEdit', '次対応日時', toDateTimeLocal(lead.nextFollowUpAt || lead.nextActionAt), '', 'datetime-local') +
+          inputField('leadContactEmailEdit', 'メールアドレス', lead.contactEmail) +
+          inputField('leadContactFormUrlEdit', 'フォームURL', lead.contactFormUrl) +
+          inputField('leadSiteMessageUrlEdit', 'サイト内メッセージURL', lead.siteMessageUrl) +
+          inputField('leadBrandWebsiteUrlEdit', '公式サイト', lead.brandWebsiteUrl) +
+        '</div>' +
+        '<div class="row">' +
+          '<label for="leadOwnerMemoEdit">メモ</label>' +
+          '<textarea id="leadOwnerMemoEdit">' + escapeHtml(lead.ownerMemo || lead.contactMemo || '') + '</textarea>' +
+        '</div>' +
+        '<div class="toolbar">' +
+          '<button class="primary" onclick="saveLeadEdit()">営業情報を保存</button>' +
+          '<span id="leadEditStatus" class="status"></span>' +
+        '</div>' +
+      '</div>';
+    }
+
+    async function saveLeadEdit() {
+      if (!state.selectedLeadId) return;
+      setInlineStatus('leadEditStatus', '保存中', 'warn');
+      try {
+        await api('/api/leads/' + state.selectedLeadId, {
+          method: 'PATCH',
+          body: JSON.stringify(compactPayload({
+            status: value('leadStatusEdit'),
+            priority: value('leadPriorityEdit'),
+            sendMethod: value('leadSendMethodEdit'),
+            nextActionAt: dateTimeValue('leadNextActionAtEdit'),
+            nextFollowUpAt: dateTimeValue('leadNextActionAtEdit'),
+            contactEmail: value('leadContactEmailEdit'),
+            contactFormUrl: value('leadContactFormUrlEdit'),
+            siteMessageUrl: value('leadSiteMessageUrlEdit'),
+            brandWebsiteUrl: value('leadBrandWebsiteUrlEdit'),
+            ownerMemo: value('leadOwnerMemoEdit'),
+            contactMemo: value('leadOwnerMemoEdit')
+          }))
+        });
+        setInlineStatus('leadEditStatus', '保存しました', 'ok');
+        await loadAll();
+      } catch (error) {
+        setInlineStatus('leadEditStatus', error.message, 'error');
+      }
+    }
+
     function value(id) {
       return document.getElementById(id).value.trim();
+    }
+
+    function dateTimeValue(id) {
+      const raw = value(id);
+      return raw ? new Date(raw).toISOString() : '';
+    }
+
+    function compactPayload(payload) {
+      return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== ''));
+    }
+
+    function setInlineStatus(id, message, type = '') {
+      const element = document.getElementById(id);
+      if (!element) return;
+      element.textContent = message;
+      element.className = 'status ' + type;
     }
 
     function detailItem(label, value) {
@@ -576,6 +679,25 @@ export class DashboardController {
 
     function rowBlock(label, value, html = false) {
       return '<div class="row"><label>' + escapeHtml(label) + '</label><div class="detail-text">' + (html ? value : escapeHtml(value || '未取得')) + '</div></div>';
+    }
+
+    function inputField(id, label, fieldValue, placeholder = '', type = 'text') {
+      return '<div class="row"><label for="' + escapeHtml(id) + '">' + escapeHtml(label) + '</label><input id="' + escapeHtml(id) + '" type="' + escapeHtml(type) + '" value="' + escapeAttr(fieldValue || '') + '" placeholder="' + escapeAttr(placeholder) + '" /></div>';
+    }
+
+    function selectField(id, label, selectedValue, options) {
+      return '<div class="row"><label for="' + escapeHtml(id) + '">' + escapeHtml(label) + '</label><select id="' + escapeHtml(id) + '">' +
+        options.map(([value, text]) => '<option value="' + escapeAttr(value) + '" ' + (value === selectedValue ? 'selected' : '') + '>' + escapeHtml(text) + '</option>').join('') +
+      '</select></div>';
+    }
+
+    function toDateTimeLocal(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      const offset = date.getTimezoneOffset();
+      const local = new Date(date.getTime() - offset * 60 * 1000);
+      return local.toISOString().slice(0, 16);
     }
 
     function listBlock(label, values) {
@@ -657,6 +779,10 @@ export class DashboardController {
         '"': '&quot;',
         "'": '&#039;'
       }[char]));
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value);
     }
 
     loadAll();
