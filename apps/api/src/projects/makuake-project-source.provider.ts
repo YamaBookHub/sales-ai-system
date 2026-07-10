@@ -39,14 +39,20 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
     const browser = await chromium.launch({ headless: true });
     try {
       const context = await browser.newContext({ userAgent: MAKUAKE_USER_AGENT });
-      const page = await context.newPage();
-      const rawItems: MakuakeSearchResult[] = [];
-      for (const url of buildMakuakeSearchUrls(input)) {
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-        await page.waitForTimeout(900);
-        rawItems.push(...(await collectSearchResultsFromPage(page)));
-        if (uniqueBy(rawItems, (item) => normalizeUrlForUnique(item.url)).length >= normalizeLimit(input.limit)) break;
-      }
+      const rawItems = (
+        await runWithConcurrency(buildMakuakeSearchUrls(input), 3, async (url) => {
+          const page = await context.newPage();
+          try {
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+            await page.waitForTimeout(900);
+            return collectSearchResultsFromPage(page);
+          } catch {
+            return [];
+          } finally {
+            await page.close().catch(() => undefined);
+          }
+        })
+      ).flat();
       const excluded = new Set((input.excludeUrls || []).map((url) => normalizeUrlForUnique(url)));
       const items = sortSearchResults(uniqueBy(rawItems, (item) => normalizeUrlForUnique(item.url)), input)
         .filter((item) => matchesKeyword(item, input.keyword))
@@ -465,4 +471,19 @@ function uniqueBy<T>(items: T[], getKey: (item: T) => string) {
     seen.add(key);
     return true;
   });
+}
+
+async function runWithConcurrency<T, R>(items: T[], concurrency: number, worker: (item: T) => Promise<R>) {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      const current = items[cursor];
+      cursor += 1;
+      results[index] = await worker(current);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
