@@ -22,26 +22,39 @@ export class AiService {
     }
 
     const project = lead.project;
+    const analysisSource = [project?.title, project?.description, lead.reason, lead.brandAnalysisMemo, lead.snsAnalysisMemo]
+      .filter(Boolean)
+      .join(' ');
     const factsUsed = [
       lead.company.name ? `会社名: ${lead.company.name}` : '',
       project?.title ? `プロジェクト名: ${project.title}` : '',
       project?.category ? `カテゴリ: ${project.category}` : '',
       typeof project?.amount === 'number' ? `支援額: ${project.amount.toLocaleString()}円` : '',
       typeof project?.supporterCount === 'number' ? `支援者数: ${project.supporterCount.toLocaleString()}人` : '',
-      lead.reason ? `リード理由: ${lead.reason}` : ''
+      lead.reason ? `リード理由: ${lead.reason}` : '',
+      lead.brandAnalysisMemo ? `ブランド分析メモ: ${lead.brandAnalysisMemo}` : '',
+      lead.snsAnalysisMemo ? `SNS分析メモ: ${lead.snsAnalysisMemo}` : ''
     ].filter(Boolean);
 
     const output = {
       summary: buildLocalSummary(lead.company.name, project?.title, project?.category, project?.amount, project?.supporterCount),
-      productStrengths: buildLocalStrengths(project?.description, lead.reason),
-      targetUsers: buildLocalTargetUsers(project?.category, project?.description),
+      productStrengths: buildLocalStrengths(analysisSource, lead.reason),
+      targetUsers: buildLocalTargetUsers(project?.category, analysisSource),
       salesAngles: buildLocalSalesAngles(project?.amount, project?.supporterCount),
-      snsIdeas: buildLocalSnsIdeas(project?.category, project?.description),
+      snsIdeas: buildLocalSnsIdeas(project?.category, analysisSource),
       readiness: buildMailReadiness(lead, project),
       missingInfo: buildMissingInfo(lead, project),
       nextChecks: buildNextChecks(lead, project),
-      mailAdvice: buildMailAdvice(project?.category, project?.description, lead.reason),
-      mailPlaceholders: buildMailPlaceholders(lead.company.name, project?.title, project?.category, project?.description, lead.reason),
+      mailAdvice: buildMailAdvice(project?.category, analysisSource, lead.reason),
+      mailPlaceholders: buildMailPlaceholders(
+        lead.company.name,
+        project?.title,
+        project?.category,
+        project?.description,
+        lead.reason,
+        lead.brandAnalysisMemo,
+        lead.snsAnalysisMemo
+      ),
       factsUsed,
       assumptions: ['OpenAI APIを使わない無料分析のため、商品説明から読み取れる範囲で整理しています。'],
       riskFlags: ['メール生成前に、会社名・商品名・商品特徴が相手と合っているか確認してください。']
@@ -61,7 +74,9 @@ export class AiService {
           projectCategory: project?.category,
           projectAmount: project?.amount,
           supporterCount: project?.supporterCount,
-          leadReason: lead.reason
+          leadReason: lead.reason,
+          brandAnalysisMemo: lead.brandAnalysisMemo,
+          snsAnalysisMemo: lead.snsAnalysisMemo
         },
         outputJson: output,
         latencyMs: 0
