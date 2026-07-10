@@ -139,6 +139,17 @@ export class DashboardController {
       grid-template-columns: minmax(0, 1fr);
       gap: 10px;
     }
+    .lead-detail-stack {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
+    }
+    .detail-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(360px, .9fr);
+      gap: 10px;
+      align-items: start;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -191,7 +202,7 @@ export class DashboardController {
       font-size: 12px;
     }
     @media (max-width: 1100px) {
-      .filters, .stats, .split, .detail-grid { grid-template-columns: 1fr; }
+      .filters, .stats, .split, .detail-grid, .detail-shell { grid-template-columns: 1fr; }
       th { position: static; }
     }
   </style>
@@ -251,8 +262,13 @@ export class DashboardController {
             <button onclick="openProject()" id="openProjectButton" disabled>URLを開く</button>
           </div>
         </div>
-        <div class="body" id="leadDetail">
-          <div class="muted">営業リストから案件を選択してください</div>
+        <div class="body lead-detail-stack">
+          <div id="leadDetail">
+            <div class="muted">営業リストから案件を選択してください</div>
+          </div>
+          <div id="leadAnalysis">
+            <div class="muted">案件を選択すると分析結果が表示されます</div>
+          </div>
         </div>
       </section>
     </div>
@@ -307,7 +323,7 @@ export class DashboardController {
   </main>
   <footer>Sales AI System</footer>
   <script>
-    const state = { leads: [], mails: [], selectedLeadId: null };
+    const state = { leads: [], mails: [], aiGenerations: [], selectedLeadId: null };
 
     async function api(path) {
       const response = await fetch(path);
@@ -336,6 +352,7 @@ export class DashboardController {
       renderStats();
       renderRows();
       renderDetail();
+      renderLeadAnalysis();
     }
 
     function renderStats() {
@@ -384,6 +401,7 @@ export class DashboardController {
       const openButton = document.getElementById('openProjectButton');
       if (!lead) {
         container.innerHTML = '<div class="muted">営業リストから案件を選択してください</div>';
+        document.getElementById('leadAnalysis').innerHTML = '<div class="muted">案件を選択すると分析結果が表示されます</div>';
         openButton.disabled = true;
         return;
       }
@@ -409,6 +427,53 @@ export class DashboardController {
         rowBlock('ブランド/SNS', snsDetail(lead), true) +
         rowBlock('次にやること', nextActionLabel(lead, mail)) +
         rowBlock('最新メール件名', mail?.subject || '未生成');
+    }
+
+    async function loadLeadAnalysis() {
+      if (!state.selectedLeadId) {
+        state.aiGenerations = [];
+        renderLeadAnalysis();
+        return;
+      }
+      document.getElementById('leadAnalysis').innerHTML = '<div class="muted">分析結果を読み込み中</div>';
+      try {
+        const result = await api('/api/ai/leads/' + state.selectedLeadId + '/generations');
+        state.aiGenerations = result.items || [];
+        renderLeadAnalysis();
+      } catch (error) {
+        document.getElementById('leadAnalysis').innerHTML = '<div class="status error">' + escapeHtml(error.message) + '</div>';
+      }
+    }
+
+    function renderLeadAnalysis() {
+      const container = document.getElementById('leadAnalysis');
+      if (!container) return;
+      if (!state.selectedLeadId) {
+        container.innerHTML = '<div class="muted">案件を選択すると分析結果が表示されます</div>';
+        return;
+      }
+      const latest = state.aiGenerations.find((item) => item.type === 'project_summary') || state.aiGenerations[0];
+      if (!latest) {
+        container.innerHTML = '<section style="border-radius:4px"><div class="section-head"><h2>分析</h2></div><div class="body muted">まだ分析結果がありません。URL取り込み時の自動分析、または無料分析を実行してください。</div></section>';
+        return;
+      }
+      const output = latest.outputJson || {};
+      container.innerHTML =
+        '<section style="border-radius:4px">' +
+          '<div class="section-head"><h2>分析</h2><span class="status muted">' + escapeHtml(formatDate(latest.createdAt)) + '</span></div>' +
+          '<div class="body">' +
+            '<div class="detail-grid">' +
+              detailItem('判断', output.readiness?.label || '未判定') +
+              detailItem('点数', typeof output.readiness?.score === 'number' ? output.readiness.score + '点' : '未判定') +
+              detailItem('種別', labelAiGenerationType(latest.type)) +
+              detailItem('費用', latest.provider === 'local' ? '無料分析' : 'AI生成') +
+            '</div>' +
+            rowBlock('分析まとめ', output.summary || '未生成') +
+            listBlock('商品の魅力・強み', output.productStrengths) +
+            listBlock('SNSでの見せ方', output.snsIdeas) +
+            listBlock('次に確認すること', output.nextChecks) +
+          '</div>' +
+        '</section>';
     }
 
     function filteredLeads() {
@@ -447,8 +512,11 @@ export class DashboardController {
 
     function selectLead(id) {
       state.selectedLeadId = id;
+      state.aiGenerations = [];
       renderRows();
       renderDetail();
+      renderLeadAnalysis();
+      void loadLeadAnalysis();
     }
 
     function openProject() {
@@ -510,6 +578,13 @@ export class DashboardController {
       return '<div class="row"><label>' + escapeHtml(label) + '</label><div class="detail-text">' + (html ? value : escapeHtml(value || '未取得')) + '</div></div>';
     }
 
+    function listBlock(label, values) {
+      const items = Array.isArray(values) ? values : [];
+      return '<div class="row"><label>' + escapeHtml(label) + '</label><div class="detail-text">' +
+        (items.length ? items.map((item) => '・' + escapeHtml(item)).join('<br>') : '未生成') +
+      '</div></div>';
+    }
+
     function renderLink(url) {
       return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener">' + escapeHtml(url) + '</a>';
     }
@@ -555,6 +630,17 @@ export class DashboardController {
         failed: '送信失敗',
         cancelled: 'キャンセル'
       })[status] || status || '未設定';
+    }
+
+    function labelAiGenerationType(type) {
+      return ({
+        project_summary: '無料分析',
+        email_draft: 'メール生成',
+        lead_scoring: 'スコア分析',
+        subject_generation: '件名生成',
+        reply_classification: '返信分類',
+        next_action: '次アクション'
+      })[type] || type || '未設定';
     }
 
     function mailBadgeClass(status) {
@@ -1121,6 +1207,66 @@ export class DashboardController {
       margin-top: 12px;
       padding-top: 12px;
     }
+    .mail-flow {
+      display: grid;
+      gap: 12px;
+    }
+    .mail-context {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
+    }
+    .mail-stage {
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .mail-stage-head {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+    .mail-stage-head h3 {
+      margin: 0;
+      font-size: 14px;
+    }
+    .mail-stage-body {
+      padding: 12px;
+    }
+    .mail-create-bar {
+      display: grid;
+      grid-template-columns: minmax(180px, 240px) auto minmax(240px, 1fr);
+      gap: 8px;
+      align-items: center;
+    }
+    .mail-editor-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(360px, .65fr);
+      gap: 12px;
+      align-items: start;
+    }
+    .next-action-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .next-action-card {
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 8px 10px;
+      background: #fbfcfd;
+    }
+    .next-action-card strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
     footer {
       max-width: 1240px;
       margin: 0 auto;
@@ -1134,7 +1280,7 @@ export class DashboardController {
     }
     a:hover { text-decoration: underline; }
     @media (max-width: 980px) {
-      main, .workflow, .split, .grid-2, .detail-grid, .compact-summary { grid-template-columns: 1fr; }
+      main, .workflow, .split, .grid-2, .detail-grid, .compact-summary, .mail-create-bar, .mail-editor-grid, .next-action-strip { grid-template-columns: 1fr; }
       header { padding: 0 14px; }
       .direct-import, .quick-search, .search-filter-row, .mail-filter-row, .result-filter-panel, .search-block { grid-template-columns: 1fr; }
       .search-block .direct-import,
@@ -1360,65 +1506,95 @@ export class DashboardController {
       <section class="tab-panel" data-tab-panel="mail">
         <div class="section-head">
           <h2>メール作成・確認</h2>
-          <div class="toolbar">
-            <select id="templateKey">
-              <option value="normal">通常版</option>
-              <option value="sns_video_ad">SNS動画・広告版</option>
-            </select>
-            <button class="primary" id="generateButton" onclick="generateMail()" disabled>新規メール生成</button>
-          </div>
+          <span id="mailStatus" class="status"></span>
         </div>
-        <div class="body">
-          <div class="row">
-            <label>選択案件情報</label>
-            <div id="mailLeadSummary">対象を選択してください</div>
+        <div class="body mail-flow">
+          <div class="mail-stage">
+            <div class="mail-stage-head">
+              <h3>1. 対象案件</h3>
+              <span id="mailNextAction" class="status muted">対象を選択してください</span>
+            </div>
+            <div class="mail-stage-body">
+              <div id="mailLeadSummary">対象を選択してください</div>
+            </div>
           </div>
-          <div class="row">
-            <label>メール作成履歴</label>
-            <table>
-              <thead>
-                <tr>
-                  <th>作成履歴</th>
-                  <th style="width:92px">状態</th>
-                  <th style="width:120px">作成日</th>
-                </tr>
-              </thead>
-              <tbody id="mailRows"></tbody>
-            </table>
-          </div>
-          <div class="split">
-            <div>
-              <div id="rejectReasonBox"></div>
-              <div class="row">
-                <label for="subject">件名</label>
-                <input id="subject" />
-              </div>
-              <div class="row">
-                <label for="body">本文</label>
-                <textarea id="body"></textarea>
-              </div>
-              <div class="toolbar">
-                <button class="primary" onclick="saveMail()" id="saveButton" disabled>保存</button>
-                <span id="mailStatus" class="status"></span>
+
+          <div class="mail-stage">
+            <div class="mail-stage-head">
+              <h3>2. 作成履歴</h3>
+              <div class="mail-create-bar">
+                <select id="templateKey">
+                  <option value="normal">通常版</option>
+                  <option value="sns_video_ad">SNS動画・広告版</option>
+                </select>
+                <button class="primary" id="generateButton" onclick="generateMail()" disabled>新規メール生成</button>
+                <span id="generateHelp" class="status muted">対象を選択してください</span>
               </div>
             </div>
-            <div>
-              <div class="compact-summary">
-                <div class="detail-item">
-                  <div class="detail-label">選択リード</div>
+            <div class="mail-stage-body" style="padding:0">
+              <table>
+                <thead>
+                  <tr>
+                    <th>作成履歴</th>
+                    <th style="width:92px">状態</th>
+                    <th style="width:120px">作成日</th>
+                  </tr>
+                </thead>
+                <tbody id="mailRows"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="mail-stage">
+            <div class="mail-stage-head">
+              <h3>3. 本文編集</h3>
+              <div class="toolbar">
+                <button class="primary" onclick="saveMail()" id="saveButton" disabled>保存</button>
+              </div>
+            </div>
+            <div class="mail-stage-body mail-editor-grid">
+              <div>
+                <div id="rejectReasonBox"></div>
+                <div class="row">
+                  <label for="subject">件名</label>
+                <input id="subject" />
+              </div>
+                <div class="row">
+                  <label for="body">本文</label>
+                  <textarea id="body"></textarea>
+                </div>
+              </div>
+              <div>
+                <div class="compact-summary">
+                  <div class="detail-item">
+                    <div class="detail-label">選択リード</div>
                   <div id="selectedLead" class="detail-value muted">未選択</div>
                 </div>
                 <div class="detail-item">
                   <div class="detail-label">選択メール</div>
                   <div id="selectedMail" class="detail-value muted">未選択</div>
+                  </div>
+                </div>
+                <div class="row">
+                  <label>次に押すボタン</label>
+                  <div id="mailActionGuide" class="detail-text">メールを選択してください</div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div class="mail-stage">
+            <div class="mail-stage-head">
+              <h3>4. 送信前チェック・レビュー</h3>
+              <span id="checklistStatus" class="status muted"></span>
+            </div>
+            <div class="mail-stage-body">
+              <div class="next-action-strip" id="mailStageCards"></div>
               <div class="row">
                 <label>送信前チェック</label>
                 <ul class="checklist" id="checklistRows">
                   <li class="muted">メールを選択してください</li>
                 </ul>
-                <div id="checklistStatus" class="status muted" style="margin-top:8px"></div>
               </div>
               <div class="toolbar mail-actions">
                 <button onclick="requestReview()" id="reviewButton" disabled>レビュー依頼</button>
@@ -1428,6 +1604,15 @@ export class DashboardController {
                 <button onclick="queueMail()" id="queueButton" disabled>キュー投入</button>
                 <button onclick="markMailSent()" id="markSentButton" disabled>送信済みにする</button>
               </div>
+            </div>
+          </div>
+
+          <div class="mail-stage">
+            <div class="mail-stage-head">
+              <h3>5. 返信メモ</h3>
+              <span class="status muted">送信後に使う欄</span>
+            </div>
+            <div class="mail-stage-body">
               <div class="row">
                 <label for="replyBody">返信記録</label>
                 <input id="replyFromEmail" placeholder="返信元メールアドレス 任意" />
@@ -1860,11 +2045,15 @@ export class DashboardController {
       const lead = state.leads.find((item) => item.id === state.selectedLeadId);
       if (!lead) {
         container.innerHTML = '対象を選択してください';
+        const next = document.getElementById('mailNextAction');
+        if (next) next.textContent = '対象を選択してください';
         return;
       }
       const company = lead.company || {};
       const project = lead.project || {};
       const mail = selectedLeadMails()[0];
+      const next = document.getElementById('mailNextAction');
+      if (next) next.textContent = mailNextActionText(lead, mail);
       container.innerHTML =
         '<div class="detail-grid">' +
           detailItem('企業名', company.name || lead.companyId) +
@@ -1874,7 +2063,7 @@ export class DashboardController {
           detailItem('支援額', formatCurrency(project.amount)) +
           detailItem('支援者数', formatNumber(project.supporterCount) + '人') +
           detailItem('連絡先', mailContactSummary(lead)) +
-          detailItem('次にやること', mail ? labelMailStatus(mail.status) : '新規メール生成') +
+          detailItem('次にやること', mailNextActionText(lead, mail)) +
         '</div>' +
         rowBlock('URL', project.url ? renderLink(project.url) : '未取得', true) +
         rowBlock('商品説明', project.description || '未取得');
@@ -2132,6 +2321,7 @@ export class DashboardController {
         populateMailEditor(null);
         renderRejectReason(null);
         updateMailButtons(null);
+        renderMailStageCards(null);
         return;
       }
       if (state.selectedMailId && !mails.some((mail) => mail.id === state.selectedMailId)) {
@@ -2153,6 +2343,7 @@ export class DashboardController {
       populateMailEditor(selected);
       renderRejectReason(selected);
       updateMailButtons(selected);
+      renderMailStageCards(selected);
     }
 
     function mailContactSummary(lead) {
@@ -2184,6 +2375,11 @@ export class DashboardController {
       const latest = mails[0] || null;
       state.selectedMailId = latest?.id || null;
       return latest;
+    }
+
+    function currentSelectedMail() {
+      if (!state.selectedMailId) return null;
+      return selectedLeadMails().find((mail) => mail.id === state.selectedMailId) || state.mails.find((mail) => mail.id === state.selectedMailId) || null;
     }
 
     function populateMailEditor(mail) {
@@ -2228,6 +2424,7 @@ export class DashboardController {
       const totalCount = state.checklist.length;
       const message = totalCount ? checkedCount + ' / ' + totalCount + ' 完了' : '';
       setStatus('checklistStatus', message, state.checklistComplete ? 'ok' : 'warn');
+      renderMailStageCards(currentSelectedMail());
     }
 
     function sortedChecklistItems() {
@@ -2319,6 +2516,7 @@ export class DashboardController {
 
     function updateMailButtons(mail) {
       const generateButton = document.getElementById('generateButton');
+      const generateHelp = document.getElementById('generateHelp');
       const hasLead = Boolean(state.selectedLeadId);
       const hasExistingMails = selectedLeadMails().length > 0;
       generateButton.disabled = !canGenerateMail();
@@ -2327,6 +2525,13 @@ export class DashboardController {
         : hasExistingMails
           ? '既存メールがあります。履歴から選択して編集・レビューしてください'
           : 'この対象の新規メールを生成できます';
+      if (generateHelp) {
+        generateHelp.textContent = !hasLead
+          ? '先に上の一覧から対象を選択'
+          : hasExistingMails
+            ? '既存メールがあります。履歴から選択してください'
+            : 'メール未生成です。ここから新規作成できます';
+      }
       document.getElementById('saveButton').disabled = !mail;
       document.getElementById('reviewButton').disabled = !mail || mail.status !== 'draft';
       document.getElementById('reReviewButton').disabled = !mail || mail.status !== 'rejected';
@@ -2335,6 +2540,44 @@ export class DashboardController {
       document.getElementById('queueButton').disabled = !mail || mail.status !== 'approved' || !state.checklistComplete;
       document.getElementById('markSentButton').disabled = !mail || !['approved', 'queued'].includes(mail.status);
       document.getElementById('replyButton').disabled = !mail || !['queued', 'sent'].includes(mail.status);
+      const guide = document.getElementById('mailActionGuide');
+      if (guide) guide.textContent = mailActionGuideText(mail);
+    }
+
+    function renderMailStageCards(mail) {
+      const container = document.getElementById('mailStageCards');
+      if (!container) return;
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      const checklistText = state.checklist.length
+        ? state.checklist.filter((item) => item.checked).length + ' / ' + state.checklist.length
+        : '未読み込み';
+      container.innerHTML =
+        stageCard('対象', lead ? (lead.company?.name || '選択済み') : '未選択') +
+        stageCard('メール', mail ? labelMailStatus(mail.status) : '未生成') +
+        stageCard('チェック', mail ? checklistText : '未選択') +
+        stageCard('次操作', mailActionGuideText(mail));
+    }
+
+    function stageCard(label, value) {
+      return '<div class="next-action-card"><strong>' + escapeHtml(label) + '</strong><span class="muted">' + escapeHtml(value || '-') + '</span></div>';
+    }
+
+    function mailNextActionText(lead, mail) {
+      if (!lead) return '対象を選択してください';
+      if (!mail) return 'メール未生成。新規メール生成へ';
+      return mailActionGuideText(mail);
+    }
+
+    function mailActionGuideText(mail) {
+      if (!mail) return state.selectedLeadId ? '新規メール生成' : '対象選択';
+      if (mail.status === 'draft') return '本文を確認して保存後、レビュー依頼';
+      if (mail.status === 'in_review') return state.checklistComplete ? '内容確認後、承認または棄却' : '送信前チェックを完了して承認';
+      if (mail.status === 'rejected') return '棄却理由を直して再レビュー依頼';
+      if (mail.status === 'approved') return 'キュー投入、または手動送信後に送信済み';
+      if (mail.status === 'queued') return '送信待ち。送信したら送信済みに更新';
+      if (mail.status === 'sent') return '返信が来たら返信メモへ記録';
+      if (mail.status === 'failed') return '失敗理由を確認して再試行';
+      return '状態を確認';
     }
 
     function formatDate(value) {
