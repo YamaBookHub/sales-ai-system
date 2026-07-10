@@ -354,17 +354,30 @@ function isProjectUrl(url: string) {
 
 function extractAmount(text: string) {
   const match =
+    extractNumberAfterLabels(text, ['応援購入総額', '集まっている金額', '現在の支援総額', '購入総額', '支援総額'], ['円']) ||
     text.match(/[¥￥]\s*([0-9,]+)/) ||
-    text.match(/(?:集まっている金額|応援購入総額|購入総額|支援総額|現在の支援総額)\s*[:：]?\s*([0-9,]+)\s*円/) ||
     text.match(/([0-9,]+)\s*円/);
   return match?.[1] ? Number(match[1].replace(/,/g, '')) : 0;
 }
 
 function extractSupporterCount(text: string) {
   const match =
+    extractNumberAfterLabels(text, ['サポーター', '寄附者', '寄付者', 'サポーター数', '支援者数', '応援購入者数', '支援者', '応援購入者'], ['人', '名']) ||
     text.match(/(?:寄附者|寄付者|サポーター数|支援者数|応援購入者数|サポーター|支援者|応援購入者)\s*[:：]?\s*([0-9,]+)\s*(?:人|名)?/) ||
     text.match(/([0-9,]+)\s*(?:人|名)\s*(?:の)?(?:寄附者|寄付者|サポーター|応援購入者|購入者|支援者)/);
   return match?.[1] ? Number(match[1].replace(/,/g, '')) : 0;
+}
+
+function extractNumberAfterLabels(text: string, labels: string[], units: string[]) {
+  for (const label of labels) {
+    const index = text.indexOf(label);
+    if (index < 0) continue;
+    const nearby = text.slice(index + label.length, index + label.length + 80);
+    const unitPattern = units.map(escapeRegExp).join('|');
+    const match = nearby.match(new RegExp(`([0-9,]+)\\s*(?:${unitPattern})`));
+    if (match?.[1]) return match;
+  }
+  return null;
 }
 
 function extractDaysLeft(text: string) {
@@ -482,6 +495,10 @@ function firstUsefulLine(text: string) {
 
 function clean(value?: string) {
   return (value || '').replace(/\s+/g, ' ').trim();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function normalizeUrlForUnique(value: string) {
