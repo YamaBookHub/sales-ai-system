@@ -1,5 +1,5 @@
 import { ProjectStatus } from '@prisma/client';
-import { IsEnum, IsInt, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 
 export class CreateProjectDto {
   @IsUUID()
@@ -80,4 +80,9 @@ export class SearchCampfireProjectsDto {
   @IsOptional()
   @IsString()
   status?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  excludeUrls?: string[];
 }

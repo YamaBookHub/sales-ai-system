@@ -2083,6 +2083,7 @@ export class DashboardController {
     async function searchCampfireCandidates() {
       const profileProjectRange = rangeFieldValue('campfireSearchProfileProjectRange');
       const hasProfileProjectSearch = profileProjectRange.min !== null || profileProjectRange.max !== null;
+      const desiredLimit = numberFieldValue('campfireFetchLimit') || 10;
       startCampfireSearchTimer(hasProfileProjectSearch);
       document.getElementById('campfireCandidateCount').textContent = '検索中';
       try {
@@ -2093,13 +2094,14 @@ export class DashboardController {
             category: fieldValue('campfireSearchCategory'),
             profileProjectMin: profileProjectRange.min,
             profileProjectMax: profileProjectRange.max,
-            limit: numberFieldValue('campfireFetchLimit') || 10
+            limit: desiredLimit,
+            excludeUrls: knownCampfireUrls()
           }))
         });
         state.campfireCandidates = result.items || [];
         syncCandidateImportStatuses();
         renderCampfireCandidates();
-        const countText = '取得 ' + state.campfireCandidates.length + '件';
+        const countText = '新規候補 ' + state.campfireCandidates.length + '件';
         const elapsed = currentSearchElapsedText();
         stopCampfireSearchTimer();
         setStatus('campfireSearchStatusText', countText + ' / ' + elapsed, 'ok');
@@ -2112,6 +2114,15 @@ export class DashboardController {
         setStatus('campfireSearchStatusText', error.message + (elapsed ? ' / ' + elapsed : ''), 'error');
         document.getElementById('campfireCandidateCount').textContent = '検索失敗';
       }
+    }
+
+    function knownCampfireUrls() {
+      const leadUrls = state.leads.map((lead) => lead.project?.url).filter(Boolean);
+      const importedCandidateUrls = Object.entries(state.candidateImportStatus)
+        .filter(([, value]) => value?.status === 'imported' || value?.status === 'existing')
+        .map(([key]) => key)
+        .filter(Boolean);
+      return Array.from(new Set([...leadUrls, ...importedCandidateUrls]));
     }
 
     function clearCampfireSearch() {

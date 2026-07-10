@@ -42,6 +42,7 @@ export type CampfireSearchInput = {
   profileProjectMax?: number;
   limit?: number;
   status?: string;
+  excludeUrls?: string[];
 };
 
 export type CampfireSearchResult = {
@@ -107,9 +108,10 @@ export class CampfireScraperService {
       const page = await context.newPage();
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const resultLimit = normalizeSearchLimit(input.limit);
+      const excludedUrls = buildExcludedUrlSet(input.excludeUrls);
       const items = hasProfileProjectFilter(input)
-        ? await collectSearchResultsMatchingProfileRange(page, input, resultLimit)
-        : await collectSearchResults(page, resultLimit);
+        ? await collectSearchResultsMatchingProfileRange(page, input, resultLimit, excludedUrls)
+        : await collectSearchResults(page, resultLimit, excludedUrls);
       return { items, total: items.length };
     } finally {
       await browser.close();
@@ -231,26 +233,26 @@ function extractSearchResults(html: string): CampfireSearchResult[] {
   return uniqueBy(links, (item) => normalizeUrlForUnique(item.url));
 }
 
-async function collectSearchResults(page: Page, limit: number) {
+async function collectSearchResults(page: Page, limit: number, excludedUrls = new Set<string>()) {
   let items: CampfireSearchResult[] = [];
   let unchangedCount = 0;
 
   for (let attempt = 0; attempt < 8 && items.length < limit; attempt += 1) {
     const beforeCount = items.length;
-    items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
 
     if (items.length >= limit) break;
 
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
     await page.waitForTimeout(1200);
-    items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
 
     if (items.length >= limit) break;
 
     const clickedMore = await clickNextSearchResults(page);
     if (clickedMore) {
       await page.waitForTimeout(1600);
-      items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+      items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
     }
 
     unchangedCount = items.length === beforeCount ? unchangedCount + 1 : 0;
@@ -260,7 +262,7 @@ async function collectSearchResults(page: Page, limit: number) {
   return items.slice(0, limit);
 }
 
-async function collectSearchResultsMatchingProfileRange(page: Page, input: CampfireSearchInput, limit: number) {
+async function collectSearchResultsMatchingProfileRange(page: Page, input: CampfireSearchInput, limit: number, excludedUrls = new Set<string>()) {
   let items: CampfireSearchResult[] = [];
   let matched: CampfireSearchResult[] = [];
   let unchangedCount = 0;
@@ -271,14 +273,14 @@ async function collectSearchResultsMatchingProfileRange(page: Page, input: Campf
   try {
     for (let attempt = 0; attempt < 20 && matched.length < limit && items.length < maxCandidates; attempt += 1) {
       const beforeCount = items.length;
-      items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+      items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
       matched = await collectProfileMatchesFromCandidates(detailPage, items, input, checkedUrls, matched, limit);
 
       if (matched.length >= limit || items.length >= maxCandidates) break;
 
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
       await page.waitForTimeout(900);
-      items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+      items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
       matched = await collectProfileMatchesFromCandidates(detailPage, items, input, checkedUrls, matched, limit);
 
       if (matched.length >= limit || items.length >= maxCandidates) break;
@@ -286,7 +288,7 @@ async function collectSearchResultsMatchingProfileRange(page: Page, input: Campf
       const clickedMore = await clickNextSearchResults(page);
       if (clickedMore) {
         await page.waitForTimeout(1200);
-        items = uniqueBy([...items, ...extractSearchResults(await page.content())], (item) => normalizeUrlForUnique(item.url));
+        items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
         matched = await collectProfileMatchesFromCandidates(detailPage, items, input, checkedUrls, matched, limit);
       }
 
@@ -326,6 +328,21 @@ async function collectProfileMatchesFromCandidates(
   }
 
   return nextMatched;
+}
+
+function buildExcludedUrlSet(urls?: string[]) {
+  return new Set((urls || []).map((url) => normalizeUrlForUnique(url)).filter(Boolean));
+}
+
+function mergeSearchResults(
+  current: CampfireSearchResult[],
+  next: CampfireSearchResult[],
+  excludedUrls: Set<string>
+) {
+  return uniqueBy(
+    [...current, ...next.filter((item) => !excludedUrls.has(normalizeUrlForUnique(item.url)))],
+    (item) => normalizeUrlForUnique(item.url)
+  );
 }
 
 async function enrichWithProjectPageProfileCount(page: Page, item: CampfireSearchResult) {
