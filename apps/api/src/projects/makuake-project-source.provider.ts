@@ -45,7 +45,7 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
           try {
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
             await page.waitForTimeout(900);
-            return collectSearchResultsFromPage(page);
+            return await collectSearchResultsFromPage(page);
           } catch {
             return [];
           } finally {
@@ -179,9 +179,13 @@ function buildMakuakeSearchUrls(input: SearchCampfireProjectsDto) {
 async function collectSearchResultsFromPage(page: Page) {
   const items: MakuakeSearchResult[] = [];
   for (let index = 0; index < 4; index += 1) {
-    items.push(...extractSearchResults(await page.content()));
-    await page.evaluate(() => window.scrollBy(0, Math.round(window.innerHeight * 0.85))).catch(() => undefined);
-    await page.waitForTimeout(350);
+    try {
+      items.push(...extractSearchResults(await page.content()));
+      await page.evaluate(() => window.scrollBy(0, Math.round(window.innerHeight * 0.85)));
+      await page.waitForTimeout(350);
+    } catch {
+      break;
+    }
   }
   return uniqueBy(items, (item) => normalizeUrlForUnique(item.url));
 }
