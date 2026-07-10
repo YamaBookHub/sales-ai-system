@@ -155,6 +155,23 @@ export class DashboardController {
       border-collapse: collapse;
       table-layout: fixed;
     }
+    .table-scroll {
+      overflow: auto;
+      border-top: 0;
+    }
+    .table-scroll table {
+      margin: 0;
+      min-width: 1180px;
+    }
+    .table-scroll thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      border-bottom: 1px solid var(--line);
+    }
+    .lead-list-scroll {
+      max-height: 420px;
+    }
     th, td {
       padding: 12px 10px;
       border-bottom: 1px solid var(--line);
@@ -541,8 +558,14 @@ export class DashboardController {
     }
 
     function latestMail(leadId) {
+      const lead = state.leads.find((item) => item.id === leadId);
       return state.mails
-        .filter((mail) => mail.leadId === leadId)
+        .filter((mail) => {
+          if (mail.leadId === leadId || mail.lead?.id === leadId) return true;
+          if (lead && mail.companyId === lead.companyId) return true;
+          if (lead && mail.company?.id === lead.companyId) return true;
+          return false;
+        })
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
     }
 
@@ -2039,20 +2062,17 @@ export class DashboardController {
 
     async function bulkImportVisibleCandidates() {
       const entries = getVisibleCandidateEntries();
-      if (!entries.length) return;
-      const ok = window.confirm('表示中の' + entries.length + '件を取り込みます。よろしいですか？');
+      const importableEntries = entries.filter(({ item }) => isCandidateImportable(item));
+      if (!importableEntries.length) {
+        return setStatus('importStatus', '表示中に取り込める候補はありません', 'warn');
+      }
+      const ok = window.confirm('表示中の未取込候補 ' + importableEntries.length + '件を取り込みます。登録済み・取込済みは取り込みません。よろしいですか？');
       if (!ok) return;
       let successCount = 0;
       let failedCount = 0;
-      let skippedCount = 0;
-      setStatus('importStatus', '一括取り込み中 0/' + entries.length, 'warn');
-      for (let index = 0; index < entries.length; index += 1) {
-        const candidate = entries[index].item;
-        const importState = getCandidateImportState(candidate);
-        if (importState.status === 'existing' || importState.status === 'imported') {
-          skippedCount += 1;
-          continue;
-        }
+      setStatus('importStatus', '一括取り込み中 0/' + importableEntries.length, 'warn');
+      for (let index = 0; index < importableEntries.length; index += 1) {
+        const candidate = importableEntries[index].item;
         try {
           document.getElementById('campfireUrl').value = candidate.url;
           setCandidateImportStatus(candidate, 'importing', '取り込み中');
@@ -2065,17 +2085,17 @@ export class DashboardController {
           await api('/api/ai/leads/' + result.lead.id + '/analyze', { method: 'POST' });
           setCandidateImportStatus(candidate, 'imported', '取り込み済み', result.lead.id);
           successCount += 1;
-          setStatus('importStatus', '一括取り込み中 ' + (index + 1) + '/' + entries.length, 'warn');
+          setStatus('importStatus', '一括取り込み中 ' + (index + 1) + '/' + importableEntries.length, 'warn');
         } catch (error) {
           setCandidateImportStatus(candidate, 'failed', error.message);
           failedCount += 1;
-          setStatus('importStatus', '一括取り込み中 ' + (index + 1) + '/' + entries.length + '（失敗 ' + failedCount + '件）', 'warn');
+          setStatus('importStatus', '一括取り込み中 ' + (index + 1) + '/' + importableEntries.length + '（失敗 ' + failedCount + '件）', 'warn');
         }
         renderCampfireCandidates();
       }
       setStatus(
         'importStatus',
-        '一括取り込み完了: 取込 ' + successCount + '件 / 登録済みスキップ ' + skippedCount + '件 / 失敗 ' + failedCount + '件',
+        '一括取り込み完了: 取込 ' + successCount + '件 / 失敗 ' + failedCount + '件',
         failedCount ? 'warn' : 'ok'
       );
       await loadAll();
@@ -2366,7 +2386,7 @@ export class DashboardController {
       const importableCount = visibleCandidates.filter(({ item }) => isCandidateImportable(item)).length;
       document.getElementById('bulkImportButton').disabled = !importableCount;
       document.getElementById('campfireCandidateCount').textContent =
-        '表示 ' + visibleCandidates.length + '件 / 取得 ' + state.campfireCandidates.length + '件 / 未取込 ' + importableCount + '件';
+        '表示 ' + visibleCandidates.length + '件 / 取得 ' + state.campfireCandidates.length + '件 / 取込可能 ' + importableCount + '件';
       if (!visibleCandidates.length) {
         container.innerHTML = '<div class="muted">表示条件に合う候補がありません。条件をゆるめてください。</div>';
         return;
