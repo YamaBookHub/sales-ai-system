@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import * as cheerio from 'cheerio';
-import { chromium, type Page } from 'playwright';
+import { chromium, type BrowserContext, type Page } from 'playwright';
 
 const CAMPFIRE_ORIGIN = 'https://camp-fire.jp';
 const DEFAULT_SEARCH_RESULT_LIMIT = 10;
 const SEARCH_RESULT_LIMITS = [10, 50, 100];
+const PROFILE_LOOKUP_CONCURRENCY = clampNumber(Number(process.env.CAMPFIRE_PROFILE_LOOKUP_CONCURRENCY || 5), 1, 12);
 const CAMPFIRE_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36';
 
@@ -244,14 +245,14 @@ async function collectSearchResults(page: Page, limit: number, excludedUrls = ne
     if (items.length >= limit) break;
 
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(500);
     items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
 
     if (items.length >= limit) break;
 
     const clickedMore = await clickNextSearchResults(page);
     if (clickedMore) {
-      await page.waitForTimeout(1600);
+      await page.waitForTimeout(700);
       items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
     }
 
@@ -268,42 +269,36 @@ async function collectSearchResultsMatchingProfileRange(page: Page, input: Campf
   let unchangedCount = 0;
   const checkedUrls = new Set<string>();
   const maxCandidates = Math.min(Math.max(limit * 10, 100), 300);
-  const detailPage = await page.context().newPage();
+  for (let attempt = 0; attempt < 20 && matched.length < limit && items.length < maxCandidates; attempt += 1) {
+    const beforeCount = items.length;
+    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
+    matched = await collectProfileMatchesFromCandidates(page.context(), items, input, checkedUrls, matched, limit);
 
-  try {
-    for (let attempt = 0; attempt < 20 && matched.length < limit && items.length < maxCandidates; attempt += 1) {
-      const beforeCount = items.length;
+    if (matched.length >= limit || items.length >= maxCandidates) break;
+
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
+    await page.waitForTimeout(350);
+    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
+    matched = await collectProfileMatchesFromCandidates(page.context(), items, input, checkedUrls, matched, limit);
+
+    if (matched.length >= limit || items.length >= maxCandidates) break;
+
+    const clickedMore = await clickNextSearchResults(page);
+    if (clickedMore) {
+      await page.waitForTimeout(700);
       items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
-      matched = await collectProfileMatchesFromCandidates(detailPage, items, input, checkedUrls, matched, limit);
-
-      if (matched.length >= limit || items.length >= maxCandidates) break;
-
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
-      await page.waitForTimeout(900);
-      items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
-      matched = await collectProfileMatchesFromCandidates(detailPage, items, input, checkedUrls, matched, limit);
-
-      if (matched.length >= limit || items.length >= maxCandidates) break;
-
-      const clickedMore = await clickNextSearchResults(page);
-      if (clickedMore) {
-        await page.waitForTimeout(1200);
-        items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls);
-        matched = await collectProfileMatchesFromCandidates(detailPage, items, input, checkedUrls, matched, limit);
-      }
-
-      unchangedCount = items.length === beforeCount ? unchangedCount + 1 : 0;
-      if (!clickedMore && unchangedCount >= 2) break;
+      matched = await collectProfileMatchesFromCandidates(page.context(), items, input, checkedUrls, matched, limit);
     }
-  } finally {
-    await detailPage.close().catch(() => undefined);
+
+    unchangedCount = items.length === beforeCount ? unchangedCount + 1 : 0;
+    if (!clickedMore && unchangedCount >= 2) break;
   }
 
   return matched;
 }
 
 async function collectProfileMatchesFromCandidates(
-  page: Page,
+  context: BrowserContext,
   items: CampfireSearchResult[],
   input: CampfireSearchInput,
   checkedUrls: Set<string>,
@@ -313,18 +308,28 @@ async function collectProfileMatchesFromCandidates(
   const nextMatched = [...matched];
   const matchedUrls = new Set(nextMatched.map((item) => normalizeUrlForUnique(item.url)));
 
+  const candidates: CampfireSearchResult[] = [];
   for (const item of items) {
     if (nextMatched.length >= limit) break;
 
     const key = normalizeUrlForUnique(item.url);
     if (checkedUrls.has(key) || matchedUrls.has(key)) continue;
     checkedUrls.add(key);
+    candidates.push(item);
+  }
 
-    const enriched = item.profileProjectCount === null ? await enrichWithProjectPageProfileCount(page, item) : item;
-    if (!matchesProfileProjectRange(enriched, input)) continue;
+  for (let start = 0; start < candidates.length && nextMatched.length < limit; start += PROFILE_LOOKUP_CONCURRENCY) {
+    const batch = candidates.slice(start, start + PROFILE_LOOKUP_CONCURRENCY);
+    const enrichedBatch = await Promise.all(
+      batch.map((item) => item.profileProjectCount === null ? enrichWithProjectPageProfileCount(context, item) : Promise.resolve(item))
+    );
 
-    nextMatched.push(enriched);
-    matchedUrls.add(key);
+    for (const enriched of enrichedBatch) {
+      if (nextMatched.length >= limit) break;
+      if (!matchesProfileProjectRange(enriched, input)) continue;
+      nextMatched.push(enriched);
+      matchedUrls.add(normalizeUrlForUnique(enriched.url));
+    }
   }
 
   return nextMatched;
@@ -345,13 +350,16 @@ function mergeSearchResults(
   );
 }
 
-async function enrichWithProjectPageProfileCount(page: Page, item: CampfireSearchResult) {
+async function enrichWithProjectPageProfileCount(context: BrowserContext, item: CampfireSearchResult) {
+  const page = await context.newPage();
   try {
     await openPageFast(page, item.url);
-    const text = (await page.locator('body').innerText({ timeout: 2500 })).replace(/\s+/g, ' ').trim();
+    const text = (await page.locator('body').innerText({ timeout: 1200 })).replace(/\s+/g, ' ').trim();
     return { ...item, profileProjectCount: extractProfileProjectCount(text) };
   } catch {
     return item;
+  } finally {
+    await page.close().catch(() => undefined);
   }
 }
 
@@ -377,6 +385,11 @@ async function clickNextSearchResults(page: Page) {
 
 function normalizeSearchLimit(limit?: number) {
   return SEARCH_RESULT_LIMITS.includes(Number(limit)) ? Number(limit) : DEFAULT_SEARCH_RESULT_LIMIT;
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min;
+  return Math.max(min, Math.min(max, Math.floor(value)));
 }
 
 function hasProfileProjectFilter(input: CampfireSearchInput) {
@@ -421,14 +434,14 @@ function extractTitleFromUrl(value: string) {
 
 async function openPage(page: Page, url: string) {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-  await page.waitForLoadState('load', { timeout: 15000 }).catch(() => undefined);
-  await page.waitForTimeout(2500);
+  await page.waitForLoadState('load', { timeout: 8000 }).catch(() => undefined);
+  await page.waitForTimeout(900);
 }
 
 async function openPageFast(page: Page, url: string) {
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 12000 });
-  await page.waitForLoadState('load', { timeout: 4000 }).catch(() => undefined);
-  await page.waitForTimeout(600);
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 8000 });
+  await page.waitForLoadState('load', { timeout: 2000 }).catch(() => undefined);
+  await page.waitForTimeout(150);
 }
 
 function validateCampfireUrl(url: string) {
