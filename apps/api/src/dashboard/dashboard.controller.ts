@@ -523,7 +523,7 @@ export class DashboardController {
 
       <div class="tabs" aria-label="機能タブ">
         <button class="tab-button" data-tab-button="detail" data-active="true" onclick="switchTab('detail')">案件詳細</button>
-        <button class="tab-button" data-tab-button="ai" onclick="switchTab('ai')">AI分析</button>
+        <button class="tab-button" data-tab-button="ai" onclick="switchTab('ai')">無料分析</button>
         <button class="tab-button" data-tab-button="mail" onclick="switchTab('mail')">メール確認</button>
       </div>
 
@@ -541,7 +541,10 @@ export class DashboardController {
 
       <section class="tab-panel" data-tab-panel="ai">
         <div class="section-head">
-          <h2>4. AI分析結果</h2>
+          <h2>4. 無料分析</h2>
+          <div class="toolbar">
+            <button onclick="analyzeLead()" id="analysisButton" disabled>無料分析を再実行</button>
+          </div>
         </div>
         <div class="body" id="aiAnalysis">
           <div class="muted">営業リストから案件を選択してください</div>
@@ -748,6 +751,7 @@ export class DashboardController {
 
     async function analyzeLead(options = {}) {
       if (!state.selectedLeadId) return;
+      document.getElementById('aiAnalysis').innerHTML = '<div class="status warn">無料分析中</div>';
       try {
         await api('/api/ai/leads/' + state.selectedLeadId + '/analyze', { method: 'POST' });
         await loadAiAnalysis();
@@ -920,6 +924,7 @@ export class DashboardController {
       }).join('');
       document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="5" class="muted">まだリードがありません</td></tr>';
       document.getElementById('generateButton').disabled = !state.selectedLeadId;
+      document.getElementById('analysisButton').disabled = !state.selectedLeadId;
       const selected = state.leads.find((lead) => lead.id === state.selectedLeadId);
       document.getElementById('selectedLead').textContent = selected ? (selected.company?.name || selected.id) : '未選択';
     }
@@ -1010,18 +1015,24 @@ export class DashboardController {
       const latest = state.aiGenerations[0];
       const output = latest.outputJson || {};
       const isMailDraft = latest.type === 'email_draft';
+      const readiness = output.readiness || {};
       container.innerHTML =
         '<div class="detail-grid">' +
           detailItem('種別', labelAiGenerationType(latest.type)) +
           detailItem('モデル', latest.model) +
           detailItem('生成日時', formatDate(latest.createdAt)) +
           detailItem('トークン', formatTokenUsage(latest)) +
+          (!isMailDraft ? detailItem('メール生成判断', (readiness.label || '未判定') + (typeof readiness.score === 'number' ? ' / ' + readiness.score + '点' : '')) : '') +
         '</div>' +
+        (!isMailDraft && readiness.reason ? '<div class="notice"><strong>' + escapeHtml(readiness.label || 'メール生成判断') + '</strong>' + escapeHtml(readiness.reason) + '</div>' : '') +
         (!isMailDraft ? '<div class="row"><label>分析まとめ</label><div class="detail-text">' + escapeHtml(output.summary || '未生成') + '</div></div>' : '') +
+        (!isMailDraft ? renderListSection('不足している情報', output.missingInfo) : '') +
+        (!isMailDraft ? renderListSection('次に確認すること', output.nextChecks) : '') +
         (!isMailDraft ? renderListSection('商品の魅力・強み', output.productStrengths) : '') +
         (!isMailDraft ? renderListSection('使う人', output.targetUsers) : '') +
         (!isMailDraft ? renderListSection('営業の切り口', output.salesAngles) : '') +
         (!isMailDraft ? renderListSection('SNSでの見せ方', output.snsIdeas) : '') +
+        (!isMailDraft ? renderListSection('メール作成の注意', output.mailAdvice) : '') +
         renderListSection('使用した事実', output.factsUsed) +
         renderListSection(isMailDraft ? 'AIの推測' : '補足', output.assumptions) +
         renderListSection('注意点', output.riskFlags) +

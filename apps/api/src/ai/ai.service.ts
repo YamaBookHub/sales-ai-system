@@ -36,6 +36,10 @@ export class AiService {
       targetUsers: buildLocalTargetUsers(project?.category, project?.description),
       salesAngles: buildLocalSalesAngles(project?.amount, project?.supporterCount),
       snsIdeas: buildLocalSnsIdeas(project?.category, project?.description),
+      readiness: buildMailReadiness(lead, project),
+      missingInfo: buildMissingInfo(lead, project),
+      nextChecks: buildNextChecks(lead, project),
+      mailAdvice: buildMailAdvice(project?.category, project?.description, lead.reason),
       factsUsed,
       assumptions: ['OpenAI APIを使わない無料分析のため、商品説明から読み取れる範囲で整理しています。'],
       riskFlags: ['メール生成前に、会社名・商品名・商品特徴が相手と合っているか確認してください。']
@@ -222,4 +226,85 @@ function buildLocalSnsIdeas(category?: string | null, description?: string | nul
   if (/防災|安全|守/.test(source)) return ['使用前後の安心感や、保管シーンを短く見せる。'];
   if (/アウトドア|キャンプ|旅行/.test(source)) return ['屋外や移動中の利用シーンを短く見せる。'];
   return ['実際に使う場面を短く見せ、誰に役立つかを分かりやすくする。'];
+}
+
+function buildMailReadiness(
+  lead: {
+    contactEmail?: string | null;
+    contactFormUrl?: string | null;
+    siteMessageUrl?: string | null;
+    reason?: string | null;
+    company: { name?: string | null };
+  },
+  project?: { title?: string | null; description?: string | null; amount?: number | null; supporterCount?: number | null } | null
+) {
+  const missing = buildMissingInfo(lead, project);
+  const missingCount = missing[0] === '大きな不足はありません。' ? 0 : missing.length;
+  const hasContact = Boolean(lead.contactEmail || lead.contactFormUrl || lead.siteMessageUrl);
+  let score = 100 - missingCount * 12;
+  if (!hasContact) score -= 18;
+  if (!lead.reason) score -= 8;
+  if (typeof project?.amount === 'number' && project.amount > 0) score += 5;
+  if (typeof project?.supporterCount === 'number' && project.supporterCount > 0) score += 5;
+  score = Math.max(0, Math.min(100, score));
+
+  const label = score >= 80 ? 'メール生成に進めます' : score >= 55 ? '確認後にメール生成' : '先に情報確認';
+  const reason = hasContact
+    ? '連絡先候補があるため、内容確認後にメール生成へ進めます。'
+    : '連絡先が未確認のため、メール生成前に問い合わせフォームまたはサイト内メッセージ先を確認してください。';
+
+  return { score, label, reason };
+}
+
+function buildMissingInfo(
+  lead: {
+    contactEmail?: string | null;
+    contactFormUrl?: string | null;
+    siteMessageUrl?: string | null;
+    company: { name?: string | null };
+  },
+  project?: { title?: string | null; description?: string | null } | null
+) {
+  const missing = [
+    lead.company.name ? '' : '企業名',
+    project?.title ? '' : '商品名',
+    project?.description ? '' : '商品説明',
+    lead.contactEmail || lead.contactFormUrl || lead.siteMessageUrl ? '' : '連絡先'
+  ].filter(Boolean);
+  return missing.length ? missing : ['大きな不足はありません。'];
+}
+
+function buildNextChecks(
+  lead: {
+    contactEmail?: string | null;
+    contactFormUrl?: string | null;
+    siteMessageUrl?: string | null;
+    brandWebsiteUrl?: string | null;
+    instagramUrl?: string | null;
+    tiktokUrl?: string | null;
+    xUrl?: string | null;
+  },
+  project?: { url?: string | null; description?: string | null } | null
+) {
+  const checks = [
+    '会社名と商品名がCAMPFIREページと一致しているか確認する。',
+    project?.description ? '商品特徴がメール本文に入れて問題ない表現か確認する。' : '商品特徴をCAMPFIREページから手動で補足する。',
+    lead.contactEmail || lead.contactFormUrl || lead.siteMessageUrl ? '送信先がメール・フォーム・サイト内メッセージのどれか確認する。' : '送信先メール、問い合わせフォーム、サイト内メッセージの有無を確認する。'
+  ];
+  if (lead.brandWebsiteUrl || lead.instagramUrl || lead.tiktokUrl || lead.xUrl) {
+    checks.push('公式サイトやSNSの見せ方を確認し、メール内で触れるべきか判断する。');
+  }
+  if (project?.url) checks.push('CAMPFIREページを開き、終了日や公開状態が変わっていないか確認する。');
+  return checks;
+}
+
+function buildMailAdvice(category?: string | null, description?: string | null, reason?: string | null) {
+  const source = `${category || ''} ${description || ''} ${reason || ''}`;
+  if (/防災|安全|守/.test(source)) {
+    return ['不安を煽りすぎず、「備え」「安心」「保管シーン」を中心に書く。', '成果保証ではなく、商品の魅力を伝える見せ方の相談として書く。'];
+  }
+  if (/アウトドア|キャンプ|旅行/.test(source)) {
+    return ['使用シーンが想像しやすい点を中心に書く。', '持ち運びや便利さを断定しすぎず、実際の利用場面に寄せる。'];
+  }
+  return ['商品特徴を1つに絞り、営業感を弱めて書く。', '課題を断定せず、「お力になれそうな機会があれば」という柔らかい表現にする。'];
 }
