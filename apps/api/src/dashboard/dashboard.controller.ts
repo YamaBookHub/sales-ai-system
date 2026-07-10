@@ -806,6 +806,13 @@ export class DashboardController {
       return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener">' + escapeHtml(url) + '</a>';
     }
 
+    function formatDate(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
     function formatCurrency(value) {
       const number = Number(value || 0);
       return number ? number.toLocaleString('ja-JP') + '円' : '未取得';
