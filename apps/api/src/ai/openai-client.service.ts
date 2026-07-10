@@ -218,7 +218,7 @@ export class OpenAiClientService {
 
   private composeStableMailBody(input: SalesMailDraftInput, aiBody: string) {
     const companyName = this.cleanPhrase(input.companyName) || 'ご担当者';
-    const productName = this.cleanPhrase(input.projectTitle) || '貴社プロジェクト';
+    const productName = this.cleanProjectTitle(input.projectTitle) || '貴社プロジェクト';
     const platformName = this.cleanPhrase(input.projectPlatformName) || 'クラウドファンディングサイト';
     const appeal = this.extractAppeal(input, aiBody);
     const targetUser = this.extractTargetUser(input, aiBody);
@@ -273,7 +273,7 @@ export class OpenAiClientService {
   }
 
   private extractTargetUser(input: SalesMailDraftInput, aiBody: string) {
-    const source = `${input.projectCategory || ''} ${input.projectTitle || ''} ${input.projectDescription || ''} ${input.brandAnalysisMemo || ''} ${input.snsAnalysisMemo || ''} ${aiBody || ''}`;
+    const source = `${input.projectCategory || ''} ${input.projectTitle || ''} ${input.projectDescription || ''} ${input.brandAnalysisMemo || ''} ${input.snsAnalysisMemo || ''}`;
     const manualTarget = this.pickManualTarget(source);
     if (manualTarget) return manualTarget;
     if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|浜松町|創業/.test(source)) {
@@ -281,6 +281,12 @@ export class OpenAiClientService {
     }
     if (/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(source)) {
       return 'お米の保存状態やキッチン収納を重視する方';
+    }
+    if (/醤油差し|醤油|サイフォン|有田焼|陶磁器|器|食卓|残量|ガラス管|NEO CLAY/i.test(source)) {
+      return '食卓まわりの使いやすさやデザイン性を重視する方';
+    }
+    if (/エアベッド|ベッド|寝られる|寝心地|空気|マットレス|キャンプ|車中泊|アウトドア/.test(source)) {
+      return 'キャンプや車中泊、来客時の寝具を手軽に用意したい方';
     }
     if (/防災|金庫|保管|守|安全|貴重品|書類/.test(source)) return '防災備えや大切な物の保管を重視する方';
     if (/アウトドア|キャンプ|旅行|屋外|持ち運/.test(source)) return '屋外や移動先での使いやすさを重視する方';
@@ -312,6 +318,12 @@ export class OpenAiClientService {
     if (/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(source)) {
       return 'お米の鮮度を保ちながら、キッチンに収まりやすい形で分けて保存できる点';
     }
+    if (/醤油差し|醤油|サイフォン|有田焼|陶磁器|器|食卓|残量|ガラス管|NEO CLAY/i.test(source)) {
+      return '残量が見えやすく、食卓で使う道具としての機能性とデザイン性を両立している点';
+    }
+    if (/エアベッド|ベッド|寝られる|寝心地|空気|マットレス|キャンプ|車中泊|アウトドア/.test(source)) {
+      return '屋内外で使いやすく、寝心地や持ち運びやすさを訴求しやすい点';
+    }
     return '';
   }
 
@@ -329,13 +341,14 @@ export class OpenAiClientService {
       .replace(/(?:特別価格|限定価格|早割|割引|[0-9,]+円(?:税込)?|価格でご提供|ご提供)/g, '')
       .replace(/特徴\s*[:：]?\s*カテゴリーからさがす/g, '')
       .replace(/カテゴリーからさがす/g, '')
+      .replace(/商品説明から読み取れる特徴をメール生成前に確認してください。?/g, '')
       .replace(/\s*\/\s*/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
   }
 
   private isBadAppeal(value: string) {
-    return !value || /達成率|残り日数|支援額|支援者数|カテゴリーからさがす|カテゴリ[:：]|特別価格|限定価格|早割|割引|価格でご提供/.test(value);
+    return !value || /達成率|残り日数|支援額|支援者数|カテゴリーからさがす|カテゴリ[:：]|特別価格|限定価格|早割|割引|価格でご提供|確認してください|未取得|TODO/.test(value);
   }
 
   private pickSentence(value: string, pattern: RegExp) {
@@ -357,6 +370,14 @@ export class OpenAiClientService {
       .replace(/\s+/g, ' ')
       .replace(/^[・、。]+/, '')
       .replace(/[。]+$/, '')
+      .trim();
+  }
+
+  private cleanProjectTitle(value: string | null | undefined) {
+    return this.cleanPhrase(value)
+      .replace(/^Makuake[｜|]\s*/i, '')
+      .replace(/\s*[｜|]\s*Makuake（マクアケ）$/i, '')
+      .replace(/\s*[｜|]\s*Makuake$/i, '')
       .trim();
   }
 
