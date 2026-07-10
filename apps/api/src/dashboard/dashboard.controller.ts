@@ -920,25 +920,26 @@ export class DashboardController {
     .search-panel .toolbar { grid-column: 1 / -1; }
     .search-console .body {
       display: grid;
-      gap: 14px;
+      gap: 8px;
+      padding: 10px 12px;
     }
     .direct-import,
     .quick-search {
       display: grid;
-      gap: 10px;
+      gap: 8px;
       align-items: center;
     }
     .direct-import {
-      grid-template-columns: minmax(0, 1fr) 220px;
+      grid-template-columns: minmax(0, 1fr) 180px;
     }
     .quick-search {
-      grid-template-columns: minmax(0, 1fr) 92px 92px;
+      grid-template-columns: minmax(0, 1fr) 84px 84px;
     }
     .search-filter-row {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-      padding-top: 2px;
+      gap: 8px;
+      padding-top: 0;
     }
     .direct-import .status,
     .quick-search .status {
@@ -1001,16 +1002,27 @@ export class DashboardController {
     }
     .search-drawer .body,
     .mail-filter-drawer .body {
-      padding-top: 12px;
+      padding-top: 10px;
     }
     .search-block {
       display: grid;
-      gap: 8px;
+      grid-template-columns: 150px minmax(0, 1fr);
+      gap: 8px 12px;
+      align-items: center;
     }
     .search-block-title {
       color: var(--muted);
       font-size: 12px;
       font-weight: 700;
+    }
+    .search-block .direct-import,
+    .search-block .quick-search,
+    .search-block .search-filter-row {
+      grid-column: 2;
+    }
+    details[open] .when-closed,
+    details:not([open]) .when-open {
+      display: none;
     }
     body.url-search-page .right > section {
       border-radius: 4px;
@@ -1120,7 +1132,12 @@ export class DashboardController {
     @media (max-width: 980px) {
       main, .workflow, .split, .grid-2, .detail-grid, .compact-summary { grid-template-columns: 1fr; }
       header { padding: 0 14px; }
-      .direct-import, .quick-search, .search-filter-row, .mail-filter-row, .result-filter-panel { grid-template-columns: 1fr; }
+      .direct-import, .quick-search, .search-filter-row, .mail-filter-row, .result-filter-panel, .search-block { grid-template-columns: 1fr; }
+      .search-block .direct-import,
+      .search-block .quick-search,
+      .search-block .search-filter-row {
+        grid-column: 1;
+      }
     }
   </style>
 </head>
@@ -1158,7 +1175,7 @@ export class DashboardController {
         <details class="search-drawer">
           <summary>
             <span>検索条件・URL取り込み</span>
-            <span class="muted">開く</span>
+            <span class="muted"><span class="when-closed">開く</span><span class="when-open">閉じる</span></span>
           </summary>
           <div class="body">
             <div class="search-block">
@@ -1205,7 +1222,7 @@ export class DashboardController {
         <details class="mail-filter-drawer">
           <summary>
             <span>対象検索</span>
-            <span class="muted">必要な時だけ開く</span>
+            <span class="muted"><span class="when-closed">開く</span><span class="when-open">閉じる</span></span>
           </summary>
           <div class="body">
             <div class="mail-filter-row">
