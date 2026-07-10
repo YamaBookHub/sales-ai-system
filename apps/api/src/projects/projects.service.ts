@@ -37,8 +37,17 @@ export class ProjectsService {
     });
   }
 
-  searchCampfire(dto: SearchCampfireProjectsDto) {
-    return this.campfireScraper.search(dto);
+  async searchCampfire(dto: SearchCampfireProjectsDto) {
+    const existingProjects = await this.prisma.crowdfundingProject.findMany({
+      where: { url: { contains: 'camp-fire.jp' } },
+      select: { url: true }
+    });
+    const excludeUrls = Array.from(new Set([
+      ...(dto.excludeUrls || []),
+      ...existingProjects.map((project) => project.url)
+    ].filter(Boolean)));
+
+    return this.campfireScraper.search({ ...dto, excludeUrls });
   }
 
   campfireCategories() {
