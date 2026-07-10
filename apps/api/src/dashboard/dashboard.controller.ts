@@ -2200,14 +2200,13 @@ export class DashboardController {
       let successCount = 0;
       let failedCount = 0;
       let completedCount = 0;
-      let nextIndex = 0;
-      const concurrency = Math.min(4, importableEntries.length);
+      let analyzedCount = 0;
+      let analysisFailedCount = 0;
+      const importResults = [];
+      const importConcurrency = Math.min(4, importableEntries.length);
+      const analysisConcurrency = Math.min(6, importableEntries.length);
       setStatus('bulkImportStatus', '一括取り込み中 0/' + importableEntries.length, 'warn');
-      const runNext = async () => {
-        const entryIndex = nextIndex;
-        nextIndex += 1;
-        if (entryIndex >= importableEntries.length) return;
-        const candidate = importableEntries[entryIndex].item;
+      await runWithConcurrency(importableEntries, importConcurrency, async ({ item: candidate }) => {
         try {
           document.getElementById('campfireUrl').value = candidate.url;
           setCandidateImportStatus(candidate, 'importing', '取り込み中');
@@ -2217,8 +2216,8 @@ export class DashboardController {
             body: JSON.stringify({ url: candidate.url })
           });
           state.selectedLeadId = result.lead.id;
-          await api('/api/ai/leads/' + result.lead.id + '/analyze', { method: 'POST' });
-          setCandidateImportStatus(candidate, 'imported', '取り込み済み', result.lead.id);
+          importResults.push({ candidate, leadId: result.lead.id });
+          setCandidateImportStatus(candidate, 'imported', '取り込み済み・分析待ち', result.lead.id);
           successCount += 1;
         } catch (error) {
           setCandidateImportStatus(candidate, 'failed', error.message);
@@ -2227,16 +2226,45 @@ export class DashboardController {
         completedCount += 1;
         setStatus('bulkImportStatus', '一括取り込み中 ' + completedCount + '/' + importableEntries.length + (failedCount ? '（失敗 ' + failedCount + '件）' : ''), 'warn');
         renderCampfireCandidates();
-        await runNext();
-      };
-      await Promise.all(Array.from({ length: concurrency }, () => runNext()));
+      });
+
+      if (importResults.length) {
+        setStatus('bulkImportStatus', 'AI分析中 0/' + importResults.length, 'warn');
+        await runWithConcurrency(importResults, analysisConcurrency, async ({ candidate, leadId }) => {
+          try {
+            setCandidateImportStatus(candidate, 'imported', 'AI分析中', leadId);
+            renderCampfireCandidates();
+            await api('/api/ai/leads/' + leadId + '/analyze', { method: 'POST' });
+            setCandidateImportStatus(candidate, 'imported', '取り込み・AI分析済み', leadId);
+            analyzedCount += 1;
+          } catch (error) {
+            setCandidateImportStatus(candidate, 'imported', '取り込み済み / AI分析失敗: ' + error.message, leadId);
+            analysisFailedCount += 1;
+          }
+          setStatus('bulkImportStatus', 'AI分析中 ' + (analyzedCount + analysisFailedCount) + '/' + importResults.length + (analysisFailedCount ? '（分析失敗 ' + analysisFailedCount + '件）' : ''), 'warn');
+          renderCampfireCandidates();
+        });
+      }
       setStatus(
         'bulkImportStatus',
-        '一括取り込み完了: 取込 ' + successCount + '件 / 失敗 ' + failedCount + '件',
-        failedCount ? 'warn' : 'ok'
+        '一括取り込み完了: 取込 ' + successCount + '件 / 取込失敗 ' + failedCount + '件 / AI分析 ' + analyzedCount + '件' + (analysisFailedCount ? ' / AI分析失敗 ' + analysisFailedCount + '件' : ''),
+        failedCount || analysisFailedCount ? 'warn' : 'ok'
       );
       await loadAll();
       renderCampfireCandidates();
+    }
+
+    async function runWithConcurrency(items, concurrency, worker) {
+      let nextIndex = 0;
+      const safeConcurrency = Math.max(1, Math.min(concurrency, items.length));
+      const runNext = async () => {
+        const index = nextIndex;
+        nextIndex += 1;
+        if (index >= items.length) return;
+        await worker(items[index], index);
+        await runNext();
+      };
+      await Promise.all(Array.from({ length: safeConcurrency }, () => runNext()));
     }
 
     async function analyzeLead(options = {}) {
