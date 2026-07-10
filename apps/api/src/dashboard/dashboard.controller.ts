@@ -2,6 +2,536 @@ import { Controller, Get, Header } from '@nestjs/common';
 
 @Controller()
 export class DashboardController {
+  @Get('leads-view')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  leadsView() {
+    return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>営業リスト詳細</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #172026;
+      --muted: #66737f;
+      --line: #dfe4ea;
+      --accent: #136f63;
+      --warn: #9f5a00;
+      --danger: #a83232;
+      --ok: #1d7b45;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+      font-size: 14px;
+    }
+    header {
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    h1 { font-size: 18px; margin: 0; }
+    button, input, select { font: inherit; }
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      height: 34px;
+      border-radius: 6px;
+      padding: 0 12px;
+      cursor: pointer;
+    }
+    button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+    input, select {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 10px;
+      background: white;
+      min-width: 0;
+    }
+    main { padding: 16px; display: grid; gap: 14px; }
+    section {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    h2 { font-size: 15px; margin: 0; }
+    .body { padding: 14px 16px; }
+    .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .filters {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(150px, 180px));
+      gap: 8px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfd;
+    }
+    .stat strong { display: block; font-size: 22px; margin-bottom: 4px; }
+    .muted { color: var(--muted); }
+    .status { font-size: 13px; }
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(340px, .6fr);
+      gap: 14px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    th, td {
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { font-size: 12px; color: var(--muted); background: #fbfcfd; position: sticky; top: 58px; z-index: 2; }
+    tr { cursor: pointer; }
+    tr:hover { background: #f8fbfa; }
+    tr[data-selected="true"] { background: #eef8f5; }
+    .clip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      background: white;
+    }
+    .badge.ok { color: var(--ok); border-color: #bddfc9; background: #f1fbf4; }
+    .badge.warn { color: var(--warn); border-color: #ecd2a8; background: #fff8eb; }
+    .badge.danger { color: var(--danger); border-color: #ecc4c4; background: #fff4f4; }
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .detail-item { border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+    .detail-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .detail-value { word-break: break-word; }
+    .row { margin-top: 12px; }
+    .row label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+    .detail-text {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      background: #fbfcfd;
+      white-space: pre-wrap;
+      max-height: 180px;
+      overflow: auto;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    @media (max-width: 1100px) {
+      .filters, .stats, .split, .detail-grid { grid-template-columns: 1fr; }
+      th { position: static; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>営業リスト詳細</h1>
+    <div class="toolbar">
+      <span id="pageStatus" class="status muted">読み込み中</span>
+      <button onclick="location.href='/'">メイン画面</button>
+      <button class="primary" onclick="loadAll()">更新</button>
+    </div>
+  </header>
+  <main>
+    <section>
+      <div class="section-head">
+        <h2>状態サマリー</h2>
+      </div>
+      <div class="body">
+        <div class="stats" id="stats"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>検索・絞り込み</h2>
+      </div>
+      <div class="body">
+        <div class="filters">
+          <input id="keyword" placeholder="会社・案件・URL・メモで検索" oninput="render()" />
+          <select id="statusFilter" onchange="render()">
+            <option value="">状態 すべて</option>
+            <option value="discovered">発見</option>
+            <option value="qualified">候補</option>
+            <option value="drafted">下書き済み</option>
+            <option value="reviewing">確認中</option>
+            <option value="approved">承認済み</option>
+            <option value="queued">送信待ち</option>
+            <option value="contacted">連絡済み</option>
+            <option value="replied">返信あり</option>
+            <option value="meeting_candidate">商談候補</option>
+            <option value="rejected">対象外</option>
+          </select>
+          <select id="priorityFilter" onchange="render()">
+            <option value="">優先度 すべて</option>
+            <option value="high">高</option>
+            <option value="medium">中</option>
+            <option value="low">低</option>
+          </select>
+          <select id="contactFilter" onchange="render()">
+            <option value="">連絡先 すべて</option>
+            <option value="has">連絡先あり</option>
+            <option value="none">連絡先なし</option>
+          </select>
+          <select id="mailFilter" onchange="render()">
+            <option value="">メール すべて</option>
+            <option value="none">未生成</option>
+            <option value="draft">下書き</option>
+            <option value="in_review">確認待ち</option>
+            <option value="approved">承認済み</option>
+            <option value="queued">送信待ち</option>
+            <option value="sent">送信済み</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <div class="split">
+      <section>
+        <div class="section-head">
+          <h2>営業リスト</h2>
+          <span id="listCount" class="status muted">0件</span>
+        </div>
+        <div class="body" style="padding:0">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:18%">会社</th>
+                <th>案件</th>
+                <th style="width:90px">状態</th>
+                <th style="width:70px">優先度</th>
+                <th style="width:70px">点数</th>
+                <th style="width:120px">連絡先</th>
+                <th style="width:110px">最新メール</th>
+                <th style="width:110px">次対応</th>
+              </tr>
+            </thead>
+            <tbody id="leadRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>選択案件</h2>
+          <div class="toolbar">
+            <button onclick="openProject()" id="openProjectButton" disabled>URLを開く</button>
+          </div>
+        </div>
+        <div class="body" id="leadDetail">
+          <div class="muted">営業リストから案件を選択してください</div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const state = { leads: [], mails: [], selectedLeadId: null };
+
+    async function api(path) {
+      const response = await fetch(path);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || payload.error?.message || 'APIエラー');
+      return payload.data;
+    }
+
+    async function loadAll() {
+      document.getElementById('pageStatus').textContent = '読み込み中';
+      try {
+        const [leads, mails] = await Promise.all([
+          api('/api/leads?limit=200'),
+          api('/api/mails?limit=200')
+        ]);
+        state.leads = leads.items || [];
+        state.mails = mails.items || [];
+        render();
+        document.getElementById('pageStatus').textContent = '読み込み完了';
+      } catch (error) {
+        document.getElementById('pageStatus').textContent = error.message;
+      }
+    }
+
+    function render() {
+      renderStats();
+      renderRows();
+      renderDetail();
+    }
+
+    function renderStats() {
+      const counts = {
+        total: state.leads.length,
+        noContact: state.leads.filter((lead) => !hasContact(lead)).length,
+        draft: state.leads.filter((lead) => latestMail(lead.id)?.status === 'draft').length,
+        review: state.leads.filter((lead) => latestMail(lead.id)?.status === 'in_review').length,
+        queued: state.leads.filter((lead) => latestMail(lead.id)?.status === 'queued').length
+      };
+      document.getElementById('stats').innerHTML =
+        statCard('総リード', counts.total) +
+        statCard('連絡先なし', counts.noContact) +
+        statCard('下書き', counts.draft) +
+        statCard('確認待ち', counts.review) +
+        statCard('送信待ち', counts.queued);
+    }
+
+    function statCard(label, value) {
+      return '<div class="stat"><strong>' + escapeHtml(value) + '</strong><span class="muted">' + escapeHtml(label) + '</span></div>';
+    }
+
+    function renderRows() {
+      const rows = filteredLeads().map((lead) => {
+        const mail = latestMail(lead.id);
+        const project = lead.project || {};
+        const contact = contactSummary(lead);
+        return '<tr data-selected="' + (lead.id === state.selectedLeadId) + '" onclick="selectLead(\\'' + lead.id + '\\')">' +
+          '<td><div class="clip">' + escapeHtml(lead.company?.name || lead.companyId) + '</div></td>' +
+          '<td><div class="clip">' + escapeHtml(project.title || '案件名なし') + '</div><div class="muted clip">' + escapeHtml(project.url || '') + '</div></td>' +
+          '<td><span class="badge">' + escapeHtml(labelLeadStatus(lead.status)) + '</span></td>' +
+          '<td>' + escapeHtml(labelPriority(lead.priority)) + '</td>' +
+          '<td>' + escapeHtml(Number(lead.score || 0)) + '</td>' +
+          '<td><span class="badge ' + (contact === '未確認' ? 'danger' : 'ok') + '">' + escapeHtml(contact) + '</span></td>' +
+          '<td>' + (mail ? '<span class="badge ' + mailBadgeClass(mail.status) + '">' + escapeHtml(labelMailStatus(mail.status)) + '</span>' : '<span class="badge warn">未生成</span>') + '</td>' +
+          '<td>' + escapeHtml(nextActionLabel(lead, mail)) + '</td>' +
+        '</tr>';
+      }).join('');
+      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="8" class="muted">条件に合うリードがありません</td></tr>';
+      document.getElementById('listCount').textContent = filteredLeads().length + '件';
+    }
+
+    function renderDetail() {
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      const container = document.getElementById('leadDetail');
+      const openButton = document.getElementById('openProjectButton');
+      if (!lead) {
+        container.innerHTML = '<div class="muted">営業リストから案件を選択してください</div>';
+        openButton.disabled = true;
+        return;
+      }
+      const project = lead.project || {};
+      const mail = latestMail(lead.id);
+      openButton.disabled = !project.url;
+      container.innerHTML =
+        '<div class="detail-grid">' +
+          detailItem('企業名', lead.company?.name || lead.companyId) +
+          detailItem('状態', labelLeadStatus(lead.status)) +
+          detailItem('優先度', labelPriority(lead.priority)) +
+          detailItem('点数', Number(lead.score || 0)) +
+          detailItem('支援額', formatCurrency(project.amount)) +
+          detailItem('支援者数', formatNumber(project.supporterCount) + '人') +
+          detailItem('連絡先', contactSummary(lead)) +
+          detailItem('最新メール', mail ? labelMailStatus(mail.status) : '未生成') +
+        '</div>' +
+        rowBlock('案件名', project.title || '未取得') +
+        rowBlock('URL', project.url ? renderLink(project.url) : '未取得', true) +
+        rowBlock('商品説明', project.description || '未取得') +
+        rowBlock('営業理由', lead.reason || '未入力') +
+        rowBlock('連絡先メモ', contactDetail(lead), true) +
+        rowBlock('ブランド/SNS', snsDetail(lead), true) +
+        rowBlock('次にやること', nextActionLabel(lead, mail)) +
+        rowBlock('最新メール件名', mail?.subject || '未生成');
+    }
+
+    function filteredLeads() {
+      const keyword = value('keyword').toLowerCase();
+      const status = value('statusFilter');
+      const priority = value('priorityFilter');
+      const contact = value('contactFilter');
+      const mailStatus = value('mailFilter');
+      return state.leads.filter((lead) => {
+        const mail = latestMail(lead.id);
+        const project = lead.project || {};
+        const haystack = [
+          lead.company?.name,
+          project.title,
+          project.url,
+          project.description,
+          lead.reason,
+          lead.ownerMemo
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (keyword && !haystack.includes(keyword)) return false;
+        if (status && lead.status !== status) return false;
+        if (priority && lead.priority !== priority) return false;
+        if (contact === 'has' && !hasContact(lead)) return false;
+        if (contact === 'none' && hasContact(lead)) return false;
+        if (mailStatus === 'none' && mail) return false;
+        if (mailStatus && mailStatus !== 'none' && mail?.status !== mailStatus) return false;
+        return true;
+      });
+    }
+
+    function latestMail(leadId) {
+      return state.mails
+        .filter((mail) => mail.leadId === leadId)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+    }
+
+    function selectLead(id) {
+      state.selectedLeadId = id;
+      renderRows();
+      renderDetail();
+    }
+
+    function openProject() {
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      const url = lead?.project?.url;
+      if (url) window.open(url, '_blank', 'noopener');
+    }
+
+    function nextActionLabel(lead, mail) {
+      if (!hasContact(lead)) return '連絡先確認';
+      if (!mail) return '無料分析後にメール生成';
+      if (mail.status === 'draft') return '本文確認';
+      if (mail.status === 'in_review') return '上長確認';
+      if (mail.status === 'rejected') return '修正して再依頼';
+      if (mail.status === 'approved') return 'キュー投入';
+      if (mail.status === 'queued') return '送信待ち';
+      if (mail.status === 'sent') return '返信確認';
+      return '確認';
+    }
+
+    function hasContact(lead) {
+      return Boolean(lead.contactEmail || lead.contactFormUrl || lead.siteMessageUrl);
+    }
+
+    function contactSummary(lead) {
+      if (lead.contactEmail) return 'メール';
+      if (lead.contactFormUrl) return 'フォーム';
+      if (lead.siteMessageUrl) return 'サイト内';
+      return '未確認';
+    }
+
+    function contactDetail(lead) {
+      return [
+        lead.contactEmail ? 'メール: ' + escapeHtml(lead.contactEmail) : '',
+        lead.contactFormUrl ? 'フォーム: ' + renderLink(lead.contactFormUrl) : '',
+        lead.siteMessageUrl ? 'サイト内: ' + renderLink(lead.siteMessageUrl) : '',
+        lead.contactMemo ? 'メモ: ' + escapeHtml(lead.contactMemo) : ''
+      ].filter(Boolean).join('<br>') || '未確認';
+    }
+
+    function snsDetail(lead) {
+      return [
+        lead.brandWebsiteUrl ? '公式: ' + renderLink(lead.brandWebsiteUrl) : '',
+        lead.instagramUrl ? 'Instagram: ' + renderLink(lead.instagramUrl) : '',
+        lead.tiktokUrl ? 'TikTok: ' + renderLink(lead.tiktokUrl) : '',
+        lead.xUrl ? 'X: ' + renderLink(lead.xUrl) : ''
+      ].filter(Boolean).join('<br>') || '未取得';
+    }
+
+    function value(id) {
+      return document.getElementById(id).value.trim();
+    }
+
+    function detailItem(label, value) {
+      return '<div class="detail-item"><div class="detail-label">' + escapeHtml(label) + '</div><div class="detail-value">' + escapeHtml(value || '未取得') + '</div></div>';
+    }
+
+    function rowBlock(label, value, html = false) {
+      return '<div class="row"><label>' + escapeHtml(label) + '</label><div class="detail-text">' + (html ? value : escapeHtml(value || '未取得')) + '</div></div>';
+    }
+
+    function renderLink(url) {
+      return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener">' + escapeHtml(url) + '</a>';
+    }
+
+    function formatCurrency(value) {
+      const number = Number(value || 0);
+      return number ? number.toLocaleString('ja-JP') + '円' : '未取得';
+    }
+
+    function formatNumber(value) {
+      const number = Number(value || 0);
+      return Number.isFinite(number) ? number.toLocaleString('ja-JP') : '0';
+    }
+
+    function labelLeadStatus(status) {
+      return ({
+        discovered: '発見',
+        qualified: '候補',
+        drafted: '下書き済み',
+        reviewing: '確認中',
+        approved: '承認済み',
+        queued: '送信待ち',
+        contacted: '連絡済み',
+        replied: '返信あり',
+        meeting_candidate: '商談候補',
+        rejected: '対象外'
+      })[status] || status || '未設定';
+    }
+
+    function labelPriority(priority) {
+      return ({ high: '高', medium: '中', low: '低' })[priority] || priority || '未設定';
+    }
+
+    function labelMailStatus(status) {
+      return ({
+        draft: '下書き',
+        in_review: '確認待ち',
+        rejected: '棄却',
+        approved: '承認済み',
+        queued: '送信待ち',
+        sending: '送信中',
+        sent: '送信済み',
+        failed: '送信失敗',
+        cancelled: 'キャンセル'
+      })[status] || status || '未設定';
+    }
+
+    function mailBadgeClass(status) {
+      if (['approved', 'queued', 'sent'].includes(status)) return 'ok';
+      if (['rejected', 'failed', 'cancelled'].includes(status)) return 'danger';
+      return 'warn';
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      }[char]));
+    }
+
+    loadAll();
+  </script>
+</body>
+</html>`;
+  }
+
   @Get()
   @Header('Content-Type', 'text/html; charset=utf-8')
   index() {
@@ -367,6 +897,7 @@ export class DashboardController {
     <h1>Sales AI System</h1>
     <div class="toolbar">
       <span id="apiStatus" class="status muted">API確認中</span>
+      <button onclick="location.href='/leads-view'">営業リスト詳細</button>
       <button onclick="loadAll()">更新</button>
     </div>
   </header>
