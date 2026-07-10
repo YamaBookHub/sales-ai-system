@@ -858,17 +858,25 @@ export class DashboardController {
     .search-panel .toolbar { grid-column: 1 / -1; }
     .search-console .body {
       display: grid;
-      gap: 12px;
+      gap: 14px;
     }
     .direct-import,
     .quick-search {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 8px;
+      gap: 10px;
       align-items: center;
     }
+    .direct-import {
+      grid-template-columns: minmax(0, 1fr) 220px;
+    }
     .quick-search {
-      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-columns: minmax(0, 1fr) 92px 92px;
+    }
+    .search-filter-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      padding-top: 2px;
     }
     .direct-import .status,
     .quick-search .status {
@@ -929,6 +937,15 @@ export class DashboardController {
     }
     .search-drawer .body {
       padding-top: 12px;
+    }
+    .search-block {
+      display: grid;
+      gap: 8px;
+    }
+    .search-block-title {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
     }
     body.url-search-page .right > section {
       border-radius: 10px;
@@ -1062,38 +1079,41 @@ export class DashboardController {
             <span class="muted">クリックで開閉</span>
           </summary>
           <div class="body">
-            <div class="direct-import">
-              <input id="campfireUrl" placeholder="https://camp-fire.jp/projects/.../view" />
-              <button class="primary" onclick="importCampfire()">このURLを取り込む</button>
-              <span id="importStatus" class="status"></span>
+            <div class="search-block">
+              <div class="search-block-title">URLを直接取り込む</div>
+              <div class="direct-import">
+                <input id="campfireUrl" placeholder="https://camp-fire.jp/projects/.../view" />
+                <button class="primary" onclick="importCampfire()">このURLを取り込む</button>
+                <span id="importStatus" class="status"></span>
+              </div>
             </div>
-            <div class="quick-search">
-              <input id="campfireSearchKeyword" placeholder="キーワード・商品名で候補検索" />
-              <button class="primary" onclick="searchCampfireCandidates()">検索</button>
-              <details class="advanced-search">
-                <summary>条件</summary>
-                <div class="search-panel">
-                  <select id="campfireSearchCategory">
-                    <option value="">カテゴリを取得中</option>
-                  </select>
-                  <select id="campfireFetchLimit">
-                    <option value="10">取得上限 10件</option>
-                    <option value="50">取得上限 50件</option>
-                    <option value="100">取得上限 100件</option>
-                  </select>
-                  <select id="campfireSearchProfileProjectRange">
-                    <option value="">過去プロジェクト すべて</option>
-                    <option value="0:0">初回のみ</option>
-                    <option value="1:3">1〜3件</option>
-                    <option value="4:9">4〜9件</option>
-                    <option value="10:29">10〜29件</option>
-                    <option value="30:99">30〜99件</option>
-                    <option value="100:">100件以上</option>
-                  </select>
-                </div>
-              </details>
-              <button onclick="clearCampfireSearch()">クリア</button>
-              <span id="campfireSearchStatusText" class="status"></span>
+            <div class="search-block">
+              <div class="search-block-title">CAMPFIREから候補を探す</div>
+              <div class="quick-search">
+                <input id="campfireSearchKeyword" placeholder="キーワード・商品名で候補検索" />
+                <button class="primary" onclick="searchCampfireCandidates()">検索</button>
+                <button onclick="clearCampfireSearch()">クリア</button>
+                <span id="campfireSearchStatusText" class="status"></span>
+              </div>
+              <div class="search-filter-row">
+                <select id="campfireSearchCategory">
+                  <option value="">カテゴリを取得中</option>
+                </select>
+                <select id="campfireFetchLimit">
+                  <option value="10">取得上限 10件</option>
+                  <option value="50">取得上限 50件</option>
+                  <option value="100">取得上限 100件</option>
+                </select>
+                <select id="campfireSearchProfileProjectRange">
+                  <option value="">過去プロジェクト すべて</option>
+                  <option value="0:0">初回のみ</option>
+                  <option value="1:3">1〜3件</option>
+                  <option value="4:9">4〜9件</option>
+                  <option value="10:29">10〜29件</option>
+                  <option value="30:99">30〜99件</option>
+                  <option value="100:">100件以上</option>
+                </select>
+              </div>
             </div>
           </div>
         </details>
