@@ -5,9 +5,11 @@ import { chromium, type BrowserContext, type Page } from 'playwright';
 const CAMPFIRE_ORIGIN = 'https://camp-fire.jp';
 const DEFAULT_SEARCH_RESULT_LIMIT = 10;
 const SEARCH_RESULT_LIMITS = [10, 50, 100];
-const PROFILE_LOOKUP_CONCURRENCY = clampNumber(Number(process.env.CAMPFIRE_PROFILE_LOOKUP_CONCURRENCY || 5), 1, 12);
+const PROFILE_LOOKUP_CONCURRENCY = clampNumber(Number(process.env.CAMPFIRE_PROFILE_LOOKUP_CONCURRENCY || 8), 1, 12);
+const SEARCH_CACHE_TTL_MS = clampNumber(Number(process.env.CAMPFIRE_SEARCH_CACHE_TTL_MS || 5 * 60 * 1000), 0, 30 * 60 * 1000);
 const CAMPFIRE_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36';
+const searchCache = new Map<string, { expiresAt: number; items: CampfireSearchResult[] }>();
 
 export type ScrapedCampfireProject = {
   projectUrl: string;
@@ -102,6 +104,12 @@ export class CampfireScraperService {
   }
 
   async search(input: CampfireSearchInput): Promise<{ items: CampfireSearchResult[]; total: number }> {
+    const cacheKey = buildSearchCacheKey(input);
+    const cachedItems = readSearchCache(cacheKey);
+    if (cachedItems) {
+      return { items: cachedItems, total: cachedItems.length };
+    }
+
     const browser = await chromium.launch({ headless: true });
 
     try {
@@ -113,6 +121,7 @@ export class CampfireScraperService {
       const items = hasProfileProjectFilter(input)
         ? await collectSearchResultsMatchingProfileRange(page, input, resultLimit, excludedUrls)
         : await collectSearchResults(page, resultLimit, excludedUrls);
+      writeSearchCache(cacheKey, items);
       return { items, total: items.length };
     } finally {
       await browser.close();
@@ -385,6 +394,50 @@ async function clickNextSearchResults(page: Page) {
 
 function normalizeSearchLimit(limit?: number) {
   return SEARCH_RESULT_LIMITS.includes(Number(limit)) ? Number(limit) : DEFAULT_SEARCH_RESULT_LIMIT;
+}
+
+function buildSearchCacheKey(input: CampfireSearchInput) {
+  return JSON.stringify({
+    keyword: input.keyword || '',
+    category: input.category || '',
+    amountMin: input.amountMin ?? null,
+    amountMax: input.amountMax ?? null,
+    supporterMin: input.supporterMin ?? null,
+    supporterMax: input.supporterMax ?? null,
+    profileProjectMin: input.profileProjectMin ?? null,
+    profileProjectMax: input.profileProjectMax ?? null,
+    limit: normalizeSearchLimit(input.limit),
+    status: input.status || '',
+    excludeUrls: Array.from(buildExcludedUrlSet(input.excludeUrls)).sort()
+  });
+}
+
+function readSearchCache(key: string) {
+  if (!SEARCH_CACHE_TTL_MS) return null;
+  const cached = searchCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    searchCache.delete(key);
+    return null;
+  }
+  return cached.items.map((item) => ({ ...item }));
+}
+
+function writeSearchCache(key: string, items: CampfireSearchResult[]) {
+  if (!SEARCH_CACHE_TTL_MS) return;
+  searchCache.set(key, {
+    expiresAt: Date.now() + SEARCH_CACHE_TTL_MS,
+    items: items.map((item) => ({ ...item }))
+  });
+  pruneSearchCache();
+}
+
+function pruneSearchCache() {
+  if (searchCache.size <= 30) return;
+  const now = Date.now();
+  for (const [key, value] of searchCache.entries()) {
+    if (value.expiresAt <= now || searchCache.size > 30) searchCache.delete(key);
+  }
 }
 
 function clampNumber(value: number, min: number, max: number) {
