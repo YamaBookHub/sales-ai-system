@@ -81,11 +81,11 @@ export class DashboardController {
       background: white;
       min-width: 0;
     }
-    main { padding: 16px; display: grid; gap: 14px; }
+    main { padding: 12px; display: grid; gap: 10px; }
     section {
       border: 1px solid var(--line);
       background: var(--panel);
-      border-radius: 8px;
+      border-radius: 4px;
       overflow: hidden;
     }
     .section-head {
@@ -93,11 +93,11 @@ export class DashboardController {
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 12px 16px;
+      padding: 10px 12px;
       border-bottom: 1px solid var(--line);
     }
     h2 { font-size: 15px; margin: 0; }
-    .body { padding: 14px 16px; }
+    .body { padding: 12px; }
     .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .filters {
       display: grid;
@@ -127,8 +127,8 @@ export class DashboardController {
     }
     .stat {
       border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 12px;
+      border-radius: 4px;
+      padding: 10px;
       background: #fbfcfd;
     }
     .stat strong { display: block; font-size: 22px; margin-bottom: 4px; }
@@ -145,7 +145,7 @@ export class DashboardController {
       table-layout: fixed;
     }
     th, td {
-      padding: 10px 8px;
+      padding: 8px;
       border-bottom: 1px solid var(--line);
       text-align: left;
       vertical-align: top;
@@ -160,7 +160,7 @@ export class DashboardController {
       align-items: center;
       min-height: 24px;
       border: 1px solid var(--line);
-      border-radius: 999px;
+      border-radius: 4px;
       padding: 2px 8px;
       font-size: 12px;
       background: white;
@@ -169,15 +169,15 @@ export class DashboardController {
     .badge.warn { color: var(--warn); border-color: #ecd2a8; background: #fff8eb; }
     .badge.danger { color: var(--danger); border-color: #ecc4c4; background: #fff4f4; }
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .detail-item { border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+    .detail-item { border: 1px solid var(--line); border-radius: 4px; padding: 8px; }
     .detail-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
     .detail-value { word-break: break-word; }
     .row { margin-top: 12px; }
     .row label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; }
     .detail-text {
       border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 10px;
+      border-radius: 4px;
+      padding: 8px;
       background: #fbfcfd;
       white-space: pre-wrap;
       max-height: 180px;
@@ -651,8 +651,8 @@ export class DashboardController {
     main {
       display: grid;
       grid-template-columns: 420px minmax(0, 1fr);
-      gap: 16px;
-      padding: 16px;
+      gap: 10px;
+      padding: 12px;
       min-height: calc(100vh - 58px);
     }
     .workflow {
@@ -661,12 +661,12 @@ export class DashboardController {
     section {
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 4px;
       min-width: 0;
     }
-    .left, .right { display: grid; gap: 16px; align-content: start; }
+    .left, .right { display: grid; gap: 10px; align-content: start; }
     .section-head {
-      padding: 14px 16px;
+      padding: 10px 12px;
       border-bottom: 1px solid var(--line);
       display: flex;
       align-items: center;
@@ -674,13 +674,13 @@ export class DashboardController {
       gap: 12px;
     }
     h2 { font-size: 15px; margin: 0; }
-    .body { padding: 16px; }
+    .body { padding: 12px; }
     .row { display: grid; gap: 8px; margin-bottom: 12px; }
     label { color: var(--muted); font-size: 12px; }
     input, select, textarea {
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 6px;
+      border-radius: 4px;
       background: white;
       color: var(--text);
       padding: 9px 10px;
@@ -697,7 +697,7 @@ export class DashboardController {
       border-left: 4px solid var(--warn);
       background: #fff8ee;
       border-radius: 6px;
-      padding: 10px 12px;
+      padding: 8px 10px;
       margin-bottom: 12px;
       line-height: 1.6;
     }
@@ -709,7 +709,7 @@ export class DashboardController {
     }
     th, td {
       border-bottom: 1px solid var(--line);
-      padding: 10px 12px;
+      padding: 8px 10px;
       text-align: left;
       vertical-align: top;
     }
@@ -727,7 +727,7 @@ export class DashboardController {
       align-items: center;
       min-height: 22px;
       padding: 2px 8px;
-      border-radius: 999px;
+      border-radius: 4px;
       background: #edf0f2;
       color: #3b4750;
       font-size: 12px;
@@ -868,7 +868,7 @@ export class DashboardController {
       width: 100%;
       margin: 0 auto;
       align-content: start;
-      gap: 12px;
+      gap: 10px;
     }
     body.mail-workspace-page main {
       grid-template-columns: minmax(0, 1fr);
@@ -876,7 +876,7 @@ export class DashboardController {
       width: 100%;
       margin: 0 auto;
       align-content: start;
-      gap: 12px;
+      gap: 10px;
     }
     body.mail-workspace-page .left,
     body.mail-workspace-page .right {
@@ -946,21 +946,21 @@ export class DashboardController {
       display: block;
     }
     body.url-search-page .left {
-      order: 1;
-    }
-    body.url-search-page .right {
       order: 2;
     }
+    body.url-search-page .right {
+      order: 1;
+    }
     body.url-search-page .search-console {
-      border-radius: 10px;
+      border-radius: 4px;
     }
     .search-drawer > summary {
-      min-height: 50px;
+      min-height: 42px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 0 16px;
+      padding: 0 12px;
       cursor: pointer;
       font-weight: 700;
       border-bottom: 1px solid transparent;
@@ -981,7 +981,7 @@ export class DashboardController {
       font-weight: 700;
     }
     body.url-search-page .right > section {
-      border-radius: 10px;
+      border-radius: 4px;
     }
     .result-filter-panel {
       display: grid;
@@ -998,7 +998,7 @@ export class DashboardController {
     .candidate-table-wrap {
       overflow: auto;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 4px;
     }
     .candidate-table {
       min-width: 980px;
@@ -1108,8 +1108,8 @@ export class DashboardController {
       <section class="search-console">
         <details class="search-drawer">
           <summary>
-            <span>CAMPFIRE候補検索・URL取り込み</span>
-            <span class="muted">クリックで開閉</span>
+            <span>検索条件・URL取り込み</span>
+            <span class="muted">開く</span>
           </summary>
           <div class="body">
             <div class="search-block">
@@ -1176,7 +1176,7 @@ export class DashboardController {
     <div class="right">
       <section>
         <div class="section-head">
-          <h2>検索結果</h2>
+          <h2>CAMPFIRE候補一覧</h2>
           <div class="toolbar">
             <span id="campfireCandidateCount" class="status muted">未検索</span>
             <button onclick="bulkImportVisibleCandidates()" id="bulkImportButton" disabled>表示中を一括取り込み</button>
@@ -1184,7 +1184,7 @@ export class DashboardController {
         </div>
         <div class="body">
           <details class="display-filter">
-            <summary>表示条件</summary>
+            <summary>一覧の表示条件</summary>
             <div class="result-filter-panel">
               <select id="campfireResultLimit" onchange="renderCampfireCandidates()">
                 <option value="10">最大表示 10件</option>
