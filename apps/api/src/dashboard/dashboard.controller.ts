@@ -826,7 +826,8 @@ export class DashboardController {
     .tab-panel[data-active="true"] { display: block; }
     body.url-search-page .left section:nth-of-type(2),
     body.url-search-page .tabs,
-    body.url-search-page .tab-panel {
+    body.url-search-page .tab-panel,
+    body.url-search-page .workflow {
       display: none;
     }
     body.mail-workspace-page .left section:first-child,
@@ -912,6 +913,23 @@ export class DashboardController {
     body.url-search-page .search-console {
       border-radius: 10px;
     }
+    .search-drawer > summary {
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 16px;
+      cursor: pointer;
+      font-weight: 700;
+      border-bottom: 1px solid transparent;
+    }
+    .search-drawer[open] > summary {
+      border-bottom-color: var(--line);
+    }
+    .search-drawer .body {
+      padding-top: 12px;
+    }
     body.url-search-page .right > section {
       border-radius: 10px;
     }
@@ -927,45 +945,74 @@ export class DashboardController {
     .display-filter .result-filter-panel {
       margin-top: 10px;
     }
-    .candidate-list {
-      display: grid;
-      gap: 10px;
-    }
-    .candidate-item {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 14px;
-      align-items: center;
+    .candidate-table-wrap {
+      overflow: auto;
       border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 12px;
-      background: #fbfcfd;
     }
-    .candidate-title {
+    .candidate-table {
+      min-width: 980px;
+      table-layout: fixed;
+    }
+    .candidate-table th,
+    .candidate-table td {
+      vertical-align: top;
+    }
+    .candidate-table th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .candidate-table td {
+      background: #fff;
+    }
+    .candidate-table tr:hover td {
+      background: #f8fbfa;
+    }
+    .candidate-title-cell {
       font-weight: 700;
-      line-height: 1.5;
-      margin-bottom: 4px;
+      line-height: 1.45;
       overflow-wrap: anywhere;
     }
-    .candidate-url {
+    .candidate-summary {
       color: var(--muted);
       font-size: 12px;
-      line-height: 1.5;
+      line-height: 1.55;
+      margin-top: 5px;
       overflow-wrap: anywhere;
     }
-    .candidate-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 8px;
+    .num-cell {
+      white-space: nowrap;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
     }
-    .candidate-meta span {
+    .center-cell {
+      text-align: center;
+      white-space: nowrap;
+    }
+    .action-cell {
+      white-space: nowrap;
+      text-align: right;
+    }
+    .link-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 34px;
       border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 3px 8px;
-      background: white;
-      color: #34424d;
-      font-size: 12px;
+      border-radius: 6px;
+      padding: 0 10px;
+      background: #fff;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .link-button:hover {
+      border-color: #b8c7d1;
+      background: #f8fafb;
+      text-decoration: none;
     }
     a {
       color: var(--accent);
@@ -1009,44 +1056,47 @@ export class DashboardController {
 
     <div class="left">
       <section class="search-console">
-        <div class="section-head">
-          <h2>CAMPFIREから候補を取り込む</h2>
-        </div>
-        <div class="body">
-          <div class="direct-import">
-            <input id="campfireUrl" placeholder="https://camp-fire.jp/projects/.../view" />
-            <button class="primary" onclick="importCampfire()">このURLを取り込む</button>
-            <span id="importStatus" class="status"></span>
+        <details class="search-drawer">
+          <summary>
+            <span>CAMPFIRE候補検索・URL取り込み</span>
+            <span class="muted">クリックで開閉</span>
+          </summary>
+          <div class="body">
+            <div class="direct-import">
+              <input id="campfireUrl" placeholder="https://camp-fire.jp/projects/.../view" />
+              <button class="primary" onclick="importCampfire()">このURLを取り込む</button>
+              <span id="importStatus" class="status"></span>
+            </div>
+            <div class="quick-search">
+              <input id="campfireSearchKeyword" placeholder="キーワード・商品名で候補検索" />
+              <button class="primary" onclick="searchCampfireCandidates()">検索</button>
+              <details class="advanced-search">
+                <summary>条件</summary>
+                <div class="search-panel">
+                  <select id="campfireSearchCategory">
+                    <option value="">カテゴリを取得中</option>
+                  </select>
+                  <select id="campfireFetchLimit">
+                    <option value="10">取得上限 10件</option>
+                    <option value="50">取得上限 50件</option>
+                    <option value="100">取得上限 100件</option>
+                  </select>
+                  <select id="campfireSearchProfileProjectRange">
+                    <option value="">過去プロジェクト すべて</option>
+                    <option value="0:0">初回のみ</option>
+                    <option value="1:3">1〜3件</option>
+                    <option value="4:9">4〜9件</option>
+                    <option value="10:29">10〜29件</option>
+                    <option value="30:99">30〜99件</option>
+                    <option value="100:">100件以上</option>
+                  </select>
+                </div>
+              </details>
+              <button onclick="clearCampfireSearch()">クリア</button>
+              <span id="campfireSearchStatusText" class="status"></span>
+            </div>
           </div>
-          <div class="quick-search">
-            <input id="campfireSearchKeyword" placeholder="キーワード・商品名で候補検索" />
-            <button class="primary" onclick="searchCampfireCandidates()">検索</button>
-            <details class="advanced-search">
-              <summary>条件</summary>
-              <div class="search-panel">
-                <select id="campfireSearchCategory">
-                  <option value="">カテゴリを取得中</option>
-                </select>
-                <select id="campfireFetchLimit">
-                  <option value="10">取得上限 10件</option>
-                  <option value="50">取得上限 50件</option>
-                  <option value="100">取得上限 100件</option>
-                </select>
-                <select id="campfireSearchProfileProjectRange">
-                  <option value="">過去プロジェクト すべて</option>
-                  <option value="0:0">初回のみ</option>
-                  <option value="1:3">1〜3件</option>
-                  <option value="4:9">4〜9件</option>
-                  <option value="10:29">10〜29件</option>
-                  <option value="30:99">30〜99件</option>
-                  <option value="100:">100件以上</option>
-                </select>
-              </div>
-            </details>
-            <button onclick="clearCampfireSearch()">クリア</button>
-            <span id="campfireSearchStatusText" class="status"></span>
-          </div>
-        </div>
+        </details>
       </section>
 
       <section>
@@ -1583,23 +1633,45 @@ export class DashboardController {
         container.innerHTML = '<div class="muted">表示条件に合う候補がありません。条件をゆるめてください。</div>';
         return;
       }
-      const items = visibleCandidates.map(({ item, originalIndex }) => {
+      const rows = visibleCandidates.map(({ item, originalIndex }) => {
         const projectUrl = escapeAttr(item.url);
-        return '<div class="candidate-item">' +
-          '<div>' +
-            '<div class="candidate-title"><a href="' + projectUrl + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(item.title) + '</a></div>' +
-            '<div class="candidate-url"><a href="' + projectUrl + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(item.url) + '</a></div>' +
-            '<div class="candidate-meta">' +
-              '<span>支援額 ' + formatCurrency(item.amount) + '</span>' +
-              '<span>支援者 ' + formatNumber(item.supporterCount) + '人</span>' +
-              '<span>残り ' + (item.daysLeft === null ? '-' : escapeHtml(item.daysLeft + '日')) + '</span>' +
-              '<span>過去 ' + (item.profileProjectCount === null ? '-' : escapeHtml(item.profileProjectCount + '件')) + '</span>' +
-            '</div>' +
-          '</div>' +
-          '<button class="primary" onclick="importCampfireCandidate(' + originalIndex + ')">取り込む</button>' +
-        '</div>';
+        const pastProjects = item.profileProjectCount === null
+          ? '-'
+          : item.profileProjectCount === 0
+            ? '初回'
+            : item.profileProjectCount + '件';
+        return '<tr>' +
+          '<td>' +
+            '<div class="candidate-title-cell"><a href="' + projectUrl + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(item.title || '案件名なし') + '</a></div>' +
+            (item.summary ? '<div class="candidate-summary">' + escapeHtml(truncateText(item.summary, 90)) + '</div>' : '') +
+          '</td>' +
+          '<td class="num-cell">' + formatCurrency(item.amount) + '</td>' +
+          '<td class="num-cell">' + formatNumber(item.supporterCount) + '人</td>' +
+          '<td class="center-cell">' + (item.daysLeft === null ? '-' : escapeHtml(item.daysLeft + '日')) + '</td>' +
+          '<td class="center-cell">' + escapeHtml(pastProjects) + '</td>' +
+          '<td>' + escapeHtml(item.category || '-') + '</td>' +
+          '<td class="center-cell"><a class="link-button" href="' + projectUrl + '" target="_blank" rel="noopener noreferrer">開く</a></td>' +
+          '<td class="action-cell"><button class="primary" onclick="importCampfireCandidate(' + originalIndex + ')">取り込む</button></td>' +
+        '</tr>';
       }).join('');
-      container.innerHTML = '<div class="candidate-list">' + items + '</div>';
+      container.innerHTML =
+        '<div class="candidate-table-wrap">' +
+          '<table class="candidate-table">' +
+            '<thead>' +
+              '<tr>' +
+                '<th style="width:34%">案件</th>' +
+                '<th style="width:110px">支援額</th>' +
+                '<th style="width:96px">支援者</th>' +
+                '<th style="width:76px">残り</th>' +
+                '<th style="width:96px">過去PJ</th>' +
+                '<th style="width:130px">カテゴリ</th>' +
+                '<th style="width:76px">URL</th>' +
+                '<th style="width:104px">操作</th>' +
+              '</tr>' +
+            '</thead>' +
+            '<tbody>' + rows + '</tbody>' +
+          '</table>' +
+        '</div>';
     }
 
     function getVisibleCandidateEntries() {
