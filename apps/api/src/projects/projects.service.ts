@@ -197,8 +197,15 @@ function normalizeCompanyName(value: string) {
 }
 
 function buildImportReason(scraped: { achievementRate: string; daysLeft: string; features: string[] }) {
-  const values = [scraped.achievementRate && `達成率: ${scraped.achievementRate}`, scraped.daysLeft && `残り日数: ${scraped.daysLeft}`, scraped.features[0] && `特徴: ${scraped.features[0]}`].filter(Boolean);
+  const feature = cleanScrapedFeature(scraped.features[0]);
+  const values = [scraped.achievementRate && `達成率: ${scraped.achievementRate}`, scraped.daysLeft && `残り日数: ${scraped.daysLeft}`, feature && `特徴: ${feature}`].filter(Boolean);
   return values.join(' / ') || 'CAMPFIRE import';
+}
+
+function cleanScrapedFeature(value?: string) {
+  const cleaned = (value || '').trim();
+  if (!cleaned || cleaned === 'カテゴリーからさがす' || cleaned === 'カテゴリからさがす') return '';
+  return cleaned;
 }
 
 function buildAutoUrlMemo(scraped: { externalUrls: string[] }) {

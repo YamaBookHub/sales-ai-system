@@ -309,6 +309,7 @@ function classifyReplyText(body: string): {
 function buildLocalStrengths(description?: string | null, reason?: string | null) {
   const source = [description, reason].filter(Boolean).join(' ');
   const strengths = [
+    source.match(/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/) ? '店舗の継続や改装の背景を、応援したくなる取り組みとして伝えやすい可能性があります。' : '',
     source.match(/軽量|コンパクト|持ち運び/) ? '持ち運びやすさを伝えやすい可能性があります。' : '',
     source.match(/防災|安全|守/) ? '安心感や備えの必要性を切り口にしやすい可能性があります。' : '',
     source.match(/便利|簡単|時短/) ? '日常の不便を減らす商品として伝えやすい可能性があります。' : ''
@@ -318,6 +319,7 @@ function buildLocalStrengths(description?: string | null, reason?: string | null
 
 function buildLocalTargetUsers(category?: string | null, description?: string | null) {
   const source = `${category || ''} ${description || ''}`;
+  if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/.test(source)) return ['地域に根ざした店舗を応援したい方', '飲食店の継続や再開を応援したい方'];
   if (/防災|安全|守/.test(source)) return ['防災備えを重視する方', '大切な物を保管したい方'];
   if (/アウトドア|キャンプ|旅行/.test(source)) return ['アウトドアや旅行で使う方', '持ち運びやすさを重視する方'];
   if (/美容|ヘルス|健康/.test(source)) return ['日常ケアに関心がある方'];
@@ -333,6 +335,7 @@ function buildLocalSalesAngles(amount?: number | null, supporters?: number | nul
 
 function buildLocalSnsIdeas(category?: string | null, description?: string | null) {
   const source = `${category || ''} ${description || ''}`;
+  if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/.test(source)) return ['店舗の歴史、改装の背景、料理や店内の雰囲気を短く見せる。'];
   if (/防災|安全|守/.test(source)) return ['使用前後の安心感や、保管シーンを短く見せる。'];
   if (/アウトドア|キャンプ|旅行/.test(source)) return ['屋外や移動中の利用シーンを短く見せる。'];
   return ['実際に使う場面を短く見せ、誰に役立つかを分かりやすくする。'];
@@ -410,6 +413,9 @@ function buildNextChecks(
 
 function buildMailAdvice(category?: string | null, description?: string | null, reason?: string | null) {
   const source = `${category || ''} ${description || ''} ${reason || ''}`;
+  if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/.test(source)) {
+    return ['商品として断定せず、店舗の継続や改装背景に共感した文章にする。', '来店者や地域の支援者に伝わる見せ方の相談として書く。'];
+  }
   if (/防災|安全|守/.test(source)) {
     return ['不安を煽りすぎず、「備え」「安心」「保管シーン」を中心に書く。', '成果保証ではなく、商品の魅力を伝える見せ方の相談として書く。'];
   }

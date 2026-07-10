@@ -124,6 +124,9 @@ export class OpenAiClientService {
       '【商品名】にはproject.titleを使ってください。',
       '【商品の魅力・特徴・強み】にはproject.descriptionやleadReasonから、事実に基づく魅力を1文で自然に入れてください。',
       '【使う人】には商品説明から自然に考えられる利用者層を短く入れてください。推測した場合はassumptionsに入れてください。',
+      '達成率、残り日数、支援額、支援者数、カテゴリ名、「カテゴリーからさがす」は商品の魅力として絶対に書かないでください。',
+      '店舗改装、飲食店、地域支援、家族事情の案件は「商品」ではなく「プロジェクト」「取り組み」として自然に書いてください。',
+      '飲食店の案件で「お子さま」「ご家族の暮らし」など無関係な利用者層を推測しないでください。',
       '余計な過去商品分析、動画アイデア、強い提案、情報交換依頼、上長確認のような文は追加しないでください。',
       '本文テンプレート:',
       '【企業名＋ご担当者】',
@@ -164,7 +167,7 @@ export class OpenAiClientService {
         supporterCount: input.supporterCount,
         description: this.truncate(input.projectDescription, maxDescriptionLength)
       },
-      leadReason: input.leadReason
+      leadReason: this.sanitizeSourceText(input.leadReason)
     };
   }
 
@@ -211,15 +214,16 @@ export class OpenAiClientService {
     const productName = this.cleanPhrase(input.projectTitle) || '貴社プロジェクト';
     const appeal = this.extractAppeal(input, aiBody);
     const targetUser = this.extractTargetUser(input, aiBody);
+    const subjectType = this.projectSubjectType(input);
 
     return [
       `${companyName} ご担当者様`,
       'お世話になっております。\n株式会社第弐ヴォヌールの山本と申します。',
       `CAMPFIREにて、貴社の「${productName}」を拝見しました。`,
-      `${this.withPointSuffix(appeal)}がとても印象的で、${targetUser}にとって、実際の使用シーンをイメージしやすい商品だと感じました。`,
+      `${this.withPointSuffix(appeal)}がとても印象的で、${targetUser}にとって、${subjectType}の魅力をイメージしやすい内容だと感じました。`,
       '弊社では、クラウドファンディング支援およびSNSマーケティング支援を行っております。',
       '実績としては、SNS運用で1か月総再生400万回超、クラウドファンディング領域では、担当商品で3,500万円規模の売上実績がございます。',
-      '商品の魅力を伝える見せ方や、売上につながる導線づくりの面でもお手伝いしております。',
+      `${subjectType === '取り組み' ? 'プロジェクト' : '商品'}の魅力を伝える見せ方や、売上につながる導線づくりの面でもお手伝いしております。`,
       'もし何かお力になれそうな機会がございましたら、お気軽にご連絡いただけますと幸いです。'
     ].join('\n\n');
   }
@@ -230,14 +234,17 @@ export class OpenAiClientService {
   }
 
   private extractAppeal(input: SalesMailDraftInput, aiBody: string) {
-    const projectSources = [input.projectDescription, input.leadReason].filter(Boolean).join(' ');
+    const sourceBundle = this.sourceBundle(input, aiBody);
+    const specialAppeal = this.specialCaseAppeal(input);
+    if (specialAppeal) return specialAppeal;
+
     const candidates = [
-      this.pickSentence(projectSources, /(?:特徴|印象的|魅力|強み|可能|でき|守|使|選|持ち運|コンパクト|軽量|防災|安心|便利|楽し|体験|香り|味わい)/),
-      this.firstSentence(input.projectDescription),
-      this.firstSentence(input.leadReason),
-      this.pickSentence(aiBody, /(?:特徴|印象的|魅力|強み|可能|でき|守|使|選|持ち運|コンパクト|軽量|防災|安心|便利|楽し|体験|香り|味わい)/)
+      this.pickSentence(sourceBundle.description, /(?:特徴|印象的|魅力|強み|可能|でき|守|使|選|持ち運|コンパクト|軽量|防災|安心|便利|楽し|体験|香り|味わい|店舗|リフォーム|改装|営業|地域|飲食|焼き鳥|炭火)/),
+      this.firstSentence(sourceBundle.description),
+      this.pickSentence(sourceBundle.aiBody, /(?:特徴|印象的|魅力|強み|可能|でき|守|使|選|持ち運|コンパクト|軽量|防災|安心|便利|楽し|体験|香り|味わい|店舗|リフォーム|改装|営業|地域|飲食|焼き鳥|炭火)/)
     ]
       .map((value) => this.cleanPhrase(value))
+      .filter((value) => !this.isBadAppeal(value))
       .filter(Boolean);
     const selected = candidates[0] || '商品の特徴や利用シーンが分かりやすい';
     return this.toAppealPhrase(this.trimJapaneseSentence(selected, 72))
@@ -258,12 +265,55 @@ export class OpenAiClientService {
   }
 
   private extractTargetUser(input: SalesMailDraftInput, aiBody: string) {
-    const source = `${input.projectCategory || ''} ${input.projectDescription || ''} ${input.leadReason || ''} ${aiBody || ''}`;
+    const source = `${input.projectCategory || ''} ${input.projectTitle || ''} ${input.projectDescription || ''} ${aiBody || ''}`;
+    if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|浜松町|創業/.test(source)) {
+      return '店舗の継続や地域に根ざしたお店を応援したい方';
+    }
     if (/防災|金庫|保管|守|安全|貴重品|書類/.test(source)) return '防災備えや大切な物の保管を重視する方';
     if (/アウトドア|キャンプ|旅行|屋外|持ち運/.test(source)) return '屋外や移動先での使いやすさを重視する方';
     if (/美容|健康|ヘルス|ケア/.test(source)) return '日常のケアや健康意識を大切にする方';
     if (/子ども|学習|教育|学校|本/.test(source)) return 'お子さまやご家族の暮らしを大切にする方';
     return '商品に関心を持つお客様';
+  }
+
+  private projectSubjectType(input: SalesMailDraftInput) {
+    const source = `${input.projectTitle || ''} ${input.projectDescription || ''} ${input.projectCategory || ''}`;
+    if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|地域|支援/.test(source)) {
+      return '取り組み';
+    }
+    return '商品';
+  }
+
+  private sourceBundle(input: SalesMailDraftInput, aiBody: string) {
+    return {
+      description: this.sanitizeSourceText(input.projectDescription),
+      aiBody: this.sanitizeSourceText(aiBody)
+    };
+  }
+
+  private specialCaseAppeal(input: SalesMailDraftInput) {
+    const source = `${input.projectTitle || ''} ${input.projectDescription || ''}`;
+    if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|浜松町|創業/.test(source)) {
+      return '長年親しまれてきた店舗をより利用しやすい形で継続しようとされている点';
+    }
+    return '';
+  }
+
+  private sanitizeSourceText(value: string | null | undefined) {
+    return (value || '')
+      .replace(/達成率\s*[:：]?\s*[0-9,]+%?/g, '')
+      .replace(/残り日数\s*[:：]?\s*[0-9,]+日?/g, '')
+      .replace(/支援額\s*[:：]?\s*[0-9,]+円?/g, '')
+      .replace(/支援者数\s*[:：]?\s*[0-9,]+人?/g, '')
+      .replace(/特徴\s*[:：]?\s*カテゴリーからさがす/g, '')
+      .replace(/カテゴリーからさがす/g, '')
+      .replace(/\s*\/\s*/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private isBadAppeal(value: string) {
+    return !value || /達成率|残り日数|支援額|支援者数|カテゴリーからさがす|カテゴリ[:：]/.test(value);
   }
 
   private pickSentence(value: string, pattern: RegExp) {
