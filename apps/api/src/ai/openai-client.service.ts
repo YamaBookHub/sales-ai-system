@@ -275,6 +275,9 @@ export class OpenAiClientService {
     if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|浜松町|創業/.test(source)) {
       return '店舗の継続や地域に根ざしたお店を応援したい方';
     }
+    if (/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(source)) {
+      return 'お米の保存状態やキッチン収納を重視する方';
+    }
     if (/防災|金庫|保管|守|安全|貴重品|書類/.test(source)) return '防災備えや大切な物の保管を重視する方';
     if (/アウトドア|キャンプ|旅行|屋外|持ち運/.test(source)) return '屋外や移動先での使いやすさを重視する方';
     if (/美容|健康|ヘルス|ケア/.test(source)) return '日常のケアや健康意識を大切にする方';
@@ -302,6 +305,9 @@ export class OpenAiClientService {
     if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|浜松町|創業/.test(source)) {
       return '長年親しまれてきた店舗をより利用しやすい形で継続しようとされている点';
     }
+    if (/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(source)) {
+      return 'お米の鮮度を保ちながら、キッチンに収まりやすい形で分けて保存できる点';
+    }
     return '';
   }
 
@@ -316,6 +322,7 @@ export class OpenAiClientService {
       .replace(/残り日数\s*[:：]?\s*[0-9,]+日?/g, '')
       .replace(/支援額\s*[:：]?\s*[0-9,]+円?/g, '')
       .replace(/支援者数\s*[:：]?\s*[0-9,]+人?/g, '')
+      .replace(/(?:特別価格|限定価格|早割|割引|[0-9,]+円(?:税込)?|価格でご提供|ご提供)/g, '')
       .replace(/特徴\s*[:：]?\s*カテゴリーからさがす/g, '')
       .replace(/カテゴリーからさがす/g, '')
       .replace(/\s*\/\s*/g, ' ')
@@ -324,7 +331,7 @@ export class OpenAiClientService {
   }
 
   private isBadAppeal(value: string) {
-    return !value || /達成率|残り日数|支援額|支援者数|カテゴリーからさがす|カテゴリ[:：]/.test(value);
+    return !value || /達成率|残り日数|支援額|支援者数|カテゴリーからさがす|カテゴリ[:：]|特別価格|限定価格|早割|割引|価格でご提供/.test(value);
   }
 
   private pickSentence(value: string, pattern: RegExp) {

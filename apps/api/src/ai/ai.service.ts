@@ -405,6 +405,7 @@ function buildMailPlaceholders(
   const source = sanitizeAnalysisSource(`${title || ''} ${category || ''} ${description || ''} ${reason || ''} ${manualAnalysis}`);
   const isStoreProject = /飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業|地域/.test(source);
   const isEventProject = /ライブ|コンサート|音楽|バンド|ファン|周年|結成|記念|イベント|公演|ツアー|フェス|アーティスト/.test(source);
+  const isRiceStorageProject = /米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(source);
   const strength = buildLocalStrengths(description, [reason, manualAnalysis].filter(Boolean).join(' '))[0] || '';
   const manualAppeal = pickManualAppeal(manualAnalysis);
   const manualTarget = pickManualTarget(manualAnalysis);
@@ -412,11 +413,15 @@ function buildMailPlaceholders(
     ? '長年親しまれてきた店舗をより利用しやすい形で継続しようとされている点'
     : isEventProject
       ? '節目となる企画をファンの方々と一緒に盛り上げようとされている点'
+      : isRiceStorageProject
+        ? 'お米の鮮度を保ちながら、キッチンに収まりやすい形で分けて保存できる点'
       : toMailSafeAppeal(strength, title));
   const target = manualTarget || (isStoreProject
     ? '店舗の継続や地域に根ざしたお店を応援したい方'
     : isEventProject
       ? 'これまで活動を応援してきたファンの方や、ライブ体験に関心のある方'
+      : isRiceStorageProject
+        ? 'お米の保存状態やキッチン収納を重視する方'
       : buildLocalTargetUsers(category, description)[0] || 'この取り組みに関心を持つ方');
   const subjectType = isStoreProject || isEventProject ? '取り組み' : '商品';
 
@@ -467,6 +472,7 @@ function sanitizeAnalysisSource(value: string) {
     .replace(/残り日数\s*[:：]?\s*[0-9,]+日?/g, '')
     .replace(/支援額\s*[:：]?\s*[0-9,]+円?/g, '')
     .replace(/支援者数\s*[:：]?\s*[0-9,]+人?/g, '')
+    .replace(/(?:特別価格|限定価格|早割|割引|[0-9,]+円(?:税込)?|価格でご提供|ご提供)/g, '')
     .replace(/特徴\s*[:：]?\s*カテゴリーからさがす/g, '')
     .replace(/カテゴリーからさがす/g, '')
     .replace(/\s+/g, ' ')
@@ -552,6 +558,7 @@ function buildLocalStrengths(description?: string | null, reason?: string | null
   const source = [description, reason].filter(Boolean).join(' ');
   const strengths = [
     source.match(/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/) ? '店舗の継続や改装の背景を、応援したくなる取り組みとして伝えやすい可能性があります。' : '',
+    source.match(/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/) ? 'お米の鮮度を保ちながら、キッチンに収まりやすく分けて保存できる点を伝えやすい可能性があります。' : '',
     source.match(/軽量|コンパクト|持ち運び/) ? '持ち運びやすさを伝えやすい可能性があります。' : '',
     source.match(/防災|安全|守/) ? '安心感や備えの必要性を切り口にしやすい可能性があります。' : '',
     source.match(/便利|簡単|時短/) ? '日常の不便を減らす商品として伝えやすい可能性があります。' : ''
@@ -562,6 +569,7 @@ function buildLocalStrengths(description?: string | null, reason?: string | null
 function buildLocalTargetUsers(category?: string | null, description?: string | null) {
   const source = `${category || ''} ${description || ''}`;
   if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/.test(source)) return ['地域に根ざした店舗を応援したい方', '飲食店の継続や再開を応援したい方'];
+  if (/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(source)) return ['お米の保存状態やキッチン収納を重視する方', '日々の食材管理をしやすくしたい方'];
   if (/防災|安全|守/.test(source)) return ['防災備えを重視する方', '大切な物を保管したい方'];
   if (/アウトドア|キャンプ|旅行/.test(source)) return ['アウトドアや旅行で使う方', '持ち運びやすさを重視する方'];
   if (/美容|ヘルス|健康/.test(source)) return ['日常ケアに関心がある方'];
