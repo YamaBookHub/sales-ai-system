@@ -1623,7 +1623,13 @@ export class DashboardController {
     }
 
     async function generateMail() {
-      if (!state.selectedLeadId) return;
+      if (!canGenerateMail()) {
+        const message = state.selectedLeadId
+          ? '既存メールがあります。履歴からメールを選択して状態に応じた操作をしてください。'
+          : '先に営業対象一覧から対象を選択してください。';
+        setStatus('mailStatus', message, 'warn');
+        return;
+      }
       setStatus('mailStatus', '生成中', 'warn');
       try {
         const templateKey = document.getElementById('templateKey').value;
@@ -1794,7 +1800,7 @@ export class DashboardController {
       document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="6" class="muted">まだリードがありません</td></tr>';
       const mailLeadCount = document.getElementById('mailLeadCount');
       if (mailLeadCount) mailLeadCount.textContent = leads.length + '件';
-      document.getElementById('generateButton').disabled = !state.selectedLeadId;
+      document.getElementById('generateButton').disabled = !canGenerateMail();
       document.getElementById('analysisButton').disabled = !state.selectedLeadId;
       const selected = state.leads.find((lead) => lead.id === state.selectedLeadId);
       document.getElementById('selectedLead').textContent = selected ? (selected.company?.name || selected.id) : '未選択';
@@ -2115,6 +2121,10 @@ export class DashboardController {
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }
 
+    function canGenerateMail() {
+      return Boolean(state.selectedLeadId && selectedLeadMails().length === 0);
+    }
+
     function ensureSelectedMailForLead() {
       if (!state.selectedLeadId) {
         state.selectedMailId = null;
@@ -2260,6 +2270,15 @@ export class DashboardController {
     }
 
     function updateMailButtons(mail) {
+      const generateButton = document.getElementById('generateButton');
+      const hasLead = Boolean(state.selectedLeadId);
+      const hasExistingMails = selectedLeadMails().length > 0;
+      generateButton.disabled = !canGenerateMail();
+      generateButton.title = !hasLead
+        ? '先に営業対象一覧から対象を選択してください'
+        : hasExistingMails
+          ? '既存メールがあります。履歴から選択して編集・レビューしてください'
+          : 'この対象の新規メールを生成できます';
       document.getElementById('saveButton').disabled = !mail;
       document.getElementById('reviewButton').disabled = !mail || mail.status !== 'draft';
       document.getElementById('reReviewButton').disabled = !mail || mail.status !== 'rejected';
