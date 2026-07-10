@@ -17,6 +17,11 @@ export class AiController {
     return ok(await this.ai.generateMailDraft(leadId, dto));
   }
 
+  @Post('leads/:leadId/analyze')
+  async analyzeLead(@Param('leadId') leadId: string) {
+    return ok(await this.ai.analyzeLead(leadId));
+  }
+
   @Get('leads/:leadId/generations')
   async listLeadGenerations(@Param('leadId') leadId: string) {
     return ok(await this.ai.listLeadGenerations(leadId));

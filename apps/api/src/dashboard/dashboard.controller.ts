@@ -405,7 +405,7 @@ export class DashboardController {
             <input id="campfireUrl" placeholder="https://camp-fire.jp/projects/.../view" />
           </div>
           <div class="toolbar">
-            <button class="primary" onclick="importCampfire()">取り込む</button>
+            <button class="primary" onclick="importCampfire()">取り込む・無料分析</button>
             <span id="importStatus" class="status"></span>
           </div>
           <div class="row" style="margin-top:16px">
@@ -685,8 +685,9 @@ export class DashboardController {
           body: JSON.stringify({ url })
         });
         state.selectedLeadId = result.lead.id;
-        setStatus('importStatus', '取り込み完了', 'ok');
+        setStatus('importStatus', '取り込み完了。AI分析中', 'warn');
         await loadAll();
+        await analyzeLead({ automatic: true });
       } catch (error) {
         setStatus('importStatus', error.message, 'error');
       }
@@ -743,6 +744,23 @@ export class DashboardController {
       if (!candidate?.url) return;
       document.getElementById('campfireUrl').value = candidate.url;
       await importCampfire();
+    }
+
+    async function analyzeLead(options = {}) {
+      if (!state.selectedLeadId) return;
+      try {
+        await api('/api/ai/leads/' + state.selectedLeadId + '/analyze', { method: 'POST' });
+        await loadAiAnalysis();
+        switchTab('ai');
+        if (options.automatic) {
+          setStatus('importStatus', '取り込みとAI分析が完了しました。問題なければメール生成へ進んでください。', 'ok');
+        }
+      } catch (error) {
+        if (options.automatic) {
+          setStatus('importStatus', '取り込みは完了。AI分析で停止しました: ' + error.message, 'error');
+        }
+        document.getElementById('aiAnalysis').innerHTML = '<div class="status error">' + escapeHtml(error.message) + '</div>';
+      }
     }
 
     async function generateMail() {
@@ -991,16 +1009,23 @@ export class DashboardController {
 
       const latest = state.aiGenerations[0];
       const output = latest.outputJson || {};
+      const isMailDraft = latest.type === 'email_draft';
       container.innerHTML =
         '<div class="detail-grid">' +
-          detailItem('種別', latest.type) +
+          detailItem('種別', labelAiGenerationType(latest.type)) +
           detailItem('モデル', latest.model) +
           detailItem('生成日時', formatDate(latest.createdAt)) +
           detailItem('トークン', formatTokenUsage(latest)) +
         '</div>' +
+        (!isMailDraft ? '<div class="row"><label>分析まとめ</label><div class="detail-text">' + escapeHtml(output.summary || '未生成') + '</div></div>' : '') +
+        (!isMailDraft ? renderListSection('商品の魅力・強み', output.productStrengths) : '') +
+        (!isMailDraft ? renderListSection('使う人', output.targetUsers) : '') +
+        (!isMailDraft ? renderListSection('営業の切り口', output.salesAngles) : '') +
+        (!isMailDraft ? renderListSection('SNSでの見せ方', output.snsIdeas) : '') +
         renderListSection('使用した事実', output.factsUsed) +
-        renderListSection('AIの推測', output.assumptions) +
+        renderListSection(isMailDraft ? 'AIの推測' : '補足', output.assumptions) +
         renderListSection('注意点', output.riskFlags) +
+        (isMailDraft ?
         '<div class="row">' +
           '<label>生成件名</label>' +
           '<div class="detail-value">' + escapeHtml(output.subject || latest.email?.subject || '未生成') + '</div>' +
@@ -1008,7 +1033,7 @@ export class DashboardController {
         '<div class="row">' +
           '<label>生成本文</label>' +
           '<div class="detail-text">' + escapeHtml(truncateText(output.body || '', 900) || '未生成') + '</div>' +
-        '</div>' +
+        '</div>' : '') +
         '<div class="row">' +
           '<label>履歴</label>' +
           '<div class="ai-history">' + renderAiHistory() + '</div>' +
@@ -1253,6 +1278,17 @@ export class DashboardController {
       })[status] || status || '未設定';
     }
 
+    function labelAiGenerationType(type) {
+      return ({
+        project_summary: '無料分析',
+        email_draft: 'メール生成',
+        lead_scoring: 'スコア分析',
+        subject_generation: '件名生成',
+        reply_classification: '返信分類',
+        next_action: '次アクション'
+      })[type] || type || '未設定';
+    }
+
     function labelLeadStatus(status) {
       return ({
         discovered: '発見',
@@ -1341,7 +1377,7 @@ export class DashboardController {
 
     function renderAiHistory() {
       return state.aiGenerations.map((item, index) => {
-        const title = formatDate(item.createdAt) + ' / ' + item.type + ' / ' + item.model;
+        const title = formatDate(item.createdAt) + ' / ' + labelAiGenerationType(item.type) + ' / ' + item.model;
         return '<button onclick="showAiGeneration(' + index + ')">' + escapeHtml(title) + '</button>';
       }).join('');
     }
