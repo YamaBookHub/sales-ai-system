@@ -156,16 +156,30 @@ export class DashboardController {
       table-layout: fixed;
     }
     th, td {
-      padding: 8px;
+      padding: 12px 10px;
       border-bottom: 1px solid var(--line);
       text-align: left;
       vertical-align: top;
+      line-height: 1.55;
     }
-    th { font-size: 12px; color: var(--muted); background: #fbfcfd; position: sticky; top: 58px; z-index: 2; }
+    th {
+      font-size: 12px;
+      color: var(--muted);
+      background: #fbfcfd;
+      position: static;
+      line-height: 1.4;
+    }
     tr { cursor: pointer; }
     tr:hover { background: #f8fbfa; }
     tr[data-selected="true"] { background: #eef8f5; }
-    .clip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .clip {
+      display: block;
+      min-height: 1.55em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.55;
+    }
     .badge {
       display: inline-flex;
       align-items: center;
