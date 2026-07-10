@@ -840,7 +840,10 @@ export class DashboardController {
       display: block;
     }
     body.url-search-page main {
-      grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
+      max-width: 1240px;
+      width: 100%;
+      margin: 0 auto;
     }
     body.mail-workspace-page main {
       grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
@@ -852,11 +855,77 @@ export class DashboardController {
       margin-top: 14px;
     }
     .search-panel .toolbar { grid-column: 1 / -1; }
+    .search-console .body {
+      display: grid;
+      gap: 12px;
+    }
+    .direct-import,
+    .quick-search {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .quick-search {
+      grid-template-columns: minmax(0, 1fr) auto auto;
+    }
+    .direct-import .status,
+    .quick-search .status {
+      grid-column: 1 / -1;
+    }
+    .advanced-search {
+      min-width: 170px;
+    }
+    .advanced-search summary,
+    .display-filter summary {
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 12px;
+      background: #fff;
+      cursor: pointer;
+      color: #34424d;
+      white-space: nowrap;
+    }
+    .advanced-search[open] summary,
+    .display-filter[open] summary {
+      border-color: #b9c8d1;
+      background: #f8fafb;
+    }
+    .advanced-search .search-panel {
+      margin-top: 10px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      min-width: min(760px, calc(100vw - 48px));
+    }
+    body.url-search-page .left,
+    body.url-search-page .right {
+      display: block;
+    }
+    body.url-search-page .left {
+      order: 1;
+    }
+    body.url-search-page .right {
+      order: 2;
+    }
+    body.url-search-page .search-console {
+      border-radius: 10px;
+    }
+    body.url-search-page .right > section {
+      border-radius: 10px;
+    }
     .result-filter-panel {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
       margin-bottom: 12px;
+    }
+    .display-filter {
+      margin-bottom: 12px;
+    }
+    .display-filter .result-filter-panel {
+      margin-top: 10px;
     }
     .candidate-list {
       display: grid;
@@ -939,46 +1008,43 @@ export class DashboardController {
     </section>
 
     <div class="left">
-      <section>
+      <section class="search-console">
         <div class="section-head">
-          <h2>CAMPFIRE URLを探す</h2>
+          <h2>CAMPFIREから候補を取り込む</h2>
         </div>
         <div class="body">
-          <div class="row">
-            <label for="campfireUrl">プロジェクトURL</label>
+          <div class="direct-import">
             <input id="campfireUrl" placeholder="https://camp-fire.jp/projects/.../view" />
-          </div>
-          <div class="toolbar">
             <button class="primary" onclick="importCampfire()">このURLを取り込む</button>
             <span id="importStatus" class="status"></span>
           </div>
-          <div class="row" style="margin-top:16px">
-            <label>CAMPFIRE候補検索</label>
-            <div class="search-panel">
-              <input id="campfireSearchKeyword" placeholder="キーワード・商品名" />
-              <select id="campfireSearchCategory">
-                <option value="">カテゴリを取得中</option>
-              </select>
-              <select id="campfireFetchLimit">
-                <option value="10">取得上限 10件</option>
-                <option value="50">取得上限 50件</option>
-                <option value="100">取得上限 100件</option>
-              </select>
-              <select id="campfireSearchProfileProjectRange">
-                <option value="">過去プロジェクト すべて</option>
-                <option value="0:0">初回のみ</option>
-                <option value="1:3">1〜3件</option>
-                <option value="4:9">4〜9件</option>
-                <option value="10:29">10〜29件</option>
-                <option value="30:99">30〜99件</option>
-                <option value="100:">100件以上</option>
-              </select>
-              <div class="toolbar">
-                <button class="primary" onclick="searchCampfireCandidates()">候補を検索</button>
-                <button onclick="clearCampfireSearch()">クリア</button>
-                <span id="campfireSearchStatusText" class="status"></span>
+          <div class="quick-search">
+            <input id="campfireSearchKeyword" placeholder="キーワード・商品名で候補検索" />
+            <button class="primary" onclick="searchCampfireCandidates()">検索</button>
+            <details class="advanced-search">
+              <summary>条件</summary>
+              <div class="search-panel">
+                <select id="campfireSearchCategory">
+                  <option value="">カテゴリを取得中</option>
+                </select>
+                <select id="campfireFetchLimit">
+                  <option value="10">取得上限 10件</option>
+                  <option value="50">取得上限 50件</option>
+                  <option value="100">取得上限 100件</option>
+                </select>
+                <select id="campfireSearchProfileProjectRange">
+                  <option value="">過去プロジェクト すべて</option>
+                  <option value="0:0">初回のみ</option>
+                  <option value="1:3">1〜3件</option>
+                  <option value="4:9">4〜9件</option>
+                  <option value="10:29">10〜29件</option>
+                  <option value="30:99">30〜99件</option>
+                  <option value="100:">100件以上</option>
+                </select>
               </div>
-            </div>
+            </details>
+            <button onclick="clearCampfireSearch()">クリア</button>
+            <span id="campfireSearchStatusText" class="status"></span>
           </div>
         </div>
       </section>
@@ -1014,47 +1080,50 @@ export class DashboardController {
           </div>
         </div>
         <div class="body">
-          <div class="result-filter-panel">
-            <select id="campfireResultLimit" onchange="renderCampfireCandidates()">
-              <option value="10">最大表示 10件</option>
-              <option value="50">最大表示 50件</option>
-              <option value="100">最大表示 100件</option>
-            </select>
-            <select id="campfireDisplayStatus" onchange="renderCampfireCandidates()">
-              <option value="">公開状態 すべて</option>
-              <option value="active">現在公開中</option>
-              <option value="endingSoon">終了間近</option>
-            </select>
-            <select id="campfireDisplayAmountRange" onchange="renderCampfireCandidates()">
-              <option value="">支援額 すべて</option>
-              <option value="0:500000">50万円未満</option>
-              <option value="500000:1000000">50万〜100万円</option>
-              <option value="1000000:3000000">100万〜300万円</option>
-              <option value="3000000:5000000">300万〜500万円</option>
-              <option value="5000000:10000000">500万〜1,000万円</option>
-              <option value="10000000:">1,000万円以上</option>
-            </select>
-            <select id="campfireDisplaySupporterRange" onchange="renderCampfireCandidates()">
-              <option value="">サポーター すべて</option>
-              <option value="0:30">30人未満</option>
-              <option value="30:50">30〜50人</option>
-              <option value="50:100">50〜100人</option>
-              <option value="100:300">100〜300人</option>
-              <option value="300:500">300〜500人</option>
-              <option value="500:">500人以上</option>
-            </select>
-            <select id="campfireDisplayProfileProjectRange" onchange="renderCampfireCandidates()">
-              <option value="">過去プロジェクト すべて</option>
-              <option value="0:0">初回のみ</option>
-              <option value="1:3">1〜3件</option>
-              <option value="4:9">4〜9件</option>
-              <option value="10:29">10〜29件</option>
-              <option value="30:99">30〜99件</option>
-              <option value="100:">100件以上</option>
-            </select>
-          </div>
+          <details class="display-filter">
+            <summary>表示条件</summary>
+            <div class="result-filter-panel">
+              <select id="campfireResultLimit" onchange="renderCampfireCandidates()">
+                <option value="10">最大表示 10件</option>
+                <option value="50">最大表示 50件</option>
+                <option value="100">最大表示 100件</option>
+              </select>
+              <select id="campfireDisplayStatus" onchange="renderCampfireCandidates()">
+                <option value="">公開状態 すべて</option>
+                <option value="active">現在公開中</option>
+                <option value="endingSoon">終了間近</option>
+              </select>
+              <select id="campfireDisplayAmountRange" onchange="renderCampfireCandidates()">
+                <option value="">支援額 すべて</option>
+                <option value="0:500000">50万円未満</option>
+                <option value="500000:1000000">50万〜100万円</option>
+                <option value="1000000:3000000">100万〜300万円</option>
+                <option value="3000000:5000000">300万〜500万円</option>
+                <option value="5000000:10000000">500万〜1,000万円</option>
+                <option value="10000000:">1,000万円以上</option>
+              </select>
+              <select id="campfireDisplaySupporterRange" onchange="renderCampfireCandidates()">
+                <option value="">サポーター すべて</option>
+                <option value="0:30">30人未満</option>
+                <option value="30:50">30〜50人</option>
+                <option value="50:100">50〜100人</option>
+                <option value="100:300">100〜300人</option>
+                <option value="300:500">300〜500人</option>
+                <option value="500:">500人以上</option>
+              </select>
+              <select id="campfireDisplayProfileProjectRange" onchange="renderCampfireCandidates()">
+                <option value="">過去プロジェクト すべて</option>
+                <option value="0:0">初回のみ</option>
+                <option value="1:3">1〜3件</option>
+                <option value="4:9">4〜9件</option>
+                <option value="10:29">10〜29件</option>
+                <option value="30:99">30〜99件</option>
+                <option value="100:">100件以上</option>
+              </select>
+            </div>
+          </details>
           <div id="campfireCandidates">
-            <div class="muted">左の検索欄で候補URLを探すと、ここに表示されます。</div>
+            <div class="muted">検索すると候補URLがここに表示されます。</div>
           </div>
         </div>
       </section>
@@ -1502,7 +1571,7 @@ export class DashboardController {
     function renderCampfireCandidates() {
       const container = document.getElementById('campfireCandidates');
       if (!state.campfireCandidates.length) {
-        container.innerHTML = '<div class="muted">左の検索欄で候補URLを探すと、ここに表示されます。</div>';
+        container.innerHTML = '<div class="muted">検索すると候補URLがここに表示されます。</div>';
         document.getElementById('bulkImportButton').disabled = true;
         return;
       }
