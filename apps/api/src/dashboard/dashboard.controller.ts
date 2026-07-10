@@ -1343,7 +1343,7 @@ export class DashboardController {
             <table>
               <thead>
                 <tr>
-                  <th>最新メール</th>
+                  <th>作成履歴</th>
                   <th style="width:92px">状態</th>
                   <th style="width:120px">作成日</th>
                 </tr>
@@ -1957,18 +1957,48 @@ export class DashboardController {
     }
 
     function renderMails() {
-      const rows = state.mails.map((mail) => {
+      const mails = selectedLeadMails();
+      if (!state.selectedLeadId) {
+        document.getElementById('mailRows').innerHTML = '<tr><td colspan="3" class="muted">対象を選択すると、その企業・案件のメール作成履歴が表示されます</td></tr>';
+        document.getElementById('selectedMail').textContent = '未選択';
+        renderRejectReason(null);
+        updateMailButtons(null);
+        return;
+      }
+      if (state.selectedMailId && !mails.some((mail) => mail.id === state.selectedMailId)) {
+        state.selectedMailId = null;
+      }
+      const rows = mails.map((mail) => {
         return '<tr data-selected="' + (mail.id === state.selectedMailId) + '" onclick="selectMail(\\'' + mail.id + '\\')">' +
           '<td><div class="clip">' + escapeHtml(mail.subject) + '</div><div class="muted clip">' + escapeHtml(mail.company?.name || '') + '</div></td>' +
           '<td><span class="badge">' + escapeHtml(labelMailStatus(mail.status)) + '</span></td>' +
           '<td>' + formatDate(mail.createdAt) + '</td>' +
         '</tr>';
       }).join('');
-      document.getElementById('mailRows').innerHTML = rows || '<tr><td colspan="3" class="muted">まだメールがありません</td></tr>';
-      const selected = state.mails.find((mail) => mail.id === state.selectedMailId);
+      document.getElementById('mailRows').innerHTML = rows || '<tr><td colspan="3" class="muted">この対象のメール作成履歴はまだありません。メール生成で新規作成できます。</td></tr>';
+      const selected = mails.find((mail) => mail.id === state.selectedMailId);
       document.getElementById('selectedMail').textContent = selected ? labelMailStatus(selected.status) : '未選択';
       renderRejectReason(selected);
       updateMailButtons(selected);
+    }
+
+    function selectedLeadMails() {
+      if (!state.selectedLeadId) return [];
+      return state.mails
+        .filter((mail) => mail.leadId === state.selectedLeadId)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+
+    function clearMailEditor() {
+      state.selectedMailId = null;
+      state.checklist = [];
+      state.checklistComplete = false;
+      document.getElementById('subject').value = '';
+      document.getElementById('body').value = '';
+      document.getElementById('selectedMail').textContent = '未選択';
+      renderRejectReason(null);
+      renderChecklist();
+      updateMailButtons(null);
     }
 
     function renderRejectReason(mail) {
@@ -2006,9 +2036,19 @@ export class DashboardController {
     function selectLead(id) {
       state.selectedLeadId = id;
       state.aiGenerations = [];
+      const latestMail = selectedLeadMails()[0];
+      state.selectedMailId = latestMail?.id || null;
+      state.checklist = [];
+      state.checklistComplete = false;
       renderLeads();
       renderLeadDetail();
       renderAiAnalysis();
+      if (latestMail) {
+        selectMail(latestMail.id);
+      } else {
+        clearMailEditor();
+        renderMails();
+      }
       void loadAiAnalysis();
     }
 
