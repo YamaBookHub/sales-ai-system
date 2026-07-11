@@ -125,6 +125,16 @@ export class DashboardController {
       grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 10px;
     }
+    .export-panel {
+      display: grid;
+      grid-template-columns: minmax(170px, 220px) minmax(170px, 220px) minmax(190px, 260px) auto minmax(180px, 1fr);
+      gap: 10px;
+      align-items: center;
+    }
+    .export-preview {
+      color: var(--muted);
+      font-size: 13px;
+    }
     .stat {
       border: 1px solid var(--line);
       border-radius: 4px;
@@ -262,7 +272,7 @@ export class DashboardController {
       font-size: 12px;
     }
     @media (max-width: 1100px) {
-      .filters, .stats, .split, .detail-grid, .detail-shell, .form-grid { grid-template-columns: 1fr; }
+      .filters, .stats, .split, .detail-grid, .detail-shell, .form-grid, .export-panel { grid-template-columns: 1fr; }
       th { position: static; }
     }
   </style>
@@ -287,6 +297,29 @@ export class DashboardController {
       </div>
       <div class="body">
         <div class="stats" id="stats"></div>
+      </div>
+    </section>
+
+    <section class="summary-panel">
+      <div class="section-head">
+        <h2>営業リスト出力</h2>
+        <span id="exportStatus" class="status muted"></span>
+      </div>
+      <div class="body export-panel">
+        <select id="exportScope" onchange="updateExportPreview()">
+          <option value="visible">表示中だけ出力</option>
+          <option value="all">全件出力</option>
+        </select>
+        <select id="exportFormat" onchange="updateExportPreview()">
+          <option value="csv">CSV</option>
+          <option value="tsv">TSV</option>
+        </select>
+        <select id="exportColumns" onchange="updateExportPreview()">
+          <option value="summary">一覧用</option>
+          <option value="detail">詳細用</option>
+        </select>
+        <button class="primary" onclick="exportLeads()">出力する</button>
+        <span id="exportPreview" class="export-preview">表示中の営業リストをCSVで出力します</span>
       </div>
     </section>
 
@@ -424,6 +457,7 @@ export class DashboardController {
       renderRows();
       renderDetail();
       renderLeadAnalysis();
+      updateExportPreview();
     }
 
     function renderStats() {
@@ -447,7 +481,8 @@ export class DashboardController {
     }
 
     function renderRows() {
-      const rows = filteredLeads().map((lead) => {
+      const visibleLeads = filteredLeads();
+      const rows = visibleLeads.map((lead) => {
         const mail = latestMail(lead.id);
         const project = lead.project || {};
         const contact = contactSummary(lead);
@@ -465,7 +500,7 @@ export class DashboardController {
         '</tr>';
       }).join('');
       document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="9" class="muted">条件に合うリードがありません</td></tr>';
-      document.getElementById('listCount').textContent = filteredLeads().length + '件';
+      document.getElementById('listCount').textContent = visibleLeads.length + '件';
       renderSortMarks('lead', ['company', 'project', 'source', 'status', 'priority', 'score', 'contact', 'mail', 'nextAction']);
     }
 
@@ -587,6 +622,99 @@ export class DashboardController {
         return true;
       });
       return sortItems(leads, state.sort, leadSortValue);
+    }
+
+    function updateExportPreview() {
+      const preview = document.getElementById('exportPreview');
+      if (!preview) return;
+      const scope = value('exportScope') || 'visible';
+      const format = value('exportFormat') || 'csv';
+      const columns = value('exportColumns') || 'summary';
+      const count = exportLeadRows(scope).length;
+      const scopeLabel = scope === 'all' ? '全件' : '表示中';
+      const columnLabel = columns === 'detail' ? '詳細用' : '一覧用';
+      preview.textContent = scopeLabel + ' ' + count + '件を' + format.toUpperCase() + '・' + columnLabel + 'で出力します';
+    }
+
+    function exportLeads() {
+      const scope = value('exportScope') || 'visible';
+      const format = value('exportFormat') || 'csv';
+      const columns = value('exportColumns') || 'summary';
+      const leads = exportLeadRows(scope);
+      if (!leads.length) {
+        setInlineStatus('exportStatus', '出力する営業リストがありません', 'warn');
+        return;
+      }
+      const delimiter = format === 'tsv' ? '\\t' : ',';
+      const rows = buildLeadExportRows(leads, columns);
+      const text = rows.map((row) => row.map((cell) => formatExportCell(cell, delimiter)).join(delimiter)).join('\\n');
+      const bom = format === 'csv' ? '\\ufeff' : '';
+      const blob = new Blob([bom + text], { type: format === 'tsv' ? 'text/tab-separated-values;charset=utf-8' : 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      link.href = url;
+      link.download = 'sales-leads-' + timestamp + '.' + format;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setInlineStatus('exportStatus', '出力しました: ' + leads.length + '件', 'ok');
+    }
+
+    function exportLeadRows(scope) {
+      return scope === 'all' ? sortItems([...state.leads], state.sort, leadSortValue) : filteredLeads();
+    }
+
+    function buildLeadExportRows(leads, columnSet) {
+      const columns = leadExportColumns(columnSet);
+      return [
+        columns.map((column) => column.label),
+        ...leads.map((lead) => columns.map((column) => column.value(lead)))
+      ];
+    }
+
+    function leadExportColumns(columnSet) {
+      const summary = [
+        ['会社名', (lead) => lead.company?.name || lead.companyId || ''],
+        ['案件名', (lead) => lead.project?.title || ''],
+        ['取得元', (lead) => projectPlatformLabel(lead.project || {})],
+        ['URL', (lead) => lead.project?.url || ''],
+        ['状態', (lead) => labelLeadStatus(lead.status)],
+        ['優先度', (lead) => labelPriority(lead.priority)],
+        ['点数', (lead) => Number(lead.score || 0)],
+        ['連絡先', (lead) => contactSummary(lead)],
+        ['送信手段', (lead) => lead.sendMethod || suggestSendMethod(lead)],
+        ['最新メール', (lead) => latestMail(lead.id) ? labelMailStatus(latestMail(lead.id).status) : '未生成'],
+        ['次にやること', (lead) => nextActionLabel(lead, latestMail(lead.id))],
+        ['次対応日', (lead) => nextActionDateLabel(lead)]
+      ];
+      const detail = [
+        ...summary,
+        ['支援額', (lead) => lead.project?.amount || 0],
+        ['支援者数', (lead) => lead.project?.supporterCount || 0],
+        ['カテゴリ', (lead) => lead.project?.category || ''],
+        ['商品説明', (lead) => lead.project?.description || ''],
+        ['営業理由', (lead) => lead.reason || ''],
+        ['メールアドレス', (lead) => lead.contactEmail || ''],
+        ['フォームURL', (lead) => lead.contactFormUrl || ''],
+        ['サイト内メッセージURL', (lead) => lead.siteMessageUrl || ''],
+        ['公式サイト', (lead) => lead.brandWebsiteUrl || ''],
+        ['Instagram', (lead) => lead.instagramUrl || ''],
+        ['TikTok', (lead) => lead.tiktokUrl || ''],
+        ['X', (lead) => lead.xUrl || ''],
+        ['連絡先メモ', (lead) => lead.contactMemo || ''],
+        ['営業メモ', (lead) => lead.ownerMemo || ''],
+        ['ブランド分析メモ', (lead) => lead.brandAnalysisMemo || ''],
+        ['SNS分析メモ', (lead) => lead.snsAnalysisMemo || '']
+      ];
+      return (columnSet === 'detail' ? detail : summary).map(([label, value]) => ({ label, value }));
+    }
+
+    function formatExportCell(value, delimiter) {
+      const text = String(value ?? '').replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
+      if (delimiter === '\\t') return text.replace(/\\t/g, ' ').replace(/\\n/g, ' ');
+      return '"' + text.replace(/"/g, '""') + '"';
     }
 
     function toggleSort(table, key) {
