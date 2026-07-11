@@ -2048,7 +2048,7 @@ export class DashboardController {
                 <select id="sourcePlatform" onchange="onSourcePlatformChange()">
                   <option value="campfire">CAMPFIRE</option>
                   <option value="makuake">Makuake</option>
-                  <option value="green_funding">GREEN FUNDING（準備中）</option>
+                  <option value="green_funding" disabled>GREEN FUNDING（準備中）</option>
                 </select>
                 <span id="sourcePlatformStatus" class="status muted">CAMPFIREの募集中プロジェクトに対応</span>
               </div>
@@ -2067,7 +2067,7 @@ export class DashboardController {
                 <input id="campfireSearchKeyword" placeholder="キーワード・商品名で候補検索" />
               </div>
               <div class="search-filter-row">
-                <select id="campfireSearchCategory" data-campfire-only="true">
+                <select id="campfireSearchCategory" data-source-field="campfire">
                   <option value="">カテゴリを取得中</option>
                 </select>
                 <select id="campfireFetchLimit">
@@ -2085,7 +2085,7 @@ export class DashboardController {
                   <option value="20">20日以内</option>
                   <option value="30">30日以内</option>
                 </select>
-                <select id="campfireSearchProfileProjectRange">
+                <select id="campfireSearchProfileProjectRange" data-source-field="campfire">
                   <option value="">過去プロジェクト すべて</option>
                   <option value="0:0">初回のみ</option>
                   <option value="1:3">1〜3件</option>
@@ -2452,24 +2452,14 @@ export class DashboardController {
           makuake: 'https://www.makuake.com/project/.../'
         })[platform] || sourcePlatformLabel(platform) + 'のプロジェクトURL（準備中）';
       }
-      if (profileSearch) {
-        profileSearch.disabled = platform !== 'campfire';
-        if (platform !== 'campfire') profileSearch.value = '';
-      }
-      if (categorySearch) {
-        categorySearch.disabled = platform !== 'campfire';
-        categorySearch.style.display = platform === 'campfire' ? '' : 'none';
-        if (platform !== 'campfire') categorySearch.value = '';
-      }
+      toggleSourceField(categorySearch, platform === 'campfire');
+      toggleSourceField(profileSearch, platform === 'campfire');
       if (searchStatus) {
         searchStatus.disabled = !['campfire', 'makuake'].includes(platform);
         searchStatus.style.display = ['campfire', 'makuake'].includes(platform) ? '' : 'none';
         if (!['campfire', 'makuake'].includes(platform)) searchStatus.value = 'active';
       }
-      if (profileDisplay) {
-        profileDisplay.disabled = platform !== 'campfire';
-        if (platform !== 'campfire') profileDisplay.value = '';
-      }
+      toggleSourceField(profileDisplay, platform === 'campfire');
       void loadCampfireCategories();
       if (sourceChanged) {
         state.campfireCandidates = [];
@@ -2485,6 +2475,13 @@ export class DashboardController {
         return;
       }
       setStatus('sourcePlatformStatus', sourcePlatformLabel(platform) + 'は取得元として準備中です', 'warn');
+    }
+
+    function toggleSourceField(element, enabled) {
+      if (!element) return;
+      element.disabled = !enabled;
+      element.style.display = enabled ? '' : 'none';
+      if (!enabled) element.value = '';
     }
 
     function ensureSupportedSourcePlatform(statusId) {
