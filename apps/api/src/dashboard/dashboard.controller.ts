@@ -277,12 +277,12 @@ export class DashboardController {
     }
   </style>
 </head>
-<body>
+<body data-ui-page="leads">
   <header>
     <h1>営業リスト詳細</h1>
     <div class="toolbar">
       <span id="pageStatus" class="status muted">読み込み中</span>
-      <div class="top-nav">
+      <div class="top-nav" data-ui="top-nav">
         <button onclick="location.href='/'">URL検索</button>
         <button class="primary" onclick="location.href='/leads-view'">営業リスト</button>
         <button onclick="location.href='/mail-workspace'">メール作成</button>
@@ -323,7 +323,7 @@ export class DashboardController {
       </div>
     </section>
 
-    <div class="split lead-list-main">
+    <div class="split lead-list-main" data-ui="lead-list-workspace">
       <section>
         <div class="section-head">
           <h2>営業リスト</h2>
@@ -1290,7 +1290,7 @@ export class DashboardController {
   @Header('Content-Type', 'text/html; charset=utf-8')
   mailWorkspace() {
     return this.index()
-      .replace('<body class="url-search-page">', '<body class="mail-workspace-page">')
+      .replace('<body class="url-search-page" data-ui-page="url-search">', '<body class="mail-workspace-page" data-ui-page="mail-workspace">')
       .replace('<h1>URL検索</h1>', '<h1>メール作成</h1>')
       .replace('<button class="primary" onclick="location.href=\'/\'">URL検索</button>', '<button onclick="location.href=\'/\'">URL検索</button>')
       .replace('<button onclick="location.href=\'/mail-workspace\'">メール作成</button>', '<button class="primary" onclick="location.href=\'/mail-workspace\'">メール作成</button>');
@@ -2005,12 +2005,12 @@ export class DashboardController {
     }
   </style>
 </head>
-<body class="url-search-page">
+<body class="url-search-page" data-ui-page="url-search">
   <header>
     <h1>URL検索</h1>
     <div class="toolbar">
       <span id="apiStatus" class="status muted">API確認中</span>
-      <div class="top-nav">
+      <div class="top-nav" data-ui="top-nav">
         <button class="primary" onclick="location.href='/'">URL検索</button>
         <button onclick="location.href='/leads-view'">営業リスト</button>
         <button onclick="location.href='/mail-workspace'">メール作成</button>
@@ -2035,7 +2035,7 @@ export class DashboardController {
     </section>
 
     <div class="left">
-      <section class="search-console">
+      <section class="search-console" data-ui="candidate-search">
         <details class="search-drawer">
           <summary>
             <span>取得元・URL取り込み</span>
@@ -2133,7 +2133,7 @@ export class DashboardController {
         </details>
       </section>
 
-      <section>
+      <section data-ui="mail-lead-queue">
         <div class="section-head">
           <h2>営業対象一覧</h2>
           <span id="mailLeadCount" class="status muted">0件</span>
@@ -2253,7 +2253,7 @@ export class DashboardController {
         </div>
       </section>
 
-      <section class="tab-panel" data-tab-panel="mail">
+      <section class="tab-panel" data-tab-panel="mail" data-ui="mail-focus-workspace">
         <div class="section-head">
           <h2>メール作成・確認</h2>
           <span id="mailStatus" class="status"></span>
@@ -2265,7 +2265,7 @@ export class DashboardController {
               <span id="mailNextAction" class="status muted"></span>
             </div>
             <div class="mail-stage-body">
-              <div id="mailLeadSummary">上の営業対象一覧から、メールを作成・確認する案件を選択してください。</div>
+              <div id="mailLeadSummary" data-ui="mail-lead-summary">上の営業対象一覧から、メールを作成・確認する案件を選択してください。</div>
             </div>
           </div>
 
@@ -2281,7 +2281,7 @@ export class DashboardController {
                 <span id="generateHelp" class="status muted">対象を選択してください</span>
               </div>
             </div>
-            <div class="mail-stage-body table-scroll mail-history-scroll" style="padding:0">
+            <div class="mail-stage-body table-scroll mail-history-scroll" data-ui="mail-history" style="padding:0">
               <table>
                 <thead>
                   <tr>
@@ -2303,7 +2303,7 @@ export class DashboardController {
                 <button class="primary" onclick="saveMail()" id="saveButton" disabled>保存</button>
               </div>
             </div>
-            <div class="mail-stage-body mail-editor-grid">
+            <div class="mail-stage-body mail-editor-grid" data-ui="mail-draft-editor">
               <div>
                 <div id="rejectReasonBox"></div>
                 <div class="row">
@@ -2334,7 +2334,7 @@ export class DashboardController {
             </div>
           </div>
 
-          <div class="mail-stage">
+          <div class="mail-stage" data-ui="mail-review-panel">
             <div class="mail-stage-head">
               <h3>4. 送信前チェック・レビュー</h3>
               <span id="checklistStatus" class="status muted"></span>

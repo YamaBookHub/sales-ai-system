@@ -13,7 +13,7 @@ describe('DashboardController HTML contracts', () => {
   }
 
   function expectTopNavigation(html: string) {
-    expect(html).toContain('class="top-nav"');
+    expect(html).toContain('class="top-nav" data-ui="top-nav"');
     expect(html).toContain("location.href='/'");
     expect(html).toContain("location.href='/leads-view'");
     expect(html).toContain("location.href='/mail-workspace'");
@@ -34,8 +34,9 @@ describe('DashboardController HTML contracts', () => {
 
     expectHtmlResponse(html);
     expectTopNavigation(html);
-    expect(html).toContain('<body class="url-search-page">');
+    expect(html).toContain('<body class="url-search-page" data-ui-page="url-search">');
     expect(html).toContain('<h1>URL検索</h1>');
+    expect(html).toContain('data-ui="candidate-search"');
     expect(html).toContain('id="sourcePlatform"');
     expect(html).toContain('id="campfireUrl"');
     expect(html).toContain('id="campfireSearchKeyword"');
@@ -50,7 +51,9 @@ describe('DashboardController HTML contracts', () => {
 
     expectHtmlResponse(html);
     expectTopNavigation(html);
+    expect(html).toContain('<body data-ui-page="leads">');
     expect(html).toContain('<h1>営業リスト詳細</h1>');
+    expect(html).toContain('data-ui="lead-list-workspace"');
     expect(html).toContain('id="stats"');
     expect(html).toContain('id="exportScope"');
     expect(html).toContain('id="exportFormat"');
@@ -66,17 +69,23 @@ describe('DashboardController HTML contracts', () => {
 
     expectHtmlResponse(mailHtml);
     expectTopNavigation(mailHtml);
-    expect(mailHtml).toContain('<body class="mail-workspace-page">');
+    expect(mailHtml).toContain('<body class="mail-workspace-page" data-ui-page="mail-workspace">');
     expect(mailHtml).toContain('<h1>メール作成</h1>');
     expect(mailHtml).toContain('<button onclick="location.href=\'/\'">URL検索</button>');
     expect(mailHtml).toContain('<button class="primary" onclick="location.href=\'/mail-workspace\'">メール作成</button>');
+    expect(mailHtml).toContain('data-ui="mail-lead-queue"');
+    expect(mailHtml).toContain('data-ui="mail-focus-workspace"');
+    expect(mailHtml).toContain('data-ui="mail-lead-summary"');
+    expect(mailHtml).toContain('data-ui="mail-history"');
+    expect(mailHtml).toContain('data-ui="mail-draft-editor"');
+    expect(mailHtml).toContain('data-ui="mail-review-panel"');
     expect(mailHtml).toContain('id="mailLeadSummary"');
     expect(mailHtml).toContain('id="templateKey"');
     expect(mailHtml).toContain('id="mailRows"');
     expect(mailHtml).toContain('id="subject"');
     expect(mailHtml).toContain('id="body"');
     expect(mailHtml).toContain('id="checklistRows"');
-    expect(indexHtml).toContain('<body class="url-search-page">');
-    expect(mailHtml).not.toContain('<body class="url-search-page">');
+    expect(indexHtml).toContain('<body class="url-search-page" data-ui-page="url-search">');
+    expect(mailHtml).not.toContain('<body class="url-search-page" data-ui-page="url-search">');
   });
 });

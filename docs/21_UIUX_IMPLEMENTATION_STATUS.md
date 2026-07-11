@@ -27,7 +27,7 @@
 | Task | Status | Depends on | Evidence | Note |
 |---|---|---|---|---|
 | UX-A01 | complete | - | 2026-07-12 / cbc7eac / npm test -- --runInBand OK / npm run build OK | dashboard HTML契約テスト |
-| UX-A02 | pending | UX-A01 | - | 安定したUI目印 |
+| UX-A02 | complete | UX-A01 | 2026-07-12 / uncommitted / npm test -- --runInBand OK / npm run build OK | 安定したUI目印 |
 | UX-A03 | pending | UX-A02 | - | dashboard README |
 | UX-A04 | pending | UX-A01, UX-A02 | - | mailWorkspace文字列置換廃止 |
 | UX-B01 | pending | UX-A04 | - | 業務用語へ統一 |
@@ -86,6 +86,7 @@
 | Task | Date | Model | Tier | Reasoning | Event | Reason | Result |
 |---|---|---|---|---|---|---|---|
 | UX-A01 | 2026-07-12 | GPT-5 | T1 | high | start | dashboard HTML契約テスト追加。現行surfaceではモデル変更せず実行 | complete: cbc7eac |
+| UX-A02 | 2026-07-12 | GPT-5 | T1 | high | start | 安定したdata-ui目印追加。現行surfaceではモデル変更せず実行 | complete: uncommitted |
 
 Event:
 
