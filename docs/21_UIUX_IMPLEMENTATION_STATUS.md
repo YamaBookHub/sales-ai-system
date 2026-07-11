@@ -29,7 +29,7 @@
 | UX-A01 | complete | - | 2026-07-12 / cbc7eac / npm test -- --runInBand OK / npm run build OK | dashboard HTML契約テスト |
 | UX-A02 | complete | UX-A01 | 2026-07-12 / 33524e1 / npm test -- --runInBand OK / npm run build OK | 安定したUI目印 |
 | UX-A03 | complete | UX-A02 | 2026-07-12 / 06f49f0 / npm test -- --runInBand OK / npm run build OK | dashboard README |
-| UX-A04 | complete | UX-A01, UX-A02 | 2026-07-12 / uncommitted / npm test -- --runInBand OK / npm run build OK | mailWorkspace文字列置換廃止 |
+| UX-A04 | complete | UX-A01, UX-A02 | 2026-07-12 / 62d0094 / npm test -- --runInBand OK / npm run build OK | mailWorkspace文字列置換廃止 |
 | UX-B01 | pending | UX-A04 | - | 業務用語へ統一 |
 | UX-B02 | pending | UX-B01 | - | 検索フォーム初期表示 |
 | UX-B03 | pending | UX-B01 | - | loading/empty/error |
@@ -88,7 +88,7 @@
 | UX-A01 | 2026-07-12 | GPT-5 | T1 | high | start | dashboard HTML契約テスト追加。現行surfaceではモデル変更せず実行 | complete: cbc7eac |
 | UX-A02 | 2026-07-12 | GPT-5 | T1 | high | start | 安定したdata-ui目印追加。現行surfaceではモデル変更せず実行 | complete: 33524e1 |
 | UX-A03 | 2026-07-12 | GPT-5 | T1 | high | start | dashboard module README追加。現行surfaceではモデル変更せず実行 | complete: 06f49f0 |
-| UX-A04 | 2026-07-12 | GPT-5 | T2 | high | start | mailWorkspaceのreplace依存を廃止。現行surfaceではモデル変更せず実行 | complete: uncommitted |
+| UX-A04 | 2026-07-12 | GPT-5 | T2 | high | start | mailWorkspaceのreplace依存を廃止。現行surfaceではモデル変更せず実行 | complete: 62d0094 |
 
 Event:
 
