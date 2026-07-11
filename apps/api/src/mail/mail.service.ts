@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { EmailStatus, LeadStatus, ReplyCategory } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApproveMailUseCase } from './application/approve-mail.usecase';
+import { CheckMailDraftConsistencyUseCase } from './application/check-mail-draft-consistency.usecase';
 import { MarkMailSentUseCase } from './application/mark-mail-sent.usecase';
 import { QueueMailUseCase } from './application/queue-mail.usecase';
 import { RejectMailUseCase } from './application/reject-mail.usecase';
@@ -26,6 +27,7 @@ export class MailService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly requestMailReview: RequestMailReviewUseCase,
+    private readonly checkMailDraftConsistency: CheckMailDraftConsistencyUseCase,
     private readonly requestMailReReview: RequestMailReReviewUseCase,
     private readonly approveMail: ApproveMailUseCase,
     private readonly rejectMail: RejectMailUseCase,
@@ -135,6 +137,10 @@ export class MailService {
 
   requestReview(id: string) {
     return this.requestMailReview.execute(id);
+  }
+
+  checkDraftConsistency(id: string) {
+    return this.checkMailDraftConsistency.execute(id);
   }
 
   requestReReview(id: string) {

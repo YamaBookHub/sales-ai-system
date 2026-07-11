@@ -52,6 +52,11 @@ export class MailController {
     return ok(await this.mail.update(id, dto));
   }
 
+  @Get(':id/consistency')
+  async checkConsistency(@Param('id') id: string) {
+    return ok(await this.mail.checkDraftConsistency(id));
+  }
+
   @Get(':id/checklist')
   async getChecklist(@Param('id') id: string) {
     return ok(await this.mail.getChecklist(id));

@@ -29,7 +29,8 @@
 | 20 | 20_UIUX_AI_IMPLEMENTATION_GUIDE.md | 小さいモデルでも最終形まで進めるUI/UX実装指示書 | 作成済み |
 | 21 | 21_UIUX_IMPLEMENTATION_STATUS.md | UI/UXタスクの依存関係・進捗・証跡 | 作成済み |
 | 22 | 22_AI_MODEL_ROUTING.md | 作業リスクに応じたモデル選択・自動昇格・委譲ルール | 作成済み |
-| 23 | 22_UIUX_MODEL_ROUTING_POLICY.md | UI/UX改善専用のモデル選択・切り替え・監査方針 | 作成済み |
+| 23 | 23_UIUX_MODEL_ROUTING_POLICY.md | UI/UX改善専用のモデル選択・切り替え・監査方針 | 作成済み |
+| 24 | 24_SALES_LIST_DATA_MAPPING.md | 営業案件一覧・今日の営業で再利用するdata対応表 | 作成済み |
 
 ## 付属仕様
 - `../prisma/schema.prisma`

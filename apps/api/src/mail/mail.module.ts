@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ApproveMailUseCase } from './application/approve-mail.usecase';
+import { CheckMailDraftConsistencyUseCase } from './application/check-mail-draft-consistency.usecase';
 import { MarkMailSentUseCase } from './application/mark-mail-sent.usecase';
 import { QueueMailUseCase } from './application/queue-mail.usecase';
 import { RejectMailUseCase } from './application/reject-mail.usecase';
@@ -17,6 +18,7 @@ import { MailService } from './mail.service';
   providers: [
     MailService,
     PrismaMailWorkflowRepository,
+    CheckMailDraftConsistencyUseCase,
     RequestMailReviewUseCase,
     RequestMailReReviewUseCase,
     ApproveMailUseCase,

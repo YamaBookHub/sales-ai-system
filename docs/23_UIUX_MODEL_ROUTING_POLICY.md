@@ -1,8 +1,10 @@
-# 22_UIUX_MODEL_ROUTING_POLICY
+# 23_UIUX_MODEL_ROUTING_POLICY
 
 ## 0. 目的
 
 UI/UX改善を実行するAIが、タスクの難易度と危険度に応じて使用モデルとreasoning effortを自分で選び、必要なら強いモデルへ切り替えるための指示書。
+
+全体のモデル選択は `docs/22_AI_MODEL_ROUTING.md` に従う。UI/UXタスクについて両文書の指定が異なる場合は、タスクIDごとの最低tierを定めるこの文書を優先する。
 
 ユーザーは、このプロジェクトの `docs/20_UIUX_AI_IMPLEMENTATION_GUIDE.md` に従う作業について、AIがモデルを選択・変更することを許可している。許可範囲内のモデル変更について、AIは毎回ユーザーへ再確認しなくてよい。
 
@@ -239,7 +241,7 @@ Recommended next action:
 - docs/19_LOW_MODEL_HANDOFF.md
 - docs/20_UIUX_AI_IMPLEMENTATION_GUIDE.md の必要部分
 - docs/21_UIUX_IMPLEMENTATION_STATUS.md
-- docs/22_UIUX_MODEL_ROUTING_POLICY.md
+- docs/23_UIUX_MODEL_ROUTING_POLICY.md
 
 ユーザーは、必要に応じてAIが使用モデルを変更することを許可しています。
 

@@ -215,7 +215,7 @@ CQRS、イベントソーシング、マイクロサービス、汎用BaseReposi
 - 低いモデルは1回に1つのタスクIDだけ実装する。
 - Phase Aから順に進める。
 - 実装状況と次タスクは `docs/21_UIUX_IMPLEMENTATION_STATUS.md` で確認する。
-- 使用モデルとreasoningは `docs/22_UIUX_MODEL_ROUTING_POLICY.md` に従い、AI自身が選択・変更する。
+- 使用モデルとreasoningは `docs/23_UIUX_MODEL_ROUTING_POLICY.md` に従い、AI自身が選択・変更する。
 - UI変更とAPI、DB、domain、状態遷移の変更を同時に行わない。
 - 各Phaseの節目で高性能モデルが安全性と整合性を監査する。
 - 最終形には今日の営業、2ペインのメール作業、誤生成警告、返信対応、アクセシビリティ、巨大controllerの段階分割まで含む。

@@ -81,7 +81,7 @@ UI/UXの中心原則:
 1. `AGENTS.md`
 2. `docs/19_LOW_MODEL_HANDOFF.md`
 3. `docs/21_UIUX_IMPLEMENTATION_STATUS.md`
-4. `docs/22_UIUX_MODEL_ROUTING_POLICY.md`
+4. `docs/23_UIUX_MODEL_ROUTING_POLICY.md`
 5. この文書のSection 0〜6
 6. 指定されたタスクIDの節だけ
 7. この文書のSection 12
@@ -348,7 +348,9 @@ data-ui="mail-review-panel"
 
 変更してよいファイル:
 
-- `apps/api/src/dashboard/dashboard.controller.ts`
+- `apps/api/src/dashboard/ui/dashboard-page.ts`
+- `apps/api/src/dashboard/ui/leads-page.ts`
+- `apps/api/src/dashboard/ui/shared-shell.ts`
 - `apps/api/src/dashboard/dashboard.controller.spec.ts`
 - `docs/05_UI.md`
 
@@ -1226,7 +1228,7 @@ apps/api/src/dashboard/
 - AGENTS.md
 - docs/19_LOW_MODEL_HANDOFF.md
 - docs/21_UIUX_IMPLEMENTATION_STATUS.md
-- docs/22_UIUX_MODEL_ROUTING_POLICY.md
+- docs/23_UIUX_MODEL_ROUTING_POLICY.md
 - docs/20_UIUX_AI_IMPLEMENTATION_GUIDE.md のSection 0〜6
 - docs/20_UIUX_AI_IMPLEMENTATION_GUIDE.md の指定タスク節
 - docs/20_UIUX_AI_IMPLEMENTATION_GUIDE.md のSection 12
