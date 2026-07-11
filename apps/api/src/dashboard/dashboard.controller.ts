@@ -329,6 +329,9 @@ export class DashboardController {
         <div class="body">
           <div class="filters">
             <input id="keyword" placeholder="会社・案件・URL・メモで検索" oninput="render()" />
+            <select id="sourceFilter" onchange="render()">
+              <option value="">取得元 すべて</option>
+            </select>
             <select id="statusFilter" onchange="render()">
               <option value="">状態 すべて</option>
               <option value="discovered">発見</option>
@@ -394,6 +397,7 @@ export class DashboardController {
         state.leads = leads.items || [];
         state.mails = mails.items || [];
         restoreSelectedLead();
+        populateSourceFilterOptions('sourceFilter');
         render();
         document.getElementById('pageStatus').textContent = '読み込み完了';
       } catch (error) {
@@ -543,13 +547,15 @@ export class DashboardController {
       const priority = value('priorityFilter');
       const contact = value('contactFilter');
       const mailStatus = value('mailFilter');
+      const sourceFilter = value('sourceFilter');
       return state.leads.filter((lead) => {
         const mail = latestMail(lead.id);
         const project = lead.project || {};
+        const sourceLabel = projectPlatformLabel(project);
         const haystack = [
           lead.company?.name,
           project.title,
-          projectPlatformLabel(project),
+          sourceLabel,
           project.url,
           project.description,
           lead.reason,
@@ -562,8 +568,19 @@ export class DashboardController {
         if (contact === 'none' && hasContact(lead)) return false;
         if (mailStatus === 'none' && mail) return false;
         if (mailStatus && mailStatus !== 'none' && mail?.status !== mailStatus) return false;
+        if (sourceFilter && sourceLabel !== sourceFilter) return false;
         return true;
       });
+    }
+
+    function populateSourceFilterOptions(selectId) {
+      const select = document.getElementById(selectId);
+      if (!select) return;
+      const current = select.value;
+      const labels = Array.from(new Set(state.leads.map((lead) => projectPlatformLabel(lead.project || {})).filter(Boolean))).sort();
+      select.innerHTML = '<option value="">取得元 すべて</option>' +
+        labels.map((label) => '<option value="' + escapeAttr(label) + '">' + escapeHtml(label) + '</option>').join('');
+      if (labels.includes(current)) select.value = current;
     }
 
     function latestMail(leadId) {
@@ -1801,6 +1818,9 @@ export class DashboardController {
           <div class="body">
             <div class="mail-filter-row">
               <input id="mailLeadKeyword" placeholder="会社・案件・理由で検索" oninput="renderLeads()" />
+              <select id="mailLeadSourceFilter" onchange="renderLeads()">
+                <option value="">取得元 すべて</option>
+              </select>
               <select id="mailLeadStatusFilter" onchange="renderLeads()">
                 <option value="">状態 すべて</option>
                 <option value="discovered">発見</option>
@@ -2206,6 +2226,7 @@ export class DashboardController {
         state.mails = mails.items || [];
         restoreSelectedLead();
         syncCandidateImportStatuses();
+        populateSourceFilterOptions('mailLeadSourceFilter');
         const selectedMail = ensureSelectedMailForLead();
         renderLeads();
         renderMailLeadSummary();
@@ -2647,14 +2668,18 @@ export class DashboardController {
     function renderLeads() {
       const keywordField = document.getElementById('mailLeadKeyword');
       const statusField = document.getElementById('mailLeadStatusFilter');
+      const sourceField = document.getElementById('mailLeadSourceFilter');
       const keyword = keywordField ? keywordField.value.trim().toLowerCase() : '';
       const status = statusField ? statusField.value : '';
+      const sourceFilter = sourceField ? sourceField.value : '';
       const leads = state.leads.filter((lead) => {
         const project = lead.project || {};
         const company = lead.company?.name || lead.companyId;
-        const haystack = [company, project.title, projectPlatformLabel(project), project.url, lead.reason].filter(Boolean).join(' ').toLowerCase();
+        const sourceLabel = projectPlatformLabel(project);
+        const haystack = [company, project.title, sourceLabel, project.url, lead.reason].filter(Boolean).join(' ').toLowerCase();
         if (keyword && !haystack.includes(keyword)) return false;
         if (status && lead.status !== status) return false;
+        if (sourceFilter && sourceLabel !== sourceFilter) return false;
         return true;
       });
       const rows = leads.map((lead) => {
@@ -3540,6 +3565,16 @@ export class DashboardController {
       if (url.includes('makuake.com')) return 'Makuake';
       if (url.includes('greenfunding.jp')) return 'GREEN FUNDING';
       return '未取得';
+    }
+
+    function populateSourceFilterOptions(selectId) {
+      const select = document.getElementById(selectId);
+      if (!select) return;
+      const current = select.value;
+      const labels = Array.from(new Set(state.leads.map((lead) => projectPlatformLabel(lead.project || {})).filter(Boolean))).sort();
+      select.innerHTML = '<option value="">取得元 すべて</option>' +
+        labels.map((label) => '<option value="' + escapeAttr(label) + '">' + escapeHtml(label) + '</option>').join('');
+      if (labels.includes(current)) select.value = current;
     }
 
     function labelLeadStatus(status) {
