@@ -22,7 +22,9 @@ export function sortEndingSoon<T extends { daysLeft?: number | null; isActive?: 
 }
 
 export function progressiveSearchLimits(desiredLimit: number) {
-  return [10, 50, 100, 150, 200].filter((limit) => limit >= desiredLimit);
+  const normalizedDesiredLimit = normalizeResultLimit(desiredLimit);
+  const firstLimit = normalizedDesiredLimit <= 10 ? 10 : normalizedDesiredLimit;
+  return [10, 50, 100, 150, 200].filter((limit) => limit >= firstLimit);
 }
 
 export function mergeSearchItems<T extends { url: string }>(current: T[], next: T[]) {

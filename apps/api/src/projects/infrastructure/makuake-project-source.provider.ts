@@ -104,9 +104,10 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
           }
         })
       ).flat();
+      const candidatePoolSize = searchCandidatePoolSize(input);
       const candidates = sortSearchResults(uniqueBy(rawItems, (item) => normalizeUrlForUnique(item.url)), input)
         .filter((item) => matchesKeyword(item, input.keyword))
-        .slice(0, Math.max(normalizeLimit(input.limit) * 2, 10));
+        .slice(0, candidatePoolSize);
       const enrichedItems = await enrichSearchResults(context, candidates);
       const excluded = new Set((input.excludeUrls || []).map((url) => normalizeUrlForUnique(url)));
       const items = sortSearchResults(enrichedItems, input)
@@ -260,10 +261,12 @@ async function enrichSearchResults(context: BrowserContext, items: MakuakeSearch
       await page.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 25000 });
       await page.waitForTimeout(500);
       const text = await readVisibleText(page);
+      const metrics = extractProjectMetrics(text);
       return {
         ...item,
-        amount: item.amount || extractAmount(text),
-        supporterCount: item.supporterCount || extractSupporterCount(text),
+        amount: item.amount || metrics.amount,
+        supporterCount: item.supporterCount || metrics.supporterCount,
+        daysLeft: item.daysLeft ?? metrics.daysLeft,
         category: item.category || extractCategory(text),
         location: item.location || extractLocation(text)
       };
@@ -283,14 +286,15 @@ function extractSearchResults(html: string): MakuakeSearchResult[] {
       const url = absolutize($(element).attr('href') || '');
       const card = $(element).closest('article, li, div');
       const text = clean(card.text()) || clean($(element).text());
+      const metrics = extractProjectMetrics(text);
       const title = clean($(element).attr('title') || card.find('h1,h2,h3,[class*="title"]').first().text() || $(element).text());
       return {
         title: title || firstUsefulLine(text) || '案件名なし',
         url,
         summary: text.slice(0, 180),
-        amount: extractAmount(text),
-        supporterCount: extractSupporterCount(text),
-        daysLeft: extractDaysLeft(text),
+        amount: metrics.amount,
+        supporterCount: metrics.supporterCount,
+        daysLeft: metrics.daysLeft,
         profileProjectCount: null,
         category: extractCategory(text),
         location: extractLocation(text)
@@ -307,16 +311,17 @@ function extractProject(html: string, url: string, visibleText = ''): ScrapedMak
   if (!title) throw new BadRequestException('Makuakeプロジェクト名を取得できませんでした。');
   const description = clean($('meta[property="og:description"]').attr('content') || $('[class*="description"], [class*="story"], main').first().text()).slice(0, 1600);
   const pageText = visibleText || clean($('body').text());
+  const metrics = extractProjectMetrics(pageText);
   const externalUrls = extractExternalUrls($, url);
   const memberUrl = extractMemberUrl($, url);
   return {
     title,
     url,
     executorName: extractExecutorName($, pageText),
-    amount: extractAmount(pageText),
-    supporterCount: extractSupporterCount(pageText),
-    daysLeft: extractDaysLeft(pageText),
-    isEnded: /終了|募集終了|販売終了/.test(pageText) && extractDaysLeft(pageText) === null,
+    amount: metrics.amount,
+    supporterCount: metrics.supporterCount,
+    daysLeft: metrics.daysLeft,
+    isEnded: /終了|募集終了|販売終了/.test(pageText) && metrics.daysLeft === null,
     description,
     category: extractCategory(pageText),
     location: extractLocation(pageText),
@@ -409,6 +414,12 @@ function normalizeEndingSoonDays(value?: number) {
   return [7, 14, 20, 30].includes(number) ? number : 14;
 }
 
+function searchCandidatePoolSize(input: SearchCampfireProjectsDto) {
+  const limit = normalizeLimit(input.limit);
+  if (input.status === 'endingSoon') return Math.min(200, Math.max(limit * 8, 80));
+  return Math.min(200, Math.max(limit * 4, 40));
+}
+
 function validateMakuakeUrl(value: string) {
   let url: URL;
   try {
@@ -424,6 +435,14 @@ function validateMakuakeUrl(value: string) {
 
 function isProjectUrl(url: string) {
   return /makuake\.com\/project\/[^/?#]+/i.test(url);
+}
+
+function extractProjectMetrics(text: string) {
+  return {
+    amount: extractAmount(text),
+    supporterCount: extractSupporterCount(text),
+    daysLeft: extractDaysLeft(text)
+  };
 }
 
 function extractAmount(text: string) {
@@ -651,4 +670,3 @@ function uniqueBy<T>(items: T[], getKey: (item: T) => string) {
     return true;
   });
 }
-
