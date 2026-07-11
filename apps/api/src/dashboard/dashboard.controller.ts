@@ -2071,6 +2071,12 @@ export class DashboardController {
                   <option value="active">募集中のみ</option>
                   <option value="endingSoon">終了間近順</option>
                 </select>
+                <select id="campfireEndingSoonDays">
+                  <option value="7">7日以内</option>
+                  <option value="14" selected>14日以内</option>
+                  <option value="20">20日以内</option>
+                  <option value="30">30日以内</option>
+                </select>
                 <select id="campfireSearchProfileProjectRange">
                   <option value="">過去プロジェクト すべて</option>
                   <option value="0:0">初回のみ</option>
@@ -2162,6 +2168,12 @@ export class DashboardController {
                   <option value="">公開状態 すべて</option>
                   <option value="active">募集中のみ</option>
                   <option value="endingSoon">終了間近</option>
+                </select>
+                <select id="campfireDisplayEndingSoonDays" onchange="renderCampfireCandidates()">
+                  <option value="7">7日以内</option>
+                  <option value="14" selected>14日以内</option>
+                  <option value="20">20日以内</option>
+                  <option value="30">30日以内</option>
                 </select>
                 <select id="campfireDisplayAmountRange" onchange="renderCampfireCandidates()">
                   <option value="">支援額 すべて</option>
@@ -2477,11 +2489,11 @@ export class DashboardController {
       stopCampfireSearchTimer();
       state.campfireSearchStartedAt = Date.now();
       const note = hasProfileProjectSearch ? ' / 過去PJ条件あり' : '';
-      const render = () => {
-        setStatus('campfireSearchStatusText', '検索中 ' + formatElapsed(Date.now() - state.campfireSearchStartedAt) + note, 'warn');
-      };
-      render();
-      state.campfireSearchTimerId = window.setInterval(render, 1000);
+      setStatus('campfireSearchStatusText', '検索中' + note, 'warn');
+      state.campfireSearchTimerId = window.setInterval(() => {
+        const element = document.getElementById('campfireSearchStatusText');
+        if (element) element.dataset.elapsed = formatElapsed(Date.now() - state.campfireSearchStartedAt);
+      }, 1000);
     }
 
     function stopCampfireSearchTimer() {
@@ -2594,7 +2606,8 @@ export class DashboardController {
             profileProjectMin: profileProjectRange.min,
             profileProjectMax: profileProjectRange.max,
             limit: desiredLimit,
-            status: ['campfire', 'makuake'].includes(source) ? (fieldValue('campfireSearchStatus') || 'active') : 'active'
+            status: ['campfire', 'makuake'].includes(source) ? (fieldValue('campfireSearchStatus') || 'active') : 'active',
+            endingSoonDays: numberFieldValue('campfireEndingSoonDays') || 14
           }))
         });
         state.campfireSearchJobId = job.id;
@@ -2622,7 +2635,7 @@ export class DashboardController {
         stopCampfireSearchTimer();
         stopCampfireSearchPoll();
         document.getElementById('stopSearchButton').disabled = true;
-        setStatus('campfireSearchStatusText', job.message + ' / ' + currentSearchElapsedText(), job.status === 'failed' ? 'error' : 'ok');
+        setStatus('campfireSearchStatusText', (job.status === 'failed' ? '検索失敗' : job.status === 'cancelled' ? '検索停止' : '検索完了') + ' / ' + currentSearchElapsedText(), job.status === 'failed' ? 'error' : 'ok');
       } catch (error) {
         stopCampfireSearchTimer();
         stopCampfireSearchPoll();
@@ -2640,7 +2653,9 @@ export class DashboardController {
       const elapsed = currentSearchElapsedText();
       const message = runningText + ' / 候補 ' + state.campfireCandidates.length + '件 / 取込可能 ' + importableCount + '件' + (job.searchedLimit ? ' / 確認中 ' + job.searchedLimit + '件枠' : '');
       document.getElementById('campfireCandidateCount').textContent = message;
-      setStatus('campfireSearchStatusText', message + (elapsed ? ' / ' + elapsed : ''), job.status === 'failed' ? 'error' : job.status === 'running' ? 'warn' : 'ok');
+      if (job.status !== 'running') {
+        setStatus('campfireSearchStatusText', (job.status === 'completed' ? '検索完了' : runningText) + (elapsed ? ' / ' + elapsed : ''), job.status === 'failed' ? 'error' : 'ok');
+      }
     }
 
     async function cancelCampfireSearch() {
@@ -2686,9 +2701,11 @@ export class DashboardController {
       });
       document.getElementById('campfireFetchLimit').value = '10';
       document.getElementById('campfireSearchStatus').value = 'active';
+      document.getElementById('campfireEndingSoonDays').value = '14';
       document.getElementById('campfireSearchProfileProjectRange').value = '';
       document.getElementById('campfireResultLimit').value = '10';
       document.getElementById('campfireDisplayStatus').value = '';
+      document.getElementById('campfireDisplayEndingSoonDays').value = '14';
       document.getElementById('campfireDisplayAmountRange').value = '';
       document.getElementById('campfireDisplaySupporterRange').value = '';
       document.getElementById('campfireDisplayProfileProjectRange').value = '';
@@ -3294,7 +3311,7 @@ export class DashboardController {
       if (profileProjectRange.min !== null && item.profileProjectCount < profileProjectRange.min) return false;
       if (profileProjectRange.max !== null && item.profileProjectCount > profileProjectRange.max) return false;
       if (status === 'active' && !item.isActive) return false;
-      if (status === 'endingSoon' && (item.daysLeft === null || item.daysLeft > 14)) return false;
+      if (status === 'endingSoon' && (item.daysLeft === null || item.daysLeft > (numberFieldValue('campfireDisplayEndingSoonDays') || 14))) return false;
       return true;
     }
 

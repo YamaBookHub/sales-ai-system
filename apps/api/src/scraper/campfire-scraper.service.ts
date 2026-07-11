@@ -4,7 +4,7 @@ import { chromium, type BrowserContext, type Page } from 'playwright';
 
 const CAMPFIRE_ORIGIN = 'https://camp-fire.jp';
 const DEFAULT_SEARCH_RESULT_LIMIT = 10;
-const SEARCH_RESULT_LIMITS = [10, 50, 100];
+const SEARCH_RESULT_LIMITS = [10, 50, 100, 150, 200];
 const PROFILE_LOOKUP_CONCURRENCY = clampNumber(Number(process.env.CAMPFIRE_PROFILE_LOOKUP_CONCURRENCY || 8), 1, 12);
 const SEARCH_CACHE_TTL_MS = clampNumber(Number(process.env.CAMPFIRE_SEARCH_CACHE_TTL_MS || 5 * 60 * 1000), 0, 30 * 60 * 1000);
 const CAMPFIRE_USER_AGENT =

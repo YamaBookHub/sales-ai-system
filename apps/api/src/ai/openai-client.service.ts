@@ -321,7 +321,7 @@ export class OpenAiClientService {
       return '長年親しまれてきた店舗をより利用しやすい形で継続しようとされている点';
     }
     if (/サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/.test(source)) {
-      return '素材の魅力や職人技が伝わりやすく、味わいを想像しやすい点';
+      return this.buildSpecificAppeal(source) || '素材の魅力や職人技が伝わりやすく、味わいを想像しやすい点';
     }
     if (/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(source)) {
       return 'お米の鮮度を保ちながら、キッチンに収まりやすい形で分けて保存できる点';
@@ -330,7 +330,24 @@ export class OpenAiClientService {
       return '残量が見えやすく、食卓で使う道具としての機能性とデザイン性を両立している点';
     }
     if (/エアベッド|ベッド|寝られる|寝心地|空気|マットレス|キャンプ|車中泊|アウトドア/.test(source)) {
-      return '屋内外で使いやすく、寝心地や持ち運びやすさを訴求しやすい点';
+      return this.buildSpecificAppeal(source) || '屋内外で使いやすく、寝心地や持ち運びやすさを訴求しやすい点';
+    }
+    return this.buildSpecificAppeal(source);
+  }
+
+  private buildSpecificAppeal(projectSource: string) {
+    const source = this.sanitizeSourceText(projectSource);
+    const patterns = [
+      { pattern: /スモークサーモン|サーモン|大山ハム|職人技|伏流水|燻製|味わい|食卓/g, suffix: '素材や味わいの魅力を想像しやすい点' },
+      { pattern: /有田焼|醤油差し|サイフォン|残量|NEO CLAY|食卓|デザイン/g, suffix: '機能性と見た目の特徴が伝わりやすい点' },
+      { pattern: /エアベッド|AeroCloud|寝心地|揺れず|丈夫|キャンプ|車中泊|来客/g, suffix: '実際の利用シーンを想像しやすい点' },
+      { pattern: /真空保存|鮮度|分割保存|米びつ|保存容器|キッチン|収納/g, suffix: '使いやすさや保管シーンを想像しやすい点' },
+      { pattern: /ライブ|ファン|周年|記念|音楽|公演|イベント/g, suffix: '参加する理由や応援する背景が伝わりやすい点' },
+      { pattern: /リフォーム|改装|創業|店舗|地域|飲食|焼き鳥|炭火/g, suffix: '応援したくなる背景が伝わりやすい点' }
+    ];
+    for (const { pattern, suffix } of patterns) {
+      const matches = Array.from(new Set(source.match(pattern) || [])).slice(0, 3);
+      if (matches.length) return `${matches.join('・')}など、${suffix}`;
     }
     return '';
   }

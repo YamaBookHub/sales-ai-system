@@ -461,17 +461,18 @@ function buildMailPlaceholders(
   const strength = buildLocalStrengths(safeDescription, [reason, manualAnalysis].filter(Boolean).join(' '))[0] || '';
   const manualAppeal = pickManualAppeal(manualAnalysis, projectSource);
   const manualTarget = pickManualTarget(manualAnalysis, projectSource);
+  const specificAppeal = buildSpecificAppeal(projectSource);
   const appeal = ensureCompatibleAppeal(manualAppeal || (isStoreProject
     ? '長年親しまれてきた店舗をより利用しやすい形で継続しようとされている点'
     : isEventProject
       ? '節目となる企画をファンの方々と一緒に盛り上げようとされている点'
       : isFoodProject
-        ? '素材の魅力や職人技が伝わりやすく、味わいを想像しやすい点'
+        ? specificAppeal || '素材の魅力や職人技が伝わりやすく、味わいを想像しやすい点'
       : isRiceStorageProject
         ? 'お米の鮮度を保ちながら、キッチンに収まりやすい形で分けて保存できる点'
-        : isAirBedProject
-          ? '屋内外で使いやすく、寝心地や持ち運びやすさを訴求しやすい点'
-      : toMailSafeAppeal(strength, title)), projectSource);
+      : isAirBedProject
+          ? specificAppeal || '屋内外で使いやすく、寝心地や持ち運びやすさを訴求しやすい点'
+      : specificAppeal || toMailSafeAppeal(strength, title)), projectSource);
   const target = manualTarget || (isStoreProject
     ? '店舗の継続や地域に根ざしたお店を応援したい方'
     : isEventProject
@@ -493,6 +494,28 @@ function buildMailPlaceholders(
     subjectType,
     caution: '達成率、残り日数、支援額、支援者数、カテゴリ名は魅力文には入れません。'
   };
+}
+
+function buildSpecificAppeal(projectSource: string) {
+  const source = sanitizeAnalysisSource(projectSource);
+  const patterns = [
+    { pattern: /スモークサーモン|サーモン|大山ハム|職人技|伏流水|燻製|味わい|食卓/g, suffix: '素材や味わいの魅力を想像しやすい点' },
+    { pattern: /有田焼|醤油差し|サイフォン|残量|NEO CLAY|食卓|デザイン/g, suffix: '機能性と見た目の特徴が伝わりやすい点' },
+    { pattern: /エアベッド|AeroCloud|寝心地|揺れず|丈夫|キャンプ|車中泊|来客/g, suffix: '実際の利用シーンを想像しやすい点' },
+    { pattern: /真空保存|鮮度|分割保存|米びつ|保存容器|キッチン|収納/g, suffix: '使いやすさや保管シーンを想像しやすい点' },
+    { pattern: /ライブ|ファン|周年|記念|音楽|公演|イベント/g, suffix: '参加する理由や応援する背景が伝わりやすい点' },
+    { pattern: /リフォーム|改装|創業|店舗|地域|飲食|焼き鳥|炭火/g, suffix: '応援したくなる背景が伝わりやすい点' }
+  ];
+  for (const { pattern, suffix } of patterns) {
+    const matches = Array.from(new Set(source.match(pattern) || [])).slice(0, 3);
+    if (matches.length) return `${matches.join('・')}など、${suffix}`;
+  }
+  const titleWords = source
+    .replace(/[「」【】｜|。、！？!?]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length >= 3 && !isBadMailPhrase(word))
+    .slice(0, 2);
+  return titleWords.length ? `${titleWords.join('・')}という特徴が伝わりやすい点` : '';
 }
 
 function pickManualAppeal(text: string, projectSource = '') {

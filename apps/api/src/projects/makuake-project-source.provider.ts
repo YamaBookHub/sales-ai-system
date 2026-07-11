@@ -391,9 +391,15 @@ function matchesKeyword(item: MakuakeSearchResult, keyword?: string) {
 
 function sortSearchResults(items: MakuakeSearchResult[], input: SearchCampfireProjectsDto) {
   if (input.status !== 'endingSoon') return items;
+  const maxDays = normalizeEndingSoonDays(input.endingSoonDays);
   return [...items]
-    .filter((item) => typeof item.daysLeft === 'number' && item.daysLeft <= 14)
+    .filter((item) => typeof item.daysLeft === 'number' && item.daysLeft <= maxDays)
     .sort((a, b) => Number(a.daysLeft) - Number(b.daysLeft));
+}
+
+function normalizeEndingSoonDays(value?: number) {
+  const number = Number(value);
+  return [7, 14, 20, 30].includes(number) ? number : 14;
 }
 
 function validateMakuakeUrl(value: string) {
@@ -415,7 +421,7 @@ function isProjectUrl(url: string) {
 
 function extractAmount(text: string) {
   const match =
-    extractNumberAfterLabels(text, ['応援購入総額', '集まっている金額', '現在の支援総額', '購入総額', '支援総額'], ['円']) ||
+    extractNumberAfterLabels(text, ['応援購入総額', '集まっている金額', '現在の支援総額', '購入総額', '支援総額'], ['円'], 160) ||
     matchYenAmount(text) ||
     text.match(/([0-9,]+)\s*円/);
   return match?.[1] ? Number(match[1].replace(/,/g, '')) : 0;
@@ -431,17 +437,17 @@ function matchYenAmount(text: string) {
 
 function extractSupporterCount(text: string) {
   const match =
-    extractNumberAfterLabels(text, ['サポーター', '寄附者', '寄付者', 'サポーター数', '支援者数', '応援購入者数', '支援者', '応援購入者'], ['人', '名']) ||
+    extractNumberAfterLabels(text, ['サポーター', '寄附者', '寄付者', 'サポーター数', '支援者数', '応援購入者数', '支援者', '応援購入者'], ['人', '名'], 160) ||
     text.match(/(?:寄附者|寄付者|サポーター数|支援者数|応援購入者数|サポーター|支援者|応援購入者)\s*[:：]?\s*([0-9,]+)\s*(?:人|名)?/) ||
     text.match(/([0-9,]+)\s*(?:人|名)\s*(?:の)?(?:寄附者|寄付者|サポーター|応援購入者|購入者|支援者)/);
   return match?.[1] ? Number(match[1].replace(/,/g, '')) : 0;
 }
 
-function extractNumberAfterLabels(text: string, labels: string[], units: string[]) {
+function extractNumberAfterLabels(text: string, labels: string[], units: string[], windowSize = 80) {
   for (const label of labels) {
     const index = text.indexOf(label);
     if (index < 0) continue;
-    const nearby = text.slice(index + label.length, index + label.length + 80);
+    const nearby = text.slice(index + label.length, index + label.length + windowSize);
     const unitPattern = units.map(escapeRegExp).join('|');
     const match = nearby.match(new RegExp(`([0-9,]+)\\s*(?:${unitPattern})`));
     if (match?.[1]) return match;
@@ -450,7 +456,8 @@ function extractNumberAfterLabels(text: string, labels: string[], units: string[
 }
 
 function extractDaysLeft(text: string) {
-  const match = text.match(/(?:残り|あと)\s*([0-9]{1,3})\s*日/);
+  const match = extractNumberAfterLabels(text, ['募集終了まで残り', '終了まで残り', '残り', 'あと'], ['日'], 80) ||
+    text.match(/(?:残り|あと)\s*([0-9]{1,3})\s*日/);
   if (match?.[1]) return Number(match[1]);
   const compactAmountMatch = matchCompactAmountDaysRate(text);
   if (compactAmountMatch !== null) return compactAmountMatch;
@@ -601,7 +608,9 @@ function absolutize(value: string) {
 }
 
 function normalizeLimit(value?: number) {
-  return [10, 50, 100].includes(Number(value)) ? Number(value) : 10;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 10;
+  return Math.max(10, Math.min(200, Math.floor(number)));
 }
 
 function firstUsefulLine(text: string) {

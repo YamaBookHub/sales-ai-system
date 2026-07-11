@@ -58,7 +58,7 @@ export class ProjectsService {
     const result = await provider.search({ ...dto, excludeUrls: dto.excludeUrls || [] });
     if (dto.status === 'endingSoon') {
       return {
-        items: sortEndingSoon(result.items).slice(0, normalizeResultLimit(dto.limit))
+        items: sortEndingSoon(result.items, normalizeEndingSoonDays(dto.endingSoonDays)).slice(0, normalizeResultLimit(dto.limit))
       };
     }
     return result;
@@ -111,12 +111,13 @@ export class ProjectsService {
   private async runSearchJob(job: SearchJob, provider: ProjectSourceProvider, dto: SearchCampfireProjectsDto) {
     try {
       const existingUrls = await this.existingProjectUrls(provider);
+      const excludeUrls = Array.from(new Set([...(dto.excludeUrls || []), ...existingUrls]));
       for (const limit of progressiveSearchLimits(job.desiredLimit)) {
         if (job.cancelled) break;
         job.searchedLimit = limit;
         job.message = `候補を取得中です（最大${limit}件まで確認中）`;
         job.updatedAt = new Date().toISOString();
-        const result = await this.searchWithProvider(provider, { ...dto, limit });
+        const result = await this.searchWithProvider(provider, { ...dto, limit, excludeUrls });
         job.items = mergeSearchItems(job.items, result.items);
         job.importableCount = countImportableSearchItems(job.items, existingUrls);
         job.message = `候補 ${job.items.length}件 / 取込可能 ${job.importableCount}件`;
@@ -488,17 +489,24 @@ function clampConcurrency(value: number | undefined, min: number, max: number, f
 }
 
 function normalizeResultLimit(value?: number) {
-  return [10, 50, 100].includes(Number(value)) ? Number(value) : 10;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 10;
+  return Math.max(10, Math.min(200, Math.floor(number)));
 }
 
-function sortEndingSoon<T extends { daysLeft?: number | null; isActive?: boolean }>(items: T[]) {
+function normalizeEndingSoonDays(value?: number) {
+  const number = Number(value);
+  return [7, 14, 20, 30].includes(number) ? number : 14;
+}
+
+function sortEndingSoon<T extends { daysLeft?: number | null; isActive?: boolean }>(items: T[], maxDays = 14) {
   return [...items]
-    .filter((item) => item.isActive !== false && typeof item.daysLeft === 'number' && item.daysLeft <= 14)
+    .filter((item) => item.isActive !== false && typeof item.daysLeft === 'number' && item.daysLeft <= maxDays)
     .sort((a, b) => Number(a.daysLeft) - Number(b.daysLeft));
 }
 
 function progressiveSearchLimits(desiredLimit: number) {
-  return [10, 50, 100].filter((limit) => limit >= desiredLimit);
+  return [10, 50, 100, 150, 200].filter((limit) => limit >= desiredLimit);
 }
 
 function mergeSearchItems<T extends { url: string }>(current: T[], next: T[]) {

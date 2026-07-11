@@ -112,6 +112,10 @@ export class SearchCampfireProjectsDto {
   status?: string;
 
   @IsOptional()
+  @IsInt()
+  endingSoonDays?: number;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   excludeUrls?: string[];
