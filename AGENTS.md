@@ -6,8 +6,17 @@ AIが小さい変更範囲を安全に特定できることを、形式的なCle
 ## 最初に読む
 
 1. `docs/19_LOW_MODEL_HANDOFF.md`
-2. 変更対象moduleの `README.md`
-3. `docs/18_AI_MAINTAINABLE_ARCHITECTURE.md`
+2. `docs/22_AI_MODEL_ROUTING.md`
+3. 変更対象moduleの `README.md`
+4. `docs/18_AI_MAINTAINABLE_ARCHITECTURE.md`
+
+## モデル選択
+
+- 作業開始前に `docs/22_AI_MODEL_ROUTING.md` で作業リスクを判定する。
+- 実行環境が対応している場合、ユーザーへの都度確認なしで適切なモデルまたはサブエージェントを選んでよい。
+- 通常は Luna相当、小さく明確な変更は GPT-5.4 mini相当、複数責務の分離は Terra相当、設計・危険な変更・難しい障害は SolまたはGPT-5.5相当を使う。
+- 低モデルで同じ原因への修正が2回失敗した場合は、修正を重ねず1段階上へ切り替える。
+- モデル名が変わった場合は、名称ではなく同文書の役割定義を優先する。
 
 ## 設計方針
 
