@@ -186,6 +186,20 @@ export class DashboardController {
       position: static;
       line-height: 1.4;
     }
+    th.sortable {
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    th.sortable:hover {
+      color: var(--accent);
+      background: #eef7f4;
+    }
+    .sort-mark {
+      margin-left: 4px;
+      color: var(--accent);
+      font-size: 12px;
+    }
     tr { cursor: pointer; }
     tr:hover { background: #f8fbfa; }
     tr[data-selected="true"] { background: #eef8f5; }
@@ -286,15 +300,15 @@ export class DashboardController {
           <table>
             <thead>
               <tr>
-                <th style="width:16%">会社</th>
-                <th>案件</th>
-                <th style="width:92px">取得元</th>
-                <th style="width:90px">状態</th>
-                <th style="width:70px">優先度</th>
-                <th style="width:70px">点数</th>
-                <th style="width:130px">連絡/手段</th>
-                <th style="width:110px">最新メール</th>
-                <th style="width:150px">次対応</th>
+                <th class="sortable" onclick="toggleSort('lead','company')" style="width:16%">会社<span id="leadSort-company" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleSort('lead','project')">案件<span id="leadSort-project" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleSort('lead','source')" style="width:92px">取得元<span id="leadSort-source" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleSort('lead','status')" style="width:90px">状態<span id="leadSort-status" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleSort('lead','priority')" style="width:70px">優先度<span id="leadSort-priority" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleSort('lead','score')" style="width:70px">点数<span id="leadSort-score" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleSort('lead','contact')" style="width:130px">連絡/手段<span id="leadSort-contact" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleSort('lead','mail')" style="width:110px">最新メール<span id="leadSort-mail" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleSort('lead','nextAction')" style="width:150px">次対応<span id="leadSort-nextAction" class="sort-mark"></span></th>
               </tr>
             </thead>
             <tbody id="leadRows"></tbody>
@@ -374,7 +388,7 @@ export class DashboardController {
   <footer>Sales AI System</footer>
   <script>
     const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
-    const state = { leads: [], mails: [], aiGenerations: [], selectedLeadId: null };
+    const state = { leads: [], mails: [], aiGenerations: [], selectedLeadId: null, sort: { table: 'lead', key: '', direction: 'asc' } };
 
     async function api(path, options = {}) {
       const operatorEmail = window.localStorage.getItem('salesAiSystem.operatorEmail') || '';
@@ -452,6 +466,7 @@ export class DashboardController {
       }).join('');
       document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="9" class="muted">条件に合うリードがありません</td></tr>';
       document.getElementById('listCount').textContent = filteredLeads().length + '件';
+      renderSortMarks('lead', ['company', 'project', 'source', 'status', 'priority', 'score', 'contact', 'mail', 'nextAction']);
     }
 
     function renderDetail() {
@@ -548,7 +563,7 @@ export class DashboardController {
       const contact = value('contactFilter');
       const mailStatus = value('mailFilter');
       const sourceFilter = value('sourceFilter');
-      return state.leads.filter((lead) => {
+      const leads = state.leads.filter((lead) => {
         const mail = latestMail(lead.id);
         const project = lead.project || {};
         const sourceLabel = projectPlatformLabel(project);
@@ -571,6 +586,67 @@ export class DashboardController {
         if (sourceFilter && sourceLabel !== sourceFilter) return false;
         return true;
       });
+      return sortItems(leads, state.sort, leadSortValue);
+    }
+
+    function toggleSort(table, key) {
+      if (state.sort.table === table && state.sort.key === key) {
+        state.sort.direction = state.sort.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.sort = { table, key, direction: defaultSortDirection(key) };
+      }
+      render();
+    }
+
+    function renderSortMarks(table, keys) {
+      keys.forEach((key) => {
+        const element = document.getElementById(table + 'Sort-' + key);
+        if (!element) return;
+        element.textContent = state.sort.table === table && state.sort.key === key
+          ? (state.sort.direction === 'asc' ? '▲' : '▼')
+          : '';
+      });
+    }
+
+    function sortItems(items, sort, valueGetter) {
+      if (!sort?.key) return items;
+      const direction = sort.direction === 'desc' ? -1 : 1;
+      return [...items].sort((left, right) => compareValues(valueGetter(left, sort.key), valueGetter(right, sort.key)) * direction);
+    }
+
+    function compareValues(left, right) {
+      const leftEmpty = left === null || left === undefined || left === '';
+      const rightEmpty = right === null || right === undefined || right === '';
+      if (leftEmpty && rightEmpty) return 0;
+      if (leftEmpty) return 1;
+      if (rightEmpty) return -1;
+      if (typeof left === 'number' && typeof right === 'number') return left - right;
+      return String(left).localeCompare(String(right), 'ja', { numeric: true, sensitivity: 'base' });
+    }
+
+    function defaultSortDirection(key) {
+      return ['score', 'createdAt', 'amount', 'supporterCount', 'daysLeft', 'profileProjectCount'].includes(key) ? 'desc' : 'asc';
+    }
+
+    function leadSortValue(lead, key) {
+      const mail = latestMail(lead.id);
+      const project = lead.project || {};
+      const values = {
+        company: lead.company?.name || lead.companyId || '',
+        project: project.title || '',
+        source: projectPlatformLabel(project),
+        status: labelLeadStatus(lead.status),
+        priority: priorityRank(lead.priority),
+        score: Number(lead.score || 0),
+        contact: contactSummary(lead),
+        mail: mail ? labelMailStatus(mail.status) : '未生成',
+        nextAction: nextActionLabel(lead, mail)
+      };
+      return values[key] ?? '';
+    }
+
+    function priorityRank(priority) {
+      return ({ high: 3, medium: 2, low: 1 })[priority] || 0;
     }
 
     function populateSourceFilterOptions(selectId) {
@@ -1233,6 +1309,20 @@ export class DashboardController {
       font-size: 12px;
       font-weight: 600;
       background: #fafbfc;
+    }
+    th.sortable {
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    th.sortable:hover {
+      color: var(--accent);
+      background: #eef7f4;
+    }
+    .sort-mark {
+      margin-left: 4px;
+      color: var(--accent);
+      font-size: 12px;
     }
     .table-scroll {
       overflow: auto;
@@ -1910,12 +2000,12 @@ export class DashboardController {
           <table>
             <thead>
               <tr>
-                <th style="width:22%">会社</th>
-                <th>案件</th>
-                <th style="width:92px">取得元</th>
-                <th style="width:90px">状態</th>
-                <th style="width:76px">点数</th>
-                <th style="width:76px">優先度</th>
+                <th class="sortable" onclick="toggleDashboardSort('lead','company')" style="width:22%">会社<span id="leadSort-company" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleDashboardSort('lead','project')">案件<span id="leadSort-project" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleDashboardSort('lead','source')" style="width:92px">取得元<span id="leadSort-source" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleDashboardSort('lead','status')" style="width:90px">状態<span id="leadSort-status" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleDashboardSort('lead','score')" style="width:76px">点数<span id="leadSort-score" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleDashboardSort('lead','priority')" style="width:76px">優先度<span id="leadSort-priority" class="sort-mark"></span></th>
                 <th style="width:76px">URL</th>
                 <th style="width:90px">選択</th>
               </tr>
@@ -2047,9 +2137,9 @@ export class DashboardController {
               <table>
                 <thead>
                   <tr>
-                    <th>作成履歴</th>
-                    <th style="width:92px">状態</th>
-                    <th style="width:120px">作成日</th>
+                    <th class="sortable" onclick="toggleDashboardSort('mail','subject')">作成履歴<span id="mailSort-subject" class="sort-mark"></span></th>
+                    <th class="sortable" onclick="toggleDashboardSort('mail','status')" style="width:92px">状態<span id="mailSort-status" class="sort-mark"></span></th>
+                    <th class="sortable" onclick="toggleDashboardSort('mail','createdAt')" style="width:120px">作成日<span id="mailSort-createdAt" class="sort-mark"></span></th>
                   </tr>
                 </thead>
                 <tbody id="mailRows"></tbody>
@@ -2161,7 +2251,10 @@ export class DashboardController {
       campfireSearchPollTimerId: null,
       campfireSearchStartedAt: null,
       campfireSearchJobId: null,
-      currentSourcePlatform: null
+      currentSourcePlatform: null,
+      leadSort: { key: '', direction: 'asc' },
+      candidateSort: { key: '', direction: 'asc' },
+      mailSort: { key: 'createdAt', direction: 'desc' }
     };
     const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
 
@@ -2812,7 +2905,8 @@ export class DashboardController {
         if (sourceFilter && sourceLabel !== sourceFilter) return false;
         return true;
       });
-      const rows = leads.map((lead) => {
+      const sortedLeads = sortDashboardItems(leads, state.leadSort, dashboardLeadSortValue);
+      const rows = sortedLeads.map((lead) => {
         const company = lead.company?.name || lead.companyId;
         const project = lead.project?.title || '案件名なし';
         const projectUrl = lead.project?.url || '';
@@ -2830,6 +2924,7 @@ export class DashboardController {
       document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="8" class="muted">まだリードがありません</td></tr>';
       const mailLeadCount = document.getElementById('mailLeadCount');
       if (mailLeadCount) mailLeadCount.textContent = leads.length + '件';
+      renderDashboardSortMarks('lead', ['company', 'project', 'source', 'status', 'score', 'priority']);
       document.getElementById('generateButton').disabled = !canGenerateMail();
       document.getElementById('analysisButton').disabled = !state.selectedLeadId;
       const selected = state.leads.find((lead) => lead.id === state.selectedLeadId);
@@ -2921,13 +3016,13 @@ export class DashboardController {
           '<table class="candidate-table">' +
             '<thead>' +
               '<tr>' +
-                '<th style="width:34%">案件</th>' +
-                '<th style="width:110px">支援額</th>' +
-                '<th style="width:96px">支援者</th>' +
-                '<th style="width:76px">残り</th>' +
-                '<th style="width:96px">過去PJ</th>' +
-                '<th style="width:130px">カテゴリ</th>' +
-                '<th style="width:130px">取込状態</th>' +
+                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;title&quot;)" style="width:34%">案件<span id="candidateSort-title" class="sort-mark"></span></th>' +
+                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;amount&quot;)" style="width:110px">支援額<span id="candidateSort-amount" class="sort-mark"></span></th>' +
+                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;supporterCount&quot;)" style="width:96px">支援者<span id="candidateSort-supporterCount" class="sort-mark"></span></th>' +
+                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;daysLeft&quot;)" style="width:76px">残り<span id="candidateSort-daysLeft" class="sort-mark"></span></th>' +
+                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;profileProjectCount&quot;)" style="width:96px">過去PJ<span id="candidateSort-profileProjectCount" class="sort-mark"></span></th>' +
+                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;category&quot;)" style="width:130px">カテゴリ<span id="candidateSort-category" class="sort-mark"></span></th>' +
+                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;importStatus&quot;)" style="width:130px">取込状態<span id="candidateSort-importStatus" class="sort-mark"></span></th>' +
                 '<th style="width:76px">URL</th>' +
                 '<th style="width:104px">操作</th>' +
               '</tr>' +
@@ -2935,6 +3030,7 @@ export class DashboardController {
             '<tbody>' + rows + '</tbody>' +
           '</table>' +
         '</div>';
+      renderDashboardSortMarks('candidate', ['title', 'amount', 'supporterCount', 'daysLeft', 'profileProjectCount', 'category', 'importStatus']);
     }
 
     function syncCandidateImportStatuses() {
@@ -3046,9 +3142,13 @@ export class DashboardController {
 
     function getVisibleCandidateEntries() {
       const limit = numberFieldValue('campfireResultLimit') || 10;
-      return state.campfireCandidates
+      return sortDashboardItems(
+        state.campfireCandidates
         .map((item, originalIndex) => ({ item, originalIndex }))
-        .filter(({ item }) => matchesCampfireDisplayFilters(item))
+        .filter(({ item }) => matchesCampfireDisplayFilters(item)),
+        state.candidateSort,
+        candidateEntrySortValue
+      )
         .slice(0, limit);
     }
 
@@ -3411,6 +3511,7 @@ export class DashboardController {
         '</tr>';
       }).join('');
       document.getElementById('mailRows').innerHTML = rows || '<tr><td colspan="3" class="muted">この対象のメール作成履歴は0件です。メール生成で新規作成できます。</td></tr>';
+      renderDashboardSortMarks('mail', ['subject', 'status', 'createdAt']);
       const selected = mails.find((mail) => mail.id === state.selectedMailId);
       document.getElementById('selectedMail').textContent = selected ? labelMailStatus(selected.status) : '未選択';
       populateMailEditor(selected);
@@ -3436,7 +3537,90 @@ export class DashboardController {
           if (lead && sameId(mail.company?.id, lead.companyId)) return true;
           return false;
         })
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        .sort((a, b) => compareDashboardValues(mailSortValue(a, state.mailSort.key), mailSortValue(b, state.mailSort.key)) * (state.mailSort.direction === 'desc' ? -1 : 1));
+    }
+
+    function toggleDashboardSort(table, key) {
+      const stateKey = table + 'Sort';
+      const current = state[stateKey];
+      if (current?.key === key) {
+        current.direction = current.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        state[stateKey] = { key, direction: defaultDashboardSortDirection(key) };
+      }
+      if (table === 'lead') renderLeads();
+      if (table === 'candidate') renderCampfireCandidates();
+      if (table === 'mail') renderMails();
+    }
+
+    function renderDashboardSortMarks(table, keys) {
+      const current = state[table + 'Sort'];
+      keys.forEach((key) => {
+        const element = document.getElementById(table + 'Sort-' + key);
+        if (!element) return;
+        element.textContent = current?.key === key ? (current.direction === 'asc' ? '▲' : '▼') : '';
+      });
+    }
+
+    function sortDashboardItems(items, sort, valueGetter) {
+      if (!sort?.key) return items;
+      const direction = sort.direction === 'desc' ? -1 : 1;
+      return [...items].sort((left, right) => compareDashboardValues(valueGetter(left, sort.key), valueGetter(right, sort.key)) * direction);
+    }
+
+    function compareDashboardValues(left, right) {
+      const leftEmpty = left === null || left === undefined || left === '';
+      const rightEmpty = right === null || right === undefined || right === '';
+      if (leftEmpty && rightEmpty) return 0;
+      if (leftEmpty) return 1;
+      if (rightEmpty) return -1;
+      if (typeof left === 'number' && typeof right === 'number') return left - right;
+      return String(left).localeCompare(String(right), 'ja', { numeric: true, sensitivity: 'base' });
+    }
+
+    function defaultDashboardSortDirection(key) {
+      return ['score', 'amount', 'supporterCount', 'daysLeft', 'profileProjectCount', 'createdAt'].includes(key) ? 'desc' : 'asc';
+    }
+
+    function dashboardLeadSortValue(lead, key) {
+      const project = lead.project || {};
+      const values = {
+        company: lead.company?.name || lead.companyId || '',
+        project: project.title || '',
+        source: projectPlatformLabel(project),
+        status: labelLeadStatus(lead.status),
+        score: Number(lead.score || 0),
+        priority: priorityRank(lead.priority)
+      };
+      return values[key] ?? '';
+    }
+
+    function candidateEntrySortValue(entry, key) {
+      const item = entry.item || {};
+      const importState = getCandidateImportState(item);
+      const values = {
+        title: item.title || '',
+        amount: Number(item.amount || 0),
+        supporterCount: Number(item.supporterCount || 0),
+        daysLeft: item.daysLeft === null || item.daysLeft === undefined ? null : Number(item.daysLeft),
+        profileProjectCount: item.profileProjectCount === null || item.profileProjectCount === undefined ? null : Number(item.profileProjectCount),
+        category: item.category || '',
+        importStatus: labelCandidateImportStatus(importState.status)
+      };
+      return values[key] ?? '';
+    }
+
+    function mailSortValue(mail, key) {
+      const values = {
+        subject: mail.subject || '',
+        status: labelMailStatus(mail.status),
+        createdAt: new Date(mail.createdAt).getTime() || 0
+      };
+      return values[key] ?? '';
+    }
+
+    function priorityRank(priority) {
+      return ({ high: 3, medium: 2, low: 1 })[priority] || 0;
     }
 
     function sameId(left, right) {
