@@ -450,12 +450,31 @@ function extractNumberAfterLabels(text: string, labels: string[], units: string[
 }
 
 function extractDaysLeft(text: string) {
-  const match = text.match(/(?:残り|あと)\s*([0-9]+)\s*日/);
+  const match = text.match(/(?:残り|あと)\s*([0-9]{1,3})\s*日/);
   if (match?.[1]) return Number(match[1]);
-  const compactCardMatch = text.match(/(?:^|\s|円)\s*([0-9]{1,3})\s*日\s+[0-9]{1,3}\s*%/);
+  const compactAmountMatch = matchCompactAmountDaysRate(text);
+  if (compactAmountMatch !== null) return compactAmountMatch;
+  const compactCardMatch = text.match(/(?:^|[^0-9,¥￥])([0-9]{1,3})\s*日\s*[0-9]{1,6}\s*%/);
   if (compactCardMatch?.[1]) return Number(compactCardMatch[1]);
-  const daysBeforeRateMatch = text.match(/([0-9]{1,3})\s*日\s*(?:達成率|[0-9]{1,3}\s*%)/);
+  const daysBeforeRateMatch = text.match(/(?:^|[^0-9,¥￥])([0-9]{1,3})\s*日\s*(?:達成率|[0-9]{1,6}\s*%)/);
   return daysBeforeRateMatch?.[1] ? Number(daysBeforeRateMatch[1]) : null;
+}
+
+function matchCompactAmountDaysRate(text: string) {
+  const normalized = clean(text);
+  const commaAmountPattern = /[¥￥]\s*[0-9]{1,3}(?:,[0-9]{3})+\s*(?:円)?\s*([0-9]{1,3})\s*日\s*[0-9]{1,6}\s*%/;
+  const commaMatch = normalized.match(commaAmountPattern);
+  if (commaMatch?.[1]) return Number(commaMatch[1]);
+
+  const compactNumberMatch = normalized.match(/[¥￥]\s*([0-9]+)\s*日\s*[0-9]{1,6}\s*%/);
+  if (!compactNumberMatch?.[1]) return null;
+  const amountAndDays = compactNumberMatch[1];
+  for (const digitLength of [3, 2, 1]) {
+    if (amountAndDays.length <= digitLength) continue;
+    const days = Number(amountAndDays.slice(-digitLength));
+    if (days >= 1 && days <= 365) return days;
+  }
+  return null;
 }
 
 function extractCategory(text: string) {
