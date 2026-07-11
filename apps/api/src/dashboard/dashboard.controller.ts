@@ -738,7 +738,38 @@ export class DashboardController {
 
     function renderLeadEditPanel(lead) {
       const memo = suggestedLeadMemos(lead);
+      const project = lead.project || {};
       return '<div class="row">' +
+        '<label>選択案件の詳細</label>' +
+        '<div class="form-grid">' +
+          inputField('leadCompanyNameEdit', '企業名', lead.company?.name || '') +
+          selectField('leadProjectSourceEdit', '取得元', projectPlatformType(project), [
+            ['campfire', 'CAMPFIRE'],
+            ['makuake', 'Makuake'],
+            ['green_funding', 'GREEN FUNDING'],
+            ['other', 'その他']
+          ]) +
+          inputField('leadProjectTitleEdit', '案件名', project.title) +
+          inputField('leadProjectUrlEdit', 'プロジェクトURL', project.url) +
+          inputField('leadProjectCategoryEdit', 'カテゴリ', project.category) +
+          selectField('leadProjectStatusEdit', '公開状態', project.status || 'unknown', [
+            ['unknown', '未確認'],
+            ['discovered', '発見'],
+            ['active', '公開中'],
+            ['ended', '終了'],
+            ['suspended', '停止']
+          ]) +
+          inputField('leadProjectAmountEdit', '支援額', project.amount || 0, '', 'number') +
+          inputField('leadProjectSupporterCountEdit', '支援者数', project.supporterCount || 0, '', 'number') +
+          inputField('leadProjectTargetAmountEdit', '目標金額', project.targetAmount || '', '', 'number') +
+          inputField('leadProjectEndDateEdit', '終了日時', toDateTimeLocal(project.endDate), '', 'datetime-local') +
+        '</div>' +
+        '<div class="row">' +
+          '<label for="leadProjectDescriptionEdit">プロジェクト説明</label>' +
+          '<textarea id="leadProjectDescriptionEdit">' + escapeHtml(project.description || '') + '</textarea>' +
+        '</div>' +
+      '</div>' +
+      '<div class="row">' +
         '<label>営業管理</label>' +
         '<div class="form-grid">' +
           selectField('leadStatusEdit', '状態', lead.status, [
@@ -806,6 +837,17 @@ export class DashboardController {
         await api('/api/leads/' + state.selectedLeadId, {
           method: 'PATCH',
           body: JSON.stringify(compactPayload({
+            companyName: value('leadCompanyNameEdit'),
+            projectSource: value('leadProjectSourceEdit'),
+            projectTitle: value('leadProjectTitleEdit'),
+            projectUrl: value('leadProjectUrlEdit'),
+            projectStatus: value('leadProjectStatusEdit'),
+            projectAmount: numberValue('leadProjectAmountEdit'),
+            projectSupporterCount: numberValue('leadProjectSupporterCountEdit'),
+            projectTargetAmount: optionalNumberValue('leadProjectTargetAmountEdit'),
+            projectEndDate: dateTimeValue('leadProjectEndDateEdit'),
+            projectCategory: value('leadProjectCategoryEdit'),
+            projectDescription: value('leadProjectDescriptionEdit'),
             status: value('leadStatusEdit'),
             priority: value('leadPriorityEdit'),
             sendMethod: value('leadSendMethodEdit'),
@@ -838,6 +880,19 @@ export class DashboardController {
     function dateTimeValue(id) {
       const raw = value(id);
       return raw ? new Date(raw).toISOString() : '';
+    }
+
+    function numberValue(id) {
+      const raw = value(id);
+      const number = Number(raw || 0);
+      return Number.isFinite(number) ? number : 0;
+    }
+
+    function optionalNumberValue(id) {
+      const raw = value(id);
+      if (!raw) return undefined;
+      const number = Number(raw);
+      return Number.isFinite(number) ? number : undefined;
     }
 
     function compactPayload(payload) {
@@ -938,6 +993,15 @@ export class DashboardController {
       if (url.includes('makuake.com')) return 'Makuake';
       if (url.includes('greenfunding.jp')) return 'GREEN FUNDING';
       return '未取得';
+    }
+
+    function projectPlatformType(project) {
+      if (project?.platform?.type) return project.platform.type;
+      const url = project?.url || '';
+      if (url.includes('camp-fire.jp')) return 'campfire';
+      if (url.includes('makuake.com')) return 'makuake';
+      if (url.includes('greenfunding.jp')) return 'green_funding';
+      return 'other';
     }
 
     function labelLeadStatus(status) {
@@ -3145,13 +3209,74 @@ export class DashboardController {
 
     function renderLeadManagementForm(lead) {
       const memo = suggestedLeadMemos(lead);
+      const project = lead.project || {};
       return '<div class="row">' +
+          '<label>選択案件の詳細</label>' +
+          '<div class="grid-2">' +
+            formInput('leadCompanyName', '企業名', lead.company?.name || '') +
+            formSelect('leadProjectSource', '取得元', projectPlatformType(project), [
+              ['campfire', 'CAMPFIRE'],
+              ['makuake', 'Makuake'],
+              ['green_funding', 'GREEN FUNDING'],
+              ['other', 'その他']
+            ]) +
+            formInput('leadProjectTitle', '案件名', project.title) +
+            formInput('leadProjectUrl', 'プロジェクトURL', project.url) +
+            formInput('leadProjectCategory', 'カテゴリ', project.category) +
+            formSelect('leadProjectStatus', '公開状態', project.status || 'unknown', [
+              ['unknown', '未確認'],
+              ['discovered', '発見'],
+              ['active', '公開中'],
+              ['ended', '終了'],
+              ['suspended', '停止']
+            ]) +
+            formInput('leadProjectAmount', '支援額', project.amount || 0, '', 'number') +
+            formInput('leadProjectSupporterCount', '支援者数', project.supporterCount || 0, '', 'number') +
+            formInput('leadProjectTargetAmount', '目標金額', project.targetAmount || '', '', 'number') +
+            formInput('leadProjectEndDate', '終了日時', toDateTimeLocal(project.endDate), '', 'datetime-local') +
+          '</div>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label for="leadProjectDescription">プロジェクト説明</label>' +
+          '<textarea id="leadProjectDescription" style="min-height:100px">' + escapeHtml(project.description || '') + '</textarea>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label>営業状態</label>' +
+          '<div class="grid-2">' +
+            formSelect('leadStatus', '状態', lead.status, [
+              ['discovered', '発見'],
+              ['qualified', '候補'],
+              ['drafted', '下書き済み'],
+              ['reviewing', '確認中'],
+              ['approved', '承認済み'],
+              ['queued', '送信待ち'],
+              ['contacted', '連絡済み'],
+              ['replied', '返信あり'],
+              ['meeting_candidate', '商談候補'],
+              ['rejected', '対象外'],
+              ['no_response', '返信なし'],
+              ['archived', 'アーカイブ']
+            ]) +
+            formSelect('leadPriority', '優先度', lead.priority, [
+              ['high', '高'],
+              ['medium', '中'],
+              ['low', '低']
+            ]) +
+          '</div>' +
+        '</div>' +
+        '<div class="row">' +
           '<label>連絡先確認</label>' +
           '<div class="grid-2">' +
             formInput('leadContactEmail', 'メールアドレス', lead.contactEmail) +
             formInput('leadContactFormUrl', '問い合わせフォームURL', lead.contactFormUrl) +
             formInput('leadSiteMessageUrl', 'サイト内メッセージURL', lead.siteMessageUrl) +
-            formInput('leadSendMethod', '送信手段', lead.sendMethod, 'メール / フォーム / サイト内メッセージ') +
+            formSelect('leadSendMethod', '送信手段', lead.sendMethod || suggestSendMethod(lead), [
+              ['', '未定'],
+              ['メール', 'メール'],
+              ['問い合わせフォーム', '問い合わせフォーム'],
+              ['サイト内メッセージ', 'サイト内メッセージ'],
+              ['その他', 'その他']
+            ]) +
           '</div>' +
         '</div>' +
         '<div class="row">' +
@@ -3385,6 +3510,19 @@ export class DashboardController {
       if (!state.selectedLeadId) return;
       setStatus('leadSaveStatus', '保存中', 'warn');
       const payload = {
+        companyName: fieldValue('leadCompanyName'),
+        projectSource: fieldValue('leadProjectSource'),
+        projectTitle: fieldValue('leadProjectTitle'),
+        projectUrl: fieldValue('leadProjectUrl'),
+        projectStatus: fieldValue('leadProjectStatus'),
+        projectAmount: numberFieldValue('leadProjectAmount'),
+        projectSupporterCount: numberFieldValue('leadProjectSupporterCount'),
+        projectTargetAmount: optionalNumberFieldValue('leadProjectTargetAmount'),
+        projectEndDate: dateTimeValue('leadProjectEndDate') || undefined,
+        projectCategory: fieldValue('leadProjectCategory'),
+        projectDescription: fieldValue('leadProjectDescription'),
+        status: fieldValue('leadStatus'),
+        priority: fieldValue('leadPriority'),
         contactEmail: fieldValue('leadContactEmail'),
         contactFormUrl: fieldValue('leadContactFormUrl'),
         siteMessageUrl: fieldValue('leadSiteMessageUrl'),
@@ -3567,6 +3705,15 @@ export class DashboardController {
       return '未取得';
     }
 
+    function projectPlatformType(project) {
+      if (project?.platform?.type) return project.platform.type;
+      const url = project?.url || '';
+      if (url.includes('camp-fire.jp')) return 'campfire';
+      if (url.includes('makuake.com')) return 'makuake';
+      if (url.includes('greenfunding.jp')) return 'green_funding';
+      return 'other';
+    }
+
     function populateSourceFilterOptions(selectId) {
       const select = document.getElementById(selectId);
       if (!select) return;
@@ -3633,6 +3780,15 @@ export class DashboardController {
       '</div>';
     }
 
+    function formSelect(id, label, selectedValue, options) {
+      return '<div class="row">' +
+        '<label for="' + escapeHtml(id) + '">' + escapeHtml(label) + '</label>' +
+        '<select id="' + escapeHtml(id) + '">' +
+          options.map(([value, text]) => '<option value="' + escapeAttr(value) + '" ' + (value === selectedValue ? 'selected' : '') + '>' + escapeHtml(text) + '</option>').join('') +
+        '</select>' +
+      '</div>';
+    }
+
     function fieldValue(id) {
       return document.getElementById(id)?.value.trim() || '';
     }
@@ -3640,6 +3796,18 @@ export class DashboardController {
     function dateTimeValue(id) {
       const value = fieldValue(id);
       return value ? new Date(value).toISOString() : '';
+    }
+
+    function numberFieldValue(id) {
+      const value = Number(fieldValue(id) || 0);
+      return Number.isFinite(value) ? value : 0;
+    }
+
+    function optionalNumberFieldValue(id) {
+      const raw = fieldValue(id);
+      if (!raw) return undefined;
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : undefined;
     }
 
     function compactPayload(payload) {

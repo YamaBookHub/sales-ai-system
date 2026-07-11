@@ -1,5 +1,5 @@
-import { LeadPriority, LeadStatus } from '@prisma/client';
-import { IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { LeadPriority, LeadStatus, PlatformType, ProjectStatus } from '@prisma/client';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateLeadDto {
   @IsUUID()
@@ -142,4 +142,48 @@ export class UpdateLeadDto {
   @IsOptional()
   @IsString()
   snsAnalysisMemo?: string;
+
+  @IsOptional()
+  @IsString()
+  companyName?: string;
+
+  @IsOptional()
+  @IsString()
+  projectTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  projectUrl?: string;
+
+  @IsOptional()
+  @IsEnum(PlatformType)
+  projectSource?: PlatformType;
+
+  @IsOptional()
+  @IsEnum(ProjectStatus)
+  projectStatus?: ProjectStatus;
+
+  @IsOptional()
+  @IsInt()
+  projectAmount?: number;
+
+  @IsOptional()
+  @IsInt()
+  projectSupporterCount?: number;
+
+  @IsOptional()
+  @IsInt()
+  projectTargetAmount?: number;
+
+  @IsOptional()
+  @IsDateString()
+  projectEndDate?: string;
+
+  @IsOptional()
+  @IsString()
+  projectCategory?: string;
+
+  @IsOptional()
+  @IsString()
+  projectDescription?: string;
 }

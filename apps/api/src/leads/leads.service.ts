@@ -56,8 +56,79 @@ export class LeadsService {
     return sanitizeLeadMemos(lead);
   }
 
-  update(id: string, dto: UpdateLeadDto) {
-    return this.prisma.salesLead.update({ where: { id }, data: dto });
+  async update(id: string, dto: UpdateLeadDto) {
+    const lead = await this.prisma.salesLead.findUnique({ where: { id } });
+    if (!lead) {
+      throw new NotFoundException('Lead not found');
+    }
+
+    const {
+      companyName,
+      projectTitle,
+      projectUrl,
+      projectSource,
+      projectStatus,
+      projectAmount,
+      projectSupporterCount,
+      projectTargetAmount,
+      projectEndDate,
+      projectCategory,
+      projectDescription,
+      ...leadDto
+    } = dto;
+
+    const companyData = compactData({
+      name: companyName,
+      normalizedName: companyName ? normalizeCompanyName(companyName) : undefined
+    });
+    const projectData = compactData({
+      title: projectTitle,
+      url: projectUrl,
+      status: projectStatus,
+      amount: projectAmount,
+      supporterCount: projectSupporterCount,
+      targetAmount: projectTargetAmount,
+      endDate: projectEndDate ? new Date(projectEndDate) : undefined,
+      category: projectCategory,
+      description: projectDescription
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      if (Object.keys(companyData).length) {
+        await tx.company.update({ where: { id: lead.companyId }, data: companyData });
+      }
+      if (lead.projectId && Object.keys(projectData).length) {
+        const platform = projectSource
+          ? await tx.crowdfundingPlatform.upsert({
+              where: {
+                type_baseUrl: {
+                  type: projectSource,
+                  baseUrl: platformBaseUrl(projectSource)
+                }
+              },
+              update: { name: platformName(projectSource), isActive: true },
+              create: {
+                type: projectSource,
+                name: platformName(projectSource),
+                baseUrl: platformBaseUrl(projectSource)
+              }
+            })
+          : null;
+        await tx.crowdfundingProject.update({
+          where: { id: lead.projectId },
+          data: { ...projectData, ...(platform ? { platformId: platform.id } : {}), scrapedAt: new Date() }
+        });
+      }
+      return sanitizeLeadMemos(await tx.salesLead.update({
+        where: { id },
+        data: leadDto,
+        include: {
+          company: true,
+          project: { include: { platform: true } },
+          scores: { orderBy: { createdAt: 'desc' }, take: 1 }
+        }
+      }));
+    });
   }
 
   async score(id: string) {
@@ -91,6 +162,32 @@ export class LeadsService {
     await this.prisma.salesLead.update({ where: { id }, data: { score: totalScore } });
     return score;
   }
+}
+
+function compactData<T extends Record<string, unknown>>(data: T): Partial<T> {
+  return Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)) as Partial<T>;
+}
+
+function normalizeCompanyName(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function platformName(type: 'campfire' | 'makuake' | 'green_funding' | 'other') {
+  return ({
+    campfire: 'CAMPFIRE',
+    makuake: 'Makuake',
+    green_funding: 'GREEN FUNDING',
+    other: 'その他'
+  })[type];
+}
+
+function platformBaseUrl(type: 'campfire' | 'makuake' | 'green_funding' | 'other') {
+  return ({
+    campfire: 'https://camp-fire.jp',
+    makuake: 'https://www.makuake.com',
+    green_funding: 'https://greenfunding.jp',
+    other: 'https://example.com'
+  })[type];
 }
 
 function sanitizeLeadMemos<T extends { project?: { title?: string | null; description?: string | null; category?: string | null } | null; brandAnalysisMemo?: string | null; snsAnalysisMemo?: string | null }>(lead: T): T {
