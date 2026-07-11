@@ -221,8 +221,8 @@ function extractSearchResults(html: string): CampfireSearchResult[] {
       const card = $(element).closest('article, li, div');
       const cardText = clean(card.text() || $(element).text());
       const title = clean($(element).find('h2,h3').first().text() || $(element).text()).slice(0, 140);
-      const amount = parseInteger(findFirst(cardText, [/([0-9,]+)\s*円/g]));
-      const supporterCount = parseInteger(findFirst(cardText, [/([0-9,]+)\s*人/g]));
+      const amount = parseInteger(extractCampfireAmount(cardText));
+      const supporterCount = parseInteger(extractCampfireSupporters(cardText));
       const daysLeftText = findFirst(cardText, [/残り\s*([0-9]+)\s*日/g, /あと\s*([0-9]+)\s*日/g]);
       const daysLeft = daysLeftText ? parseInteger(daysLeftText) : null;
       const isActive = isFundraisingProject(cardText, daysLeft);
@@ -572,8 +572,8 @@ function extractProject(html: string, projectUrl: string): ScrapedCampfireProjec
     executorName:
       sanitizeName(profileName) || sanitizeName(pickNearLabel(bodyText, ['実行者', '起案者', 'プロジェクトオーナー'])),
     brandName: sanitizeName(pickNearLabel(bodyText, ['ブランド名', 'ショップ名'])),
-    supportAmount: findFirst(bodyText, [/([0-9,]+)\s*円/g, /支援総額\s*([0-9,]+円)/g]),
-    supporters: findFirst(bodyText, [/([0-9,]+)\s*人\s*(?:の)?支援者/g, /支援者数\s*([0-9,]+人)/g]),
+    supportAmount: extractCampfireAmount(bodyText),
+    supporters: extractCampfireSupporters(bodyText),
     achievementRate: findFirst(bodyText, [/([0-9,]+)\s*%/g, /達成率\s*([0-9,]+%)/g]),
     daysLeft: findFirst(bodyText, [/残り\s*([0-9]+日)/g, /あと\s*([0-9]+日)/g]),
     mainDescription: description,
@@ -619,6 +619,23 @@ function extractProfileProjectCount(text: string) {
 
   const countText = findFirst(text, patterns);
   return countText ? parseInteger(countText) : null;
+}
+
+function extractCampfireAmount(text: string) {
+  return findFirst(text, [
+    /支援総額\s*[:：]?\s*([0-9,]+円?)/g,
+    /現在\s*([0-9,]+円?)/g,
+    /([0-9,]+円)\s*(?:集まっています|集まっております|達成|突破)/g,
+    /([0-9,]+)\s*円\s*(?:集まっています|集まっております|達成|突破)/g
+  ]);
+}
+
+function extractCampfireSupporters(text: string) {
+  return findFirst(text, [
+    /支援者(?:数)?\s*[:：]?\s*([0-9,]+人?)/g,
+    /([0-9,]+人)\s*(?:の)?支援者/g,
+    /([0-9,]+)\s*人\s*(?:の)?支援者/g
+  ]);
 }
 
 function extractExternalUrls($: cheerio.CheerioAPI, projectUrl: string) {
@@ -729,8 +746,8 @@ function pickNearLabel(text: string, labels: string[]) {
 
 function findFirst(text: string, patterns: RegExp[]) {
   for (const pattern of patterns) {
-    const match = pattern.exec(text);
-    pattern.lastIndex = 0;
+    const safePattern = new RegExp(pattern.source, pattern.flags.replace('g', ''));
+    const match = safePattern.exec(text);
 
     if (match?.[1]) {
       return clean(match[1]);
