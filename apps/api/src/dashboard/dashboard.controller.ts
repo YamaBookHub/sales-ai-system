@@ -3655,6 +3655,13 @@ export class DashboardController {
       return '未確認';
     }
 
+    function suggestSendMethod(lead) {
+      if (lead.contactEmail) return 'メール';
+      if (lead.contactFormUrl) return '問い合わせフォーム';
+      if (lead.siteMessageUrl) return 'サイト内メッセージ';
+      return '';
+    }
+
     function selectedLeadMails() {
       if (!state.selectedLeadId) return [];
       const lead = state.leads.find((item) => item.id === state.selectedLeadId);
