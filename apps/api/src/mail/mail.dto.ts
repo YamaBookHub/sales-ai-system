@@ -1,6 +1,43 @@
 import { Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsDateString, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from 'class-validator';
 
+export class SaveMailTemplateDto {
+  @IsString()
+  @MinLength(1)
+  key!: string;
+
+  @IsString()
+  @MinLength(1)
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  channel?: string;
+
+  @IsOptional()
+  @IsString()
+  subject?: string;
+
+  @IsString()
+  @MinLength(1)
+  body!: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+export class ImportMailTemplatesDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SaveMailTemplateDto)
+  templates!: SaveMailTemplateDto[];
+}
+
 export class CreateMailDraftDto {
   @IsUUID()
   leadId!: string;

@@ -1,7 +1,16 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { EmailStatus } from '@prisma/client';
 import { ok } from '../common/api-response';
-import { CreateMailDraftDto, CreateMailReplyDto, MarkMailSentDto, RejectMailDto, UpdateMailChecklistDto, UpdateMailDto } from './mail.dto';
+import {
+  CreateMailDraftDto,
+  CreateMailReplyDto,
+  ImportMailTemplatesDto,
+  MarkMailSentDto,
+  RejectMailDto,
+  SaveMailTemplateDto,
+  UpdateMailChecklistDto,
+  UpdateMailDto
+} from './mail.dto';
 import { MailService } from './mail.service';
 
 @Controller('mails')
@@ -16,6 +25,26 @@ export class MailController {
   @Post('draft')
   async createDraft(@Body() dto: CreateMailDraftDto) {
     return ok(await this.mail.createDraft(dto));
+  }
+
+  @Get('templates')
+  async listTemplates(@Query('channel') channel?: string) {
+    return ok(await this.mail.listTemplates(channel));
+  }
+
+  @Get('templates/:key')
+  async getTemplate(@Param('key') key: string) {
+    return ok(await this.mail.getTemplate(key));
+  }
+
+  @Post('templates')
+  async saveTemplate(@Body() dto: SaveMailTemplateDto) {
+    return ok(await this.mail.saveTemplate(dto));
+  }
+
+  @Post('templates/import')
+  async importTemplates(@Body() dto: ImportMailTemplatesDto) {
+    return ok(await this.mail.importTemplates(dto));
   }
 
   @Patch(':id')
@@ -61,6 +90,11 @@ export class MailController {
   @Post(':id/mark-sent')
   async markSent(@Param('id') id: string, @Body() dto: MarkMailSentDto) {
     return ok(await this.mail.markSent(id, dto));
+  }
+
+  @Post(':id/send')
+  async sendQueued(@Param('id') id: string) {
+    return ok(await this.mail.sendQueued(id));
   }
 
   @Post(':id/replies')

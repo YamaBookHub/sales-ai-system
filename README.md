@@ -143,3 +143,6 @@ curl -X POST http://localhost:3000/api/mails/{draftMailId}/queue
 - `docs/06_API.md`: API設計
 - `docs/08_DOMAIN.md`: ドメイン設計
 - `docs/15_CODEX.md`: Codex実装仕様
+- `docs/18_AI_MAINTAINABLE_ARCHITECTURE.md`: AIが修正しやすい実装アーキテクチャ
+- `docs/19_LOW_MODEL_HANDOFF.md`: 小さいモデル向けの現在地・制約・残作業
+- `AGENTS.md`: AIが変更前に守る短い実装ルール

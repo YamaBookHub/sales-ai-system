@@ -24,6 +24,8 @@
 | 15 | 15_CODEX.md | Codex実装指示 | 補強済み |
 | 16 | 16_GITHUB_HANDOFF.md | GitHub反映手順 | 作成済み |
 | 17 | 17_IMPLEMENTATION_ROADMAP.md | 実装ロードマップ | 作成済み |
+| 18 | 18_AI_MAINTAINABLE_ARCHITECTURE.md | AIが修正しやすい実装アーキテクチャ | 作成済み |
+| 19 | 19_LOW_MODEL_HANDOFF.md | 小さいモデル向けの現在地・制約・残作業 | 作成済み |
 
 ## 付属仕様
 - `../prisma/schema.prisma`

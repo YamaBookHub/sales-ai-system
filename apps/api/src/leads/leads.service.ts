@@ -1,11 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { LeadPriority, LeadStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { applyLeadPolicy } from './domain/lead-policy';
 import { CreateLeadDto, UpdateLeadDto } from './leads.dto';
+import { ScoreLeadUseCase } from './application/score-lead.usecase';
 
 @Injectable()
 export class LeadsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scoreLeadUseCase: ScoreLeadUseCase
+  ) {}
 
   async list(page = 1, limit = 20, status?: LeadStatus, priority?: LeadPriority) {
     const skip = (page - 1) * limit;
@@ -29,12 +34,31 @@ export class LeadsService {
   }
 
   create(dto: CreateLeadDto) {
+    const leadData = compactData({
+      source: dto.source ?? 'manual',
+      ownerMemo: dto.ownerMemo,
+      nextActionAt: parseOptionalDate(dto.nextActionAt),
+      contactEmail: dto.contactEmail,
+      contactFormUrl: dto.contactFormUrl,
+      siteMessageUrl: dto.siteMessageUrl,
+      contactMemo: dto.contactMemo,
+      sendMethod: dto.sendMethod,
+      sentAt: parseOptionalDate(dto.sentAt),
+      nextFollowUpAt: parseOptionalDate(dto.nextFollowUpAt),
+      brandWebsiteUrl: dto.brandWebsiteUrl,
+      instagramUrl: dto.instagramUrl,
+      tiktokUrl: dto.tiktokUrl,
+      xUrl: dto.xUrl,
+      brandAnalysisMemo: dto.brandAnalysisMemo,
+      snsAnalysisMemo: dto.snsAnalysisMemo
+    });
+
     return this.prisma.salesLead.create({
       data: {
         companyId: dto.companyId,
         projectId: dto.projectId,
-        source: dto.source ?? 'manual',
-        ownerMemo: dto.ownerMemo
+        ...leadData,
+        ...applyLeadPolicy(leadData)
       }
     });
   }
@@ -74,6 +98,9 @@ export class LeadsService {
       projectEndDate,
       projectCategory,
       projectDescription,
+      nextActionAt,
+      sentAt,
+      nextFollowUpAt,
       ...leadDto
     } = dto;
 
@@ -91,6 +118,18 @@ export class LeadsService {
       endDate: projectEndDate ? new Date(projectEndDate) : undefined,
       category: projectCategory,
       description: projectDescription
+    });
+    const leadData = compactData({
+      ...leadDto,
+      nextActionAt: parseOptionalDate(nextActionAt),
+      sentAt: parseOptionalDate(sentAt),
+      nextFollowUpAt: parseOptionalDate(nextFollowUpAt)
+    });
+    const leadPolicy = applyLeadPolicy({
+      status: leadData.status,
+      priority: leadData.priority,
+      nextActionAt: leadData.nextActionAt,
+      nextFollowUpAt: leadData.nextFollowUpAt
     });
 
     return this.prisma.$transaction(async (tx) => {
@@ -121,7 +160,7 @@ export class LeadsService {
       }
       return sanitizeLeadMemos(await tx.salesLead.update({
         where: { id },
-        data: leadDto,
+        data: { ...leadData, ...leadPolicy },
         include: {
           company: true,
           project: { include: { platform: true } },
@@ -132,35 +171,7 @@ export class LeadsService {
   }
 
   async score(id: string) {
-    const lead = await this.get(id);
-    const projectAmount = lead.project?.amount ?? 0;
-    const supporterCount = lead.project?.supporterCount ?? 0;
-    const amountScore = Math.min(30, Math.floor(projectAmount / 1000000) * 5);
-    const supporterScore = Math.min(25, Math.floor(supporterCount / 100) * 5);
-    const fitScore = lead.project?.category ? 20 : 10;
-    const urgencyScore = lead.project?.endDate ? 10 : 5;
-    const activityScore = 10;
-    const totalScore = amountScore + supporterScore + fitScore + urgencyScore + activityScore;
-
-    const score = await this.prisma.leadScore.create({
-      data: {
-        leadId: id,
-        amountScore,
-        supporterScore,
-        fitScore,
-        urgencyScore,
-        activityScore,
-        totalScore,
-        reasonJson: {
-          projectAmount,
-          supporterCount,
-          note: 'MVP scoring formula. TODO: align with docs/10_AI.md lead score details.'
-        }
-      }
-    });
-
-    await this.prisma.salesLead.update({ where: { id }, data: { score: totalScore } });
-    return score;
+    return this.scoreLeadUseCase.execute(id);
   }
 }
 
@@ -170,6 +181,10 @@ function compactData<T extends Record<string, unknown>>(data: T): Partial<T> {
 
 function normalizeCompanyName(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function parseOptionalDate(value?: string) {
+  return value ? new Date(value) : undefined;
 }
 
 function platformName(type: 'campfire' | 'makuake' | 'green_funding' | 'other') {

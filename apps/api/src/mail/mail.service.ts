@@ -1,20 +1,39 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { EmailEventType, EmailStatus, LeadStatus, Prisma, ReplyCategory } from '@prisma/client';
+import { EmailStatus, LeadStatus, ReplyCategory } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateMailDraftDto, CreateMailReplyDto, MarkMailSentDto, RejectMailDto, UpdateMailChecklistDto, UpdateMailDto } from './mail.dto';
-
-const DEFAULT_CHECKLIST_ITEMS = [
-  { key: 'company_product_correct', label: '会社名・商品名が正しい' },
-  { key: 'no_other_company_left', label: '別会社名や別商品名が残っていない' },
-  { key: 'claims_not_overstated', label: '実績表現が言い過ぎではない' },
-  { key: 'not_too_pushy', label: '売り込み感が強すぎない' },
-  { key: 'cta_info_exchange', label: '15〜20分の情報交換CTAになっている' },
-  { key: 'contact_confirmed', label: '送信先・問い合わせ先を確認した' }
-];
+import { ApproveMailUseCase } from './application/approve-mail.usecase';
+import { MarkMailSentUseCase } from './application/mark-mail-sent.usecase';
+import { QueueMailUseCase } from './application/queue-mail.usecase';
+import { RejectMailUseCase } from './application/reject-mail.usecase';
+import { RequestMailReReviewUseCase } from './application/request-mail-rereview.usecase';
+import { RequestMailReviewUseCase } from './application/request-mail-review.usecase';
+import { RetryMailUseCase } from './application/retry-mail.usecase';
+import { SendQueuedMailUseCase } from './application/send-queued-mail.usecase';
+import { DEFAULT_CHECKLIST_ITEMS } from './mail-checklist.defaults';
+import {
+  CreateMailDraftDto,
+  CreateMailReplyDto,
+  ImportMailTemplatesDto,
+  MarkMailSentDto,
+  RejectMailDto,
+  SaveMailTemplateDto,
+  UpdateMailChecklistDto,
+  UpdateMailDto
+} from './mail.dto';
 
 @Injectable()
 export class MailService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly requestMailReview: RequestMailReviewUseCase,
+    private readonly requestMailReReview: RequestMailReReviewUseCase,
+    private readonly approveMail: ApproveMailUseCase,
+    private readonly rejectMail: RejectMailUseCase,
+    private readonly queueMail: QueueMailUseCase,
+    private readonly markMailSent: MarkMailSentUseCase,
+    private readonly retryMail: RetryMailUseCase,
+    private readonly sendQueuedMail: SendQueuedMailUseCase
+  ) {}
 
   async list(page = 1, limit = 20, status?: EmailStatus) {
     const skip = (page - 1) * limit;
@@ -31,6 +50,41 @@ export class MailService {
     ]);
 
     return { items, page, limit, total };
+  }
+
+  listTemplates(channel?: string) {
+    return this.prisma.mailTemplate.findMany({
+      where: {
+        isActive: true,
+        ...(channel ? { channel } : {})
+      },
+      orderBy: [{ channel: 'asc' }, { name: 'asc' }]
+    });
+  }
+
+  getTemplate(key: string) {
+    return this.prisma.mailTemplate.findUnique({ where: { key } });
+  }
+
+  saveTemplate(dto: SaveMailTemplateDto) {
+    const data = normalizeTemplate(dto);
+    return this.prisma.mailTemplate.upsert({
+      where: { key: data.key },
+      update: data,
+      create: data
+    });
+  }
+
+  async importTemplates(dto: ImportMailTemplatesDto) {
+    const templates = [];
+    for (const template of dto.templates) {
+      templates.push(await this.saveTemplate(template));
+    }
+
+    return {
+      imported: templates.length,
+      templates
+    };
   }
 
   async createDraft(dto: CreateMailDraftDto) {
@@ -80,57 +134,31 @@ export class MailService {
   }
 
   requestReview(id: string) {
-    return this.transition(id, 'in_review', 'reviewed');
+    return this.requestMailReview.execute(id);
   }
 
-  async requestReReview(id: string) {
-    const email = await this.get(id);
-    if (email.status !== 'rejected') {
-      throw new ConflictException('Only rejected mail can be requested for re-review.');
-    }
-
-    return this.transition(id, 'in_review', 'reviewed', {
-      failedReason: null
-    }, { reReview: true });
+  requestReReview(id: string) {
+    return this.requestMailReReview.execute(id);
   }
 
   approve(id: string) {
-    return this.approveWithChecklist(id);
+    return this.approveMail.execute(id);
   }
 
-  async reject(id: string, dto: RejectMailDto) {
-    const email = await this.get(id);
-    if (!['in_review', 'approved'].includes(email.status)) {
-      throw new ConflictException('Only in_review or approved mail can be rejected.');
-    }
-
-    const reason = dto.reason?.trim() || 'rejected_by_reviewer';
-    return this.transition(id, 'rejected', 'rejected', {
-      failedReason: reason,
-      approvedAt: null
-    }, { reason });
+  reject(id: string, dto: RejectMailDto) {
+    return this.rejectMail.execute(id, dto);
   }
 
-  async queue(id: string) {
-    const email = await this.get(id);
-
-    if (email.status !== 'approved') {
-      throw new ConflictException('Only approved mail can be queued.');
-    }
-
-    await this.assertChecklistComplete(id);
-    return this.transition(id, 'queued', 'queued');
+  queue(id: string) {
+    return this.queueMail.execute(id);
   }
 
-  async markSent(id: string, dto: MarkMailSentDto) {
-    const email = await this.get(id);
+  markSent(id: string, dto: MarkMailSentDto) {
+    return this.markMailSent.execute(id, dto);
+  }
 
-    if (!['approved', 'queued'].includes(email.status)) {
-      throw new ConflictException('承認済みまたは送信待ちのメールだけ送信済みにできます。');
-    }
-
-    const sentAt = dto.sentAt ? new Date(dto.sentAt) : new Date();
-    return this.transition(id, 'sent', 'sent', { sentAt });
+  sendQueued(id: string) {
+    return this.sendQueuedMail.execute(id);
   }
 
   async recordReply(id: string, dto: CreateMailReplyDto) {
@@ -178,25 +206,18 @@ export class MailService {
     });
   }
 
-  async retry(id: string) {
-    const email = await this.get(id);
-
-    if (email.status !== 'failed') {
-      throw new ConflictException('Only failed mail can be retried.');
-    }
-
-    return this.prisma.outreachEmail.update({
-      where: { id },
-      data: {
-        status: 'queued',
-        retryCount: { increment: 1 },
-        events: { create: { type: 'retried' } }
-      }
-    });
+  retry(id: string) {
+    return this.retryMail.execute(id);
   }
 
   cancel(id: string) {
-    return this.transition(id, 'cancelled', 'cancelled');
+    return this.prisma.outreachEmail.update({
+      where: { id },
+      data: {
+        status: 'cancelled',
+        events: { create: { type: 'cancelled' } }
+      }
+    });
   }
 
   async getChecklist(emailId: string) {
@@ -270,18 +291,6 @@ export class MailService {
     return email;
   }
 
-  private async approveWithChecklist(id: string) {
-    await this.assertChecklistComplete(id);
-    return this.transition(id, 'approved', 'approved', { approvedAt: new Date() });
-  }
-
-  private async assertChecklistComplete(emailId: string) {
-    const checklist = await this.getChecklist(emailId);
-    if (!checklist.complete) {
-      throw new ConflictException('送信前チェックリストが未完了です。全項目を確認してから承認してください。');
-    }
-  }
-
   private async ensureDefaultChecklist(emailId: string) {
     const count = await this.prisma.mailChecklistItem.count({ where: { emailId } });
     if (count > 0) return;
@@ -297,34 +306,18 @@ export class MailService {
     });
   }
 
-  private async transition(
-    id: string,
-    status: EmailStatus,
-    eventType: EmailEventType,
-    extra: Record<string, unknown> = {},
-    payload?: Prisma.InputJsonObject
-  ) {
-    return this.prisma.$transaction(async (tx) => {
-      const email = await tx.outreachEmail.update({
-        where: { id },
-        data: {
-          status,
-          ...extra,
-          events: { create: { type: eventType, payload } }
-        }
-      });
+}
 
-      const leadStatus = leadStatusForEmailStatus(status);
-      if (leadStatus && email.leadId) {
-        await tx.salesLead.update({
-          where: { id: email.leadId },
-          data: { status: leadStatus }
-        });
-      }
-
-      return email;
-    });
-  }
+function normalizeTemplate(dto: SaveMailTemplateDto) {
+  return {
+    key: dto.key.trim(),
+    name: dto.name.trim(),
+    channel: (dto.channel || 'email').trim(),
+    subject: dto.subject?.trim() || null,
+    body: dto.body.trim(),
+    description: dto.description?.trim() || null,
+    isActive: dto.isActive ?? true
+  };
 }
 
 function projectPlatformLabel(project?: { platform?: { name?: string | null; type?: string | null } | null; url?: string | null } | null) {
@@ -345,16 +338,6 @@ function projectPlatformLabel(project?: { platform?: { name?: string | null; typ
   if (url.includes('makuake.com')) return 'Makuake';
   if (url.includes('greenfunding.jp')) return 'GREEN FUNDING';
   return 'クラウドファンディング';
-}
-
-function leadStatusForEmailStatus(status: EmailStatus): LeadStatus | null {
-  if (status === 'draft') return 'drafted';
-  if (status === 'in_review') return 'reviewing';
-  if (status === 'rejected') return 'rejected';
-  if (status === 'approved') return 'approved';
-  if (status === 'queued') return 'queued';
-  if (status === 'sent') return 'contacted';
-  return null;
 }
 
 function classifyReplyText(body: string): {

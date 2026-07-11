@@ -7,6 +7,7 @@
     "start": "nest start api",
     "start:dev": "nest start api --watch",
     "test": "jest",
+    "test:integration": "jest --config jest.integration.config.js --runInBand",
     "prisma:validate": "prisma validate --schema prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma",

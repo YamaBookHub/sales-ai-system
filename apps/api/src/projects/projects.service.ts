@@ -1,20 +1,33 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ProjectStatus } from '@prisma/client';
-import { randomUUID } from 'crypto';
 import { AiService } from '../ai/ai.service';
+import { runWithConcurrency } from '../common/concurrency';
 import { PrismaService } from '../prisma/prisma.service';
-import { CampfireProjectSourceProvider } from './campfire-project-source.provider';
-import { MakuakeProjectSourceProvider } from './makuake-project-source.provider';
-import { NormalizedImportedProject, ProjectSourceProvider } from './project-source-provider';
+import { ProjectSearchJobManager } from './application/project-search-job.manager';
+import { ProjectActor } from './domain/project-actor';
+import {
+  buildBulkImportSummary,
+  BulkImportAnalysisResult,
+  BulkImportItemResult,
+  clampConcurrency,
+  normalizeEndingSoonDays,
+  normalizeResultLimit,
+  sortEndingSoon,
+  uniqueNormalizedUrlInputs
+} from './domain/project-import-policy';
+import { ProjectSourceProvider } from './domain/project-source-provider';
+import { CampfireProjectSourceProvider } from './infrastructure/campfire-project-source.provider';
+import { MakuakeProjectSourceProvider } from './infrastructure/makuake-project-source.provider';
+import { PrismaProjectImportRepository } from './infrastructure/prisma-project-import.repository';
 import { BulkImportProjectsDto, CreateProjectDto, ImportCampfireProjectDto, ImportProjectDto, ProjectSource, SearchCampfireProjectsDto, SearchProjectsDto } from './projects.dto';
 
 @Injectable()
 export class ProjectsService {
-  private readonly searchJobs = new Map<string, SearchJob>();
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
+    private readonly projectSearchJobManager: ProjectSearchJobManager,
+    private readonly projectImportRepository: PrismaProjectImportRepository,
     private readonly campfireProvider: CampfireProjectSourceProvider,
     private readonly makuakeProvider: MakuakeProjectSourceProvider
   ) {}
@@ -66,107 +79,15 @@ export class ProjectsService {
 
   startSearchJob(dto: SearchProjectsDto) {
     const provider = this.providerFor(dto.source);
-    const desiredLimit = normalizeResultLimit(dto.limit);
-    this.pruneSearchJobs();
-    const job: SearchJob = {
-      id: randomUUID(),
-      status: 'running',
-      source: provider.source,
-      desiredLimit,
-      items: [],
-      importableCount: 0,
-      searchedLimit: 0,
-      message: '検索を開始しました',
-      startedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      cancelled: false
-    };
-    this.searchJobs.set(job.id, job);
-    void this.runSearchJob(job, provider, dto);
-    return this.publicSearchJob(job);
+    return this.projectSearchJobManager.start(provider, dto, (searchProvider, searchDto) => this.searchWithProvider(searchProvider, searchDto));
   }
 
   getSearchJob(id: string) {
-    const job = this.searchJobs.get(id);
-    if (!job) {
-      throw new BadRequestException('検索ジョブが見つかりません。もう一度検索してください。');
-    }
-    return this.publicSearchJob(job);
+    return this.projectSearchJobManager.get(id);
   }
 
   cancelSearchJob(id: string) {
-    const job = this.searchJobs.get(id);
-    if (!job) {
-      throw new BadRequestException('検索ジョブが見つかりません。もう一度検索してください。');
-    }
-    if (job.status === 'running') {
-      job.cancelled = true;
-      job.status = 'cancelled';
-      job.message = '検索を停止しました';
-      job.updatedAt = new Date().toISOString();
-    }
-    return this.publicSearchJob(job);
-  }
-
-  private async runSearchJob(job: SearchJob, provider: ProjectSourceProvider, dto: SearchCampfireProjectsDto) {
-    try {
-      const existingUrls = await this.existingProjectUrls(provider);
-      const excludeUrls = Array.from(new Set([...(dto.excludeUrls || []), ...existingUrls]));
-      for (const limit of progressiveSearchLimits(job.desiredLimit)) {
-        if (job.cancelled) break;
-        job.searchedLimit = limit;
-        job.message = `候補を取得中です（最大${limit}件まで確認中）`;
-        job.updatedAt = new Date().toISOString();
-        const result = await this.searchWithProvider(provider, { ...dto, limit, excludeUrls });
-        job.items = mergeSearchItems(job.items, result.items);
-        job.importableCount = countImportableSearchItems(job.items, existingUrls);
-        job.message = `候補 ${job.items.length}件 / 取込可能 ${job.importableCount}件`;
-        job.updatedAt = new Date().toISOString();
-        if (job.importableCount >= job.desiredLimit) break;
-      }
-      if (!job.cancelled) {
-        job.status = 'completed';
-        job.message = `検索完了: 候補 ${job.items.length}件 / 取込可能 ${job.importableCount}件`;
-        job.updatedAt = new Date().toISOString();
-      }
-    } catch (error) {
-      job.status = 'failed';
-      job.message = error instanceof Error ? error.message : '検索に失敗しました';
-      job.updatedAt = new Date().toISOString();
-    }
-  }
-
-  private async existingProjectUrls(provider: ProjectSourceProvider) {
-    const projects = await this.prisma.crowdfundingProject.findMany({
-      where: { platform: { baseUrl: provider.baseUrl } },
-      select: { url: true }
-    });
-    return new Set(projects.map((project) => normalizeSearchUrl(project.url)));
-  }
-
-  private publicSearchJob(job: SearchJob) {
-    return {
-      id: job.id,
-      status: job.status,
-      source: job.source,
-      desiredLimit: job.desiredLimit,
-      searchedLimit: job.searchedLimit,
-      items: job.items,
-      itemCount: job.items.length,
-      importableCount: job.importableCount,
-      message: job.message,
-      startedAt: job.startedAt,
-      updatedAt: job.updatedAt
-    };
-  }
-
-  private pruneSearchJobs() {
-    const threshold = Date.now() - 30 * 60 * 1000;
-    for (const [id, job] of this.searchJobs.entries()) {
-      if (new Date(job.updatedAt).getTime() < threshold) {
-        this.searchJobs.delete(id);
-      }
-    }
+    return this.projectSearchJobManager.cancel(id);
   }
 
   campfireCategories() {
@@ -187,22 +108,12 @@ export class ProjectsService {
 
   async bulkImport(dto: BulkImportProjectsDto, actor: ProjectActor = {}) {
     const provider = this.providerFor(dto.source);
-    const userId = await this.resolveActorUserId(actor);
-    const urlInputs = Array.from(
-      new Map(
-        (dto.urls || [])
-          .map((originalUrl) => ({
-            originalUrl,
-            url: provider.normalizeUrl(originalUrl)
-          }))
-          .filter((item) => item.url)
-          .map((item) => [item.url, item])
-      ).values()
-    );
+    const userId = await this.projectImportRepository.resolveActorUserId(actor);
+    const urlInputs = uniqueNormalizedUrlInputs(dto.urls, (url) => provider.normalizeUrl(url));
     const importConcurrency = clampConcurrency(dto.importConcurrency, 1, 4, 4);
     const analysisConcurrency = clampConcurrency(dto.analysisConcurrency, 1, 4, 3);
     const imported: Array<{ originalUrl: string; url: string; leadId: string; projectId: string; companyId: string }> = [];
-    const items: Array<{ originalUrl: string; url: string; status: 'imported' | 'failed'; leadId?: string; message?: string }> = [];
+    const items: BulkImportItemResult[] = [];
 
     await runWithConcurrency(urlInputs, importConcurrency, async (item) => {
       try {
@@ -220,7 +131,7 @@ export class ProjectsService {
       }
     });
 
-    const analysisItems: Array<{ leadId: string; status: 'analyzed' | 'failed'; message?: string }> = [];
+    const analysisItems: BulkImportAnalysisResult[] = [];
     if (dto.analyze !== false && imported.length) {
       await runWithConcurrency(imported, analysisConcurrency, async (item) => {
         try {
@@ -232,32 +143,15 @@ export class ProjectsService {
       });
     }
 
-    await this.prisma.auditLog.create({
-      data: {
-        action: 'projects.bulk_import',
-        userId,
-        entityType: 'Project',
-        after: {
-          source: provider.source,
-          requested: urlInputs.length,
-          imported: items.filter((item) => item.status === 'imported').length,
-          failed: items.filter((item) => item.status === 'failed').length,
-          analyzed: analysisItems.filter((item) => item.status === 'analyzed').length,
-          analysisFailed: analysisItems.filter((item) => item.status === 'failed').length
-        }
-      }
-    });
-
-    return {
+    const summary = buildBulkImportSummary({
       source: provider.source,
       total: urlInputs.length,
-      imported: items.filter((item) => item.status === 'imported').length,
-      failed: items.filter((item) => item.status === 'failed').length,
-      analyzed: analysisItems.filter((item) => item.status === 'analyzed').length,
-      analysisFailed: analysisItems.filter((item) => item.status === 'failed').length,
       items,
       analysisItems
-    };
+    });
+    await this.projectImportRepository.recordBulkImportAudit(userId, summary);
+
+    return summary;
   }
 
   private async importWithProvider(provider: ProjectSourceProvider, url: string, options: ImportOptions = {}) {
@@ -266,160 +160,13 @@ export class ProjectsService {
     if (imported.project.status !== 'active') {
       throw new BadRequestException('現在公開中・募集中のプロジェクトだけ取り込めます。終了済み・公開前のURLは対象外です。');
     }
-    const userId = options.userId ?? (await this.resolveActorUserId(options.actor));
-    const result = await this.persistImportedProject(imported, { ...options, userId });
+    const userId = options.userId ?? (await this.projectImportRepository.resolveActorUserId(options.actor));
+    const result = await this.projectImportRepository.persistImportedProject(imported, { ...options, userId });
 
     return {
       ...result,
       scraped: imported.raw
     };
-  }
-
-  private async persistImportedProject(imported: NormalizedImportedProject, options: ImportOptions = {}) {
-    const result = await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `project-import:${imported.project.url}`);
-      const platform = await tx.crowdfundingPlatform.upsert({
-        where: {
-          type_baseUrl: {
-            type: imported.platform.type,
-            baseUrl: imported.platform.baseUrl
-          }
-        },
-        update: { isActive: true },
-        create: {
-          type: imported.platform.type,
-          name: imported.platform.name,
-          baseUrl: imported.platform.baseUrl
-        }
-      });
-      const existingCompany = await tx.company.findFirst({
-        where: {
-          normalizedName: normalizeCompanyName(imported.company.name),
-          deletedAt: null
-        }
-      });
-      const company =
-        existingCompany
-          ? await tx.company.update({
-              where: { id: existingCompany.id },
-              data: compact({
-                websiteUrl: existingCompany.websiteUrl || imported.company.websiteUrl || undefined,
-                inquiryUrl: existingCompany.inquiryUrl || imported.company.inquiryUrl || undefined,
-                location: existingCompany.location || imported.company.location || undefined,
-                sourceTotalAmount: existingCompany.sourceTotalAmount ?? imported.company.sourceTotalAmount ?? undefined,
-                sourceProjectCount: existingCompany.sourceProjectCount ?? imported.company.sourceProjectCount ?? undefined,
-                sourceSupporterCount: existingCompany.sourceSupporterCount ?? imported.company.sourceSupporterCount ?? undefined,
-                memo: existingCompany.memo || imported.company.memo || undefined
-              })
-            })
-          : await tx.company.create({
-              data: {
-                name: imported.company.name,
-                normalizedName: normalizeCompanyName(imported.company.name),
-                websiteUrl: imported.company.websiteUrl || undefined,
-                inquiryUrl: imported.company.inquiryUrl || undefined,
-                location: imported.company.location || undefined,
-                sourceTotalAmount: imported.company.sourceTotalAmount ?? undefined,
-                sourceProjectCount: imported.company.sourceProjectCount ?? undefined,
-                sourceSupporterCount: imported.company.sourceSupporterCount ?? undefined,
-                memo: imported.company.memo || undefined
-              }
-            });
-      const project = await tx.crowdfundingProject.upsert({
-        where: { url: imported.project.url },
-        update: {
-          platformId: platform.id,
-          companyId: company.id,
-          title: imported.project.title,
-          status: imported.project.status,
-          amount: imported.project.amount,
-          supporterCount: imported.project.supporterCount,
-          daysLeft: imported.project.daysLeft ?? undefined,
-          description: imported.project.description,
-          category: imported.project.category,
-          location: imported.project.location,
-          thumbnailUrl: imported.project.thumbnailUrl,
-          scrapedAt: new Date()
-        },
-        create: {
-          platformId: platform.id,
-          companyId: company.id,
-          title: imported.project.title,
-          url: imported.project.url,
-          status: imported.project.status,
-          amount: imported.project.amount,
-          supporterCount: imported.project.supporterCount,
-          daysLeft: imported.project.daysLeft ?? undefined,
-          description: imported.project.description,
-          category: imported.project.category,
-          location: imported.project.location,
-          thumbnailUrl: imported.project.thumbnailUrl,
-          scrapedAt: imported.project.scrapedAt
-        }
-      });
-      const existingLead = await tx.salesLead.findUnique({
-        where: {
-          companyId_projectId: {
-            companyId: company.id,
-            projectId: project.id
-          }
-        }
-      });
-      const lead = await tx.salesLead.upsert({
-        where: {
-          companyId_projectId: {
-            companyId: company.id,
-            projectId: project.id
-          }
-        },
-        update: {
-          source: imported.lead.source,
-          reason: imported.lead.reason,
-          contactFormUrl: existingLead?.contactFormUrl || imported.lead.contactFormUrl || undefined,
-          brandWebsiteUrl: existingLead?.brandWebsiteUrl || imported.lead.brandWebsiteUrl || undefined,
-          instagramUrl: existingLead?.instagramUrl || imported.lead.instagramUrl || undefined,
-          tiktokUrl: existingLead?.tiktokUrl || imported.lead.tiktokUrl || undefined,
-          xUrl: existingLead?.xUrl || imported.lead.xUrl || undefined,
-          contactMemo: existingLead?.contactMemo || imported.lead.contactMemo || undefined,
-          brandAnalysisMemo: existingLead?.brandAnalysisMemo || imported.lead.brandAnalysisMemo || undefined
-        },
-        create: {
-          companyId: company.id,
-          projectId: project.id,
-          source: imported.lead.source,
-          status: 'qualified',
-          priority: 'medium',
-          reason: imported.lead.reason,
-          contactFormUrl: imported.lead.contactFormUrl || undefined,
-          brandWebsiteUrl: imported.lead.brandWebsiteUrl || undefined,
-          instagramUrl: imported.lead.instagramUrl || undefined,
-          tiktokUrl: imported.lead.tiktokUrl || undefined,
-          xUrl: imported.lead.xUrl || undefined,
-          contactMemo: imported.lead.contactMemo,
-          brandAnalysisMemo: imported.lead.brandAnalysisMemo
-        }
-      });
-
-      await tx.auditLog.create({
-        data: {
-          action: options.bulk ? 'projects.bulk_import.item' : 'projects.import',
-          userId: options.userId,
-          entityType: 'SalesLead',
-          entityId: lead.id,
-          after: {
-            source: imported.source,
-            platform: imported.platform.name,
-            projectUrl: imported.project.url,
-            projectId: project.id,
-            companyId: company.id
-          }
-        }
-      });
-
-      return { platform, company, project, lead };
-    });
-
-    return result;
   }
 
   private providerFor(source?: string): ProjectSourceProvider {
@@ -428,42 +175,12 @@ export class ProjectsService {
     if (normalizedSource === 'makuake') return this.makuakeProvider;
     throw unsupportedProjectSource(normalizedSource);
   }
-
-  private async resolveActorUserId(actor?: ProjectActor) {
-    const email = actor?.operatorEmail?.trim().toLowerCase();
-    if (!email) return null;
-    const user = await this.prisma.user.upsert({
-      where: { email },
-      update: { isActive: true },
-      create: { email, name: actor?.operatorName || email, role: 'operator' }
-    });
-    return user.id;
-  }
 }
-
-type ProjectActor = {
-  operatorEmail?: string;
-  operatorName?: string;
-};
 
 type ImportOptions = {
   bulk?: boolean;
   actor?: ProjectActor;
   userId?: string | null;
-};
-
-type SearchJob = {
-  id: string;
-  status: 'running' | 'completed' | 'cancelled' | 'failed';
-  source: ProjectSource;
-  desiredLimit: number;
-  searchedLimit: number;
-  items: Awaited<ReturnType<ProjectSourceProvider['search']>>['items'];
-  importableCount: number;
-  message: string;
-  startedAt: string;
-  updatedAt: string;
-  cancelled: boolean;
 };
 
 function normalizeProjectSource(source?: string): ProjectSource {
@@ -486,72 +203,3 @@ function sourceLabel(source: ProjectSource) {
   })[source];
 }
 
-function normalizeCompanyName(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function compact<T extends Record<string, unknown>>(value: T) {
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== '')) as Partial<T>;
-}
-
-function clampConcurrency(value: number | undefined, min: number, max: number, fallback: number) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.max(min, Math.min(max, Math.floor(number)));
-}
-
-function normalizeResultLimit(value?: number) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return 10;
-  return Math.max(10, Math.min(200, Math.floor(number)));
-}
-
-function normalizeEndingSoonDays(value?: number) {
-  const number = Number(value);
-  return [7, 14, 20, 30].includes(number) ? number : 14;
-}
-
-function sortEndingSoon<T extends { daysLeft?: number | null; isActive?: boolean }>(items: T[], maxDays = 14) {
-  return [...items]
-    .filter((item) => item.isActive !== false && typeof item.daysLeft === 'number' && item.daysLeft <= maxDays)
-    .sort((a, b) => Number(a.daysLeft) - Number(b.daysLeft));
-}
-
-function progressiveSearchLimits(desiredLimit: number) {
-  return [10, 50, 100, 150, 200].filter((limit) => limit >= desiredLimit);
-}
-
-function mergeSearchItems<T extends { url: string }>(current: T[], next: T[]) {
-  const map = new Map(current.map((item) => [normalizeSearchUrl(item.url), item]));
-  next.forEach((item) => map.set(normalizeSearchUrl(item.url), item));
-  return Array.from(map.values());
-}
-
-function countImportableSearchItems<T extends { url: string }>(items: T[], existingUrls: Set<string>) {
-  return items.filter((item) => !existingUrls.has(normalizeSearchUrl(item.url))).length;
-}
-
-function normalizeSearchUrl(value: string) {
-  if (!value) return '';
-  try {
-    const url = new URL(value);
-    url.hash = '';
-    url.search = '';
-    return url.toString().replace(/\/$/, '');
-  } catch {
-    return String(value).split('#')[0].split('?')[0].replace(/\/$/, '');
-  }
-}
-
-async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<void>) {
-  let nextIndex = 0;
-  const safeConcurrency = Math.max(1, Math.min(concurrency, items.length));
-  const runNext = async (): Promise<void> => {
-    const index = nextIndex;
-    nextIndex += 1;
-    if (index >= items.length) return;
-    await worker(items[index], index);
-    await runNext();
-  };
-  await Promise.all(Array.from({ length: safeConcurrency }, () => runNext()));
-}
