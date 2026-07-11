@@ -2904,7 +2904,7 @@ export class DashboardController {
       if (profileProjectRange.min !== null && item.profileProjectCount < profileProjectRange.min) return false;
       if (profileProjectRange.max !== null && item.profileProjectCount > profileProjectRange.max) return false;
       if (status === 'active' && !item.isActive) return false;
-      if (status === 'endingSoon' && (item.daysLeft === null || item.daysLeft > 7)) return false;
+      if (status === 'endingSoon' && (item.daysLeft === null || item.daysLeft > 14)) return false;
       return true;
     }
 

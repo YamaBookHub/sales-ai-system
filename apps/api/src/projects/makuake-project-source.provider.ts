@@ -390,7 +390,7 @@ function matchesKeyword(item: MakuakeSearchResult, keyword?: string) {
 function sortSearchResults(items: MakuakeSearchResult[], input: SearchCampfireProjectsDto) {
   if (input.status !== 'endingSoon') return items;
   return [...items]
-    .filter((item) => typeof item.daysLeft === 'number')
+    .filter((item) => typeof item.daysLeft === 'number' && item.daysLeft <= 14)
     .sort((a, b) => Number(a.daysLeft) - Number(b.daysLeft));
 }
 

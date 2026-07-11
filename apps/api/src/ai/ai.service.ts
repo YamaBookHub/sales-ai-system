@@ -22,7 +22,8 @@ export class AiService {
     }
 
     const project = lead.project;
-    const projectAnalysisSource = [project?.title, project?.description, project?.category, lead.reason]
+    const safeProjectDescription = compatibleAnalysisMemo(project?.description, [project?.title, project?.category].filter(Boolean).join(' '));
+    const projectAnalysisSource = [project?.title, safeProjectDescription, project?.category, lead.reason]
       .filter(Boolean)
       .join(' ');
     const safeBrandAnalysisMemo = compatibleAnalysisMemo(lead.brandAnalysisMemo, projectAnalysisSource);
@@ -56,7 +57,7 @@ export class AiService {
         lead.company.name,
         project?.title,
         project?.category,
-        project?.description,
+      safeProjectDescription,
         lead.reason,
         safeBrandAnalysisMemo,
         safeSnsAnalysisMemo
@@ -345,7 +346,7 @@ function buildMailInput(
     projectPlatformName: projectPlatformLabel(lead.project),
     projectUrl: lead.project?.url,
     projectCategory: lead.project?.category,
-    projectDescription: lead.project?.description,
+    projectDescription: compatibleAnalysisMemo(lead.project?.description, [lead.project?.title, lead.project?.category].filter(Boolean).join(' ')),
     projectAmount: lead.project?.amount,
     supporterCount: lead.project?.supporterCount,
     leadReason: lead.reason,
@@ -448,19 +449,24 @@ function buildMailPlaceholders(
   snsAnalysisMemo?: string | null
 ) {
   const manualAnalysis = sanitizeAnalysisSource(`${brandAnalysisMemo || ''} ${snsAnalysisMemo || ''}`);
-  const projectSource = sanitizeAnalysisSource(`${title || ''} ${category || ''} ${description || ''}`);
+  const titleCategorySource = sanitizeAnalysisSource(`${title || ''} ${category || ''}`);
+  const safeDescription = compatibleAnalysisMemo(description, titleCategorySource);
+  const projectSource = sanitizeAnalysisSource(`${titleCategorySource} ${safeDescription || ''}`);
   const source = sanitizeAnalysisSource(`${projectSource} ${reason || ''} ${manualAnalysis}`);
   const isStoreProject = /飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業|地域/.test(projectSource);
   const isEventProject = /ライブ|コンサート|音楽|バンド|ファン|周年|結成|記念|イベント|公演|ツアー|フェス|アーティスト/.test(projectSource);
+  const isFoodProject = /サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/.test(projectSource);
   const isRiceStorageProject = /米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(projectSource);
   const isAirBedProject = /エアベッド|ベッド|寝られる|寝心地|空気|マットレス|キャンプ|車中泊|アウトドア/.test(projectSource);
-  const strength = buildLocalStrengths(description, [reason, manualAnalysis].filter(Boolean).join(' '))[0] || '';
+  const strength = buildLocalStrengths(safeDescription, [reason, manualAnalysis].filter(Boolean).join(' '))[0] || '';
   const manualAppeal = pickManualAppeal(manualAnalysis, projectSource);
   const manualTarget = pickManualTarget(manualAnalysis, projectSource);
   const appeal = ensureCompatibleAppeal(manualAppeal || (isStoreProject
     ? '長年親しまれてきた店舗をより利用しやすい形で継続しようとされている点'
     : isEventProject
       ? '節目となる企画をファンの方々と一緒に盛り上げようとされている点'
+      : isFoodProject
+        ? '素材の魅力や職人技が伝わりやすく、味わいを想像しやすい点'
       : isRiceStorageProject
         ? 'お米の鮮度を保ちながら、キッチンに収まりやすい形で分けて保存できる点'
         : isAirBedProject
@@ -470,11 +476,13 @@ function buildMailPlaceholders(
     ? '店舗の継続や地域に根ざしたお店を応援したい方'
     : isEventProject
       ? 'これまで活動を応援してきたファンの方や、ライブ体験に関心のある方'
+      : isFoodProject
+        ? '食の品質や特別な味わいを楽しみたい方'
       : isRiceStorageProject
         ? 'お米の保存状態やキッチン収納を重視する方'
         : isAirBedProject
           ? 'キャンプや車中泊、来客時の寝具を手軽に用意したい方'
-      : buildLocalTargetUsers(category, description)[0] || 'この取り組みに関心を持つ方');
+      : buildLocalTargetUsers(category, safeDescription)[0] || 'この取り組みに関心を持つ方');
   const subjectType = isStoreProject || isEventProject ? '取り組み' : '商品';
 
   return {
@@ -535,6 +543,7 @@ function isPhraseCompatibleWithProject(phrase: string, projectSource: string) {
   if (!phrase || !projectSource) return true;
   const rules = [
     { pattern: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/, required: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/ },
+    { pattern: /サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/, required: /サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/ },
     { pattern: /エアベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/, required: /エアベッド|ベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/ },
     { pattern: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/, required: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/ },
     { pattern: /焼き鳥|焼鳥|炭火|店舗|飲食|居酒屋|リフォーム|改装/, required: /焼き鳥|焼鳥|炭火|店舗|飲食|居酒屋|リフォーム|改装/ }
@@ -653,6 +662,7 @@ function buildLocalStrengths(description?: string | null, reason?: string | null
   const source = [description, reason].filter(Boolean).join(' ');
   const strengths = [
     source.match(/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/) ? '店舗の継続や改装の背景を、応援したくなる取り組みとして伝えやすい可能性があります。' : '',
+    source.match(/サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/) ? '素材の魅力や職人技、味わいを想像しやすい点を伝えやすい可能性があります。' : '',
     source.match(/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/) ? 'お米の鮮度を保ちながら、キッチンに収まりやすく分けて保存できる点を伝えやすい可能性があります。' : '',
     source.match(/エアベッド|ベッド|寝られる|寝心地|空気|マットレス|キャンプ|車中泊|アウトドア/) ? '屋内外で使いやすく、寝心地や持ち運びやすさを訴求しやすい点を伝えやすい可能性があります。' : '',
     source.match(/軽量|コンパクト|持ち運び/) ? '持ち運びやすさを伝えやすい可能性があります。' : '',
@@ -665,6 +675,7 @@ function buildLocalStrengths(description?: string | null, reason?: string | null
 function buildLocalTargetUsers(category?: string | null, description?: string | null) {
   const source = `${category || ''} ${description || ''}`;
   if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/.test(source)) return ['地域に根ざした店舗を応援したい方', '飲食店の継続や再開を応援したい方'];
+  if (/サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/.test(source)) return ['食の品質や特別な味わいを楽しみたい方', 'ギフトや食卓の一品を探している方'];
   if (/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(source)) return ['お米の保存状態やキッチン収納を重視する方', '日々の食材管理をしやすくしたい方'];
   if (/エアベッド|ベッド|寝られる|寝心地|空気|マットレス|キャンプ|車中泊|アウトドア/.test(source)) return ['キャンプや車中泊、来客時の寝具を手軽に用意したい方', '持ち運びやすい寝具を探している方'];
   if (/防災|安全|守/.test(source)) return ['防災備えを重視する方', '大切な物を保管したい方'];

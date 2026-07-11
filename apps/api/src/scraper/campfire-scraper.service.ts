@@ -375,14 +375,14 @@ function mergeSearchResults(
 function matchesSearchStatus(item: CampfireSearchResult, input: CampfireSearchInput) {
   if (!input.status) return true;
   if (input.status === 'active') return item.isActive;
-  if (input.status === 'endingSoon') return item.isActive && item.daysLeft !== null;
+  if (input.status === 'endingSoon') return item.isActive && item.daysLeft !== null && item.daysLeft <= 14;
   return true;
 }
 
 function sortSearchResults(items: CampfireSearchResult[], input: CampfireSearchInput) {
   if (input.status !== 'endingSoon') return items;
   return [...items]
-    .filter((item) => item.isActive && typeof item.daysLeft === 'number')
+    .filter((item) => item.isActive && typeof item.daysLeft === 'number' && item.daysLeft <= 14)
     .sort((a, b) => Number(a.daysLeft) - Number(b.daysLeft));
 }
 

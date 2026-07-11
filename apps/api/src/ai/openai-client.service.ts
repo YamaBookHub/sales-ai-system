@@ -243,6 +243,7 @@ export class OpenAiClientService {
 
   private extractAppeal(input: SalesMailDraftInput, aiBody: string) {
     const sourceBundle = this.sourceBundle(input, aiBody);
+    const projectSource = this.compatibleProjectSource(input);
     const specialAppeal = this.specialCaseAppeal(input);
     if (specialAppeal) return specialAppeal;
 
@@ -253,6 +254,7 @@ export class OpenAiClientService {
     ]
       .map((value) => this.cleanPhrase(value))
       .filter((value) => !this.isBadAppeal(value))
+      .filter((value) => this.isMemoCompatibleWithProject(value, projectSource))
       .filter(Boolean);
     const selected = candidates[0] || '商品の特徴や利用シーンが分かりやすい';
     return this.toAppealPhrase(this.trimJapaneseSentence(selected, 72))
@@ -278,6 +280,9 @@ export class OpenAiClientService {
     if (manualTarget) return manualTarget;
     if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|浜松町|創業/.test(source)) {
       return '店舗の継続や地域に根ざしたお店を応援したい方';
+    }
+    if (/サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/.test(source)) {
+      return '食の品質や特別な味わいを楽しみたい方';
     }
     if (/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(source)) {
       return 'お米の保存状態やキッチン収納を重視する方';
@@ -315,6 +320,9 @@ export class OpenAiClientService {
     if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|浜松町|創業/.test(source)) {
       return '長年親しまれてきた店舗をより利用しやすい形で継続しようとされている点';
     }
+    if (/サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/.test(source)) {
+      return '素材の魅力や職人技が伝わりやすく、味わいを想像しやすい点';
+    }
     if (/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(source)) {
       return 'お米の鮮度を保ちながら、キッチンに収まりやすい形で分けて保存できる点';
     }
@@ -333,7 +341,9 @@ export class OpenAiClientService {
   }
 
   private compatibleProjectSource(input: SalesMailDraftInput) {
-    const projectSource = [input.projectTitle, input.projectDescription, input.projectCategory].filter(Boolean).join(' ');
+    const titleCategorySource = [input.projectTitle, input.projectCategory].filter(Boolean).join(' ');
+    const safeDescription = this.isMemoCompatibleWithProject(input.projectDescription, titleCategorySource) ? input.projectDescription : '';
+    const projectSource = [titleCategorySource, safeDescription].filter(Boolean).join(' ');
     const safeBrandMemo = this.isMemoCompatibleWithProject(input.brandAnalysisMemo, projectSource) ? input.brandAnalysisMemo : '';
     const safeSnsMemo = this.isMemoCompatibleWithProject(input.snsAnalysisMemo, projectSource) ? input.snsAnalysisMemo : '';
     return [projectSource, safeBrandMemo, safeSnsMemo].filter(Boolean).join(' ');
@@ -343,6 +353,7 @@ export class OpenAiClientService {
     if (!memo || !projectSource) return true;
     const rules = [
       { pattern: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/, required: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/ },
+      { pattern: /サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/, required: /サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/ },
       { pattern: /醤油差し|醤油|サイフォン|有田焼|陶磁器|器|食卓|残量|ガラス管|NEO CLAY/i, required: /醤油差し|醤油|サイフォン|有田焼|陶磁器|器|食卓|残量|ガラス管|NEO CLAY/i },
       { pattern: /エアベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/, required: /エアベッド|ベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/ },
       { pattern: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/, required: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/ },

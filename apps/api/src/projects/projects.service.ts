@@ -385,7 +385,7 @@ function normalizeResultLimit(value?: number) {
 
 function sortEndingSoon<T extends { daysLeft?: number | null; isActive?: boolean }>(items: T[]) {
   return [...items]
-    .filter((item) => item.isActive !== false && typeof item.daysLeft === 'number')
+    .filter((item) => item.isActive !== false && typeof item.daysLeft === 'number' && item.daysLeft <= 14)
     .sort((a, b) => Number(a.daysLeft) - Number(b.daysLeft));
 }
 
