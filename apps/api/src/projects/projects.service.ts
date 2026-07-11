@@ -52,20 +52,7 @@ export class ProjectsService {
   }
 
   async searchWithProvider(provider: ProjectSourceProvider, dto: SearchCampfireProjectsDto) {
-    const existingProjects = await this.prisma.crowdfundingProject.findMany({
-      where: {
-        platform: {
-          baseUrl: provider.baseUrl
-        }
-      },
-      select: { url: true }
-    });
-    const excludeUrls = Array.from(new Set([
-      ...(dto.excludeUrls || []),
-      ...existingProjects.map((project) => project.url)
-    ].filter(Boolean)));
-
-    const result = await provider.search({ ...dto, excludeUrls });
+    const result = await provider.search({ ...dto, excludeUrls: dto.excludeUrls || [] });
     if (dto.status === 'endingSoon') {
       return {
         items: sortEndingSoon(result.items).slice(0, normalizeResultLimit(dto.limit))

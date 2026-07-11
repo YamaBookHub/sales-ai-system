@@ -2365,14 +2365,14 @@ export class DashboardController {
             profileProjectMin: profileProjectRange.min,
             profileProjectMax: profileProjectRange.max,
             limit: desiredLimit,
-            status: ['campfire', 'makuake'].includes(source) ? (fieldValue('campfireSearchStatus') || 'active') : 'active',
-            excludeUrls: knownCampfireUrls()
+            status: ['campfire', 'makuake'].includes(source) ? (fieldValue('campfireSearchStatus') || 'active') : 'active'
           }))
         });
         state.campfireCandidates = result.items || [];
         syncCandidateImportStatuses();
         renderCampfireCandidates();
-        const countText = '新規候補 ' + state.campfireCandidates.length + '件';
+        const importableCount = state.campfireCandidates.filter((item) => isCandidateImportable(item)).length;
+        const countText = '候補 ' + state.campfireCandidates.length + '件 / 取込可能 ' + importableCount + '件';
         const elapsed = currentSearchElapsedText();
         stopCampfireSearchTimer();
         setStatus('campfireSearchStatusText', countText + ' / ' + elapsed, 'ok');
