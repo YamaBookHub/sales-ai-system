@@ -142,6 +142,10 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
           name: enriched.executorName || memberStats.name || 'Makuake実行者名未取得',
           websiteUrl: enriched.websiteUrl || undefined,
           inquiryUrl: enriched.inquiryUrl || undefined,
+          location: enriched.location || undefined,
+          sourceTotalAmount: memberStats.totalAmount,
+          sourceProjectCount: memberStats.projectCount,
+          sourceSupporterCount: memberStats.supporterCount,
           memo: buildCompanyMemo(enriched)
         },
         project: {
@@ -150,8 +154,10 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
           status: enriched.isEnded ? 'ended' : 'active',
           amount: enriched.amount,
           supporterCount: enriched.supporterCount,
+          daysLeft: enriched.daysLeft,
           description: enriched.description || undefined,
           category: enriched.category || undefined,
+          location: enriched.location || undefined,
           thumbnailUrl: enriched.thumbnailUrl || undefined,
           scrapedAt: new Date()
         },

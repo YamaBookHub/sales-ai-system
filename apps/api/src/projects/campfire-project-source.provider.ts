@@ -34,6 +34,7 @@ export class CampfireProjectSourceProvider implements ProjectSourceProvider {
         name: companyName,
         websiteUrl: scraped.websiteUrl || undefined,
         inquiryUrl: scraped.inquiryUrl || undefined,
+        sourceProjectCount: scraped.profileProjectCount,
         memo: scraped.executorName ? `CAMPFIRE executor: ${scraped.executorName}` : undefined
       },
       project: {
@@ -42,6 +43,7 @@ export class CampfireProjectSourceProvider implements ProjectSourceProvider {
         status: 'active',
         amount: parseInteger(scraped.supportAmount),
         supporterCount: parseInteger(scraped.supporters),
+        daysLeft: parseInteger(scraped.daysLeft),
         description: scraped.mainDescription || undefined,
         category: scraped.category || cleanScrapedFeature(scraped.features[0]) || undefined,
         scrapedAt: new Date()
@@ -113,4 +115,3 @@ function buildLargeProfileWarning(scraped: Pick<ScrapedCampfireProject, 'profile
   if (scraped.profileProjectCount === null || scraped.profileProjectCount < 100) return undefined;
   return `注意: この実行者は過去プロジェクトが${scraped.profileProjectCount}件以上ある可能性があります。過去案件の詳細スクレイピングは重くなるため、必要な場合だけ手動確認してください。`;
 }
-

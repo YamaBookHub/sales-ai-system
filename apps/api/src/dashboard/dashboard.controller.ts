@@ -526,6 +526,9 @@ export class DashboardController {
           detailItem('点数', Number(lead.score || 0)) +
           detailItem('支援額', formatCurrency(project.amount)) +
           detailItem('支援者数', formatNumber(project.supporterCount) + '人') +
+          detailItem('残り日数', project.daysLeft === null || project.daysLeft === undefined ? '未取得' : project.daysLeft + '日') +
+          detailItem('地域', project.location || lead.company?.location || '未取得') +
+          detailItem('実行者PJ数', lead.company?.sourceProjectCount === null || lead.company?.sourceProjectCount === undefined ? '未取得' : lead.company.sourceProjectCount + '件') +
           detailItem('連絡先', contactSummary(lead)) +
           detailItem('最新メール', mail ? labelMailStatus(mail.status) : '未生成') +
           detailItem('送信手段', lead.sendMethod || suggestSendMethod(lead)) +
@@ -693,7 +696,12 @@ export class DashboardController {
         ...summary,
         ['支援額', (lead) => lead.project?.amount || 0],
         ['支援者数', (lead) => lead.project?.supporterCount || 0],
+        ['残り日数', (lead) => lead.project?.daysLeft ?? ''],
         ['カテゴリ', (lead) => lead.project?.category || ''],
+        ['地域', (lead) => lead.project?.location || lead.company?.location || ''],
+        ['実行者プロジェクト数', (lead) => lead.company?.sourceProjectCount ?? ''],
+        ['実行者累計金額', (lead) => lead.company?.sourceTotalAmount ?? ''],
+        ['実行者累計サポーター数', (lead) => lead.company?.sourceSupporterCount ?? ''],
         ['商品説明', (lead) => lead.project?.description || ''],
         ['営業理由', (lead) => lead.reason || ''],
         ['メールアドレス', (lead) => lead.contactEmail || ''],
@@ -3401,6 +3409,9 @@ export class DashboardController {
           detailItem('カテゴリ', project.category || '未取得') +
           detailItem('支援額', formatCurrency(project.amount)) +
           detailItem('支援者数', formatNumber(project.supporterCount) + '人') +
+          detailItem('残り日数', project.daysLeft === null || project.daysLeft === undefined ? '未取得' : project.daysLeft + '日') +
+          detailItem('地域', project.location || company.location || '未取得') +
+          detailItem('実行者PJ数', company.sourceProjectCount === null || company.sourceProjectCount === undefined ? '未取得' : company.sourceProjectCount + '件') +
           detailItem('Lead状態', labelLeadStatus(lead.status)) +
           detailItem('優先度', labelPriority(lead.priority)) +
           detailItem('スコア', String(Number(lead.score || 0))) +

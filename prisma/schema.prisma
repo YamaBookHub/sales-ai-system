@@ -153,6 +153,10 @@ model Company {
   websiteUrl    String?
   inquiryUrl    String?
   industry      String?
+  location      String?
+  sourceTotalAmount Int?
+  sourceProjectCount Int?
+  sourceSupporterCount Int?
   memo          String?
   isBlocked     Boolean   @default(false)
   blockedReason String?
@@ -204,8 +208,10 @@ model CrowdfundingProject {
   targetAmount   Int?
   startDate      DateTime?
   endDate        DateTime?
+  daysLeft       Int?
   description    String?
   category       String?
+  location       String?
   thumbnailUrl   String?
   scrapedAt      DateTime?
   createdAt      DateTime      @default(now())
@@ -221,6 +227,8 @@ model CrowdfundingProject {
   @@index([status])
   @@index([amount, supporterCount])
   @@index([endDate])
+  @@index([daysLeft])
+  @@index([location])
 }
 
 model SalesLead {

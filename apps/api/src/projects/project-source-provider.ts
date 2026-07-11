@@ -27,6 +27,10 @@ export type NormalizedImportedProject = {
     name: string;
     websiteUrl?: string;
     inquiryUrl?: string;
+    location?: string;
+    sourceTotalAmount?: number | null;
+    sourceProjectCount?: number | null;
+    sourceSupporterCount?: number | null;
     memo?: string;
   };
   project: {
@@ -35,8 +39,10 @@ export type NormalizedImportedProject = {
     status: 'active' | 'ended' | 'unknown';
     amount: number;
     supporterCount: number;
+    daysLeft?: number | null;
     description?: string;
     category?: string;
+    location?: string;
     thumbnailUrl?: string;
     scrapedAt: Date;
   };

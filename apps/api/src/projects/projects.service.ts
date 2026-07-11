@@ -305,6 +305,10 @@ export class ProjectsService {
               data: compact({
                 websiteUrl: existingCompany.websiteUrl || imported.company.websiteUrl || undefined,
                 inquiryUrl: existingCompany.inquiryUrl || imported.company.inquiryUrl || undefined,
+                location: existingCompany.location || imported.company.location || undefined,
+                sourceTotalAmount: existingCompany.sourceTotalAmount ?? imported.company.sourceTotalAmount ?? undefined,
+                sourceProjectCount: existingCompany.sourceProjectCount ?? imported.company.sourceProjectCount ?? undefined,
+                sourceSupporterCount: existingCompany.sourceSupporterCount ?? imported.company.sourceSupporterCount ?? undefined,
                 memo: existingCompany.memo || imported.company.memo || undefined
               })
             })
@@ -314,6 +318,10 @@ export class ProjectsService {
                 normalizedName: normalizeCompanyName(imported.company.name),
                 websiteUrl: imported.company.websiteUrl || undefined,
                 inquiryUrl: imported.company.inquiryUrl || undefined,
+                location: imported.company.location || undefined,
+                sourceTotalAmount: imported.company.sourceTotalAmount ?? undefined,
+                sourceProjectCount: imported.company.sourceProjectCount ?? undefined,
+                sourceSupporterCount: imported.company.sourceSupporterCount ?? undefined,
                 memo: imported.company.memo || undefined
               }
             });
@@ -326,8 +334,10 @@ export class ProjectsService {
           status: imported.project.status,
           amount: imported.project.amount,
           supporterCount: imported.project.supporterCount,
+          daysLeft: imported.project.daysLeft ?? undefined,
           description: imported.project.description,
           category: imported.project.category,
+          location: imported.project.location,
           thumbnailUrl: imported.project.thumbnailUrl,
           scrapedAt: new Date()
         },
@@ -339,8 +349,10 @@ export class ProjectsService {
           status: imported.project.status,
           amount: imported.project.amount,
           supporterCount: imported.project.supporterCount,
+          daysLeft: imported.project.daysLeft ?? undefined,
           description: imported.project.description,
           category: imported.project.category,
+          location: imported.project.location,
           thumbnailUrl: imported.project.thumbnailUrl,
           scrapedAt: imported.project.scrapedAt
         }
