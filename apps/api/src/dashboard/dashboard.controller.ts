@@ -1,5 +1,7 @@
 import { Controller, Get, Header } from '@nestjs/common';
 
+type DashboardPageMode = 'url-search' | 'mail-workspace';
+
 @Controller()
 export class DashboardController {
   @Get('leads-view')
@@ -1289,16 +1291,18 @@ export class DashboardController {
   @Get('mail-workspace')
   @Header('Content-Type', 'text/html; charset=utf-8')
   mailWorkspace() {
-    return this.index()
-      .replace('<body class="url-search-page" data-ui-page="url-search">', '<body class="mail-workspace-page" data-ui-page="mail-workspace">')
-      .replace('<h1>URL検索</h1>', '<h1>メール作成</h1>')
-      .replace('<button class="primary" onclick="location.href=\'/\'">URL検索</button>', '<button onclick="location.href=\'/\'">URL検索</button>')
-      .replace('<button onclick="location.href=\'/mail-workspace\'">メール作成</button>', '<button class="primary" onclick="location.href=\'/mail-workspace\'">メール作成</button>');
+    return this.renderDashboardPage('mail-workspace');
   }
 
   @Get()
   @Header('Content-Type', 'text/html; charset=utf-8')
   index() {
+    return this.renderDashboardPage('url-search');
+  }
+
+  private renderDashboardPage(pageMode: DashboardPageMode) {
+    const isMailWorkspace = pageMode === 'mail-workspace';
+
     return `<!doctype html>
 <html lang="ja">
 <head>
@@ -2005,15 +2009,15 @@ export class DashboardController {
     }
   </style>
 </head>
-<body class="url-search-page" data-ui-page="url-search">
+<body class="${isMailWorkspace ? 'mail-workspace-page' : 'url-search-page'}" data-ui-page="${pageMode}">
   <header>
-    <h1>URL検索</h1>
+    <h1>${isMailWorkspace ? 'メール作成' : 'URL検索'}</h1>
     <div class="toolbar">
       <span id="apiStatus" class="status muted">API確認中</span>
       <div class="top-nav" data-ui="top-nav">
-        <button class="primary" onclick="location.href='/'">URL検索</button>
+        <button${isMailWorkspace ? '' : ' class="primary"'} onclick="location.href='/'">URL検索</button>
         <button onclick="location.href='/leads-view'">営業リスト</button>
-        <button onclick="location.href='/mail-workspace'">メール作成</button>
+        <button${isMailWorkspace ? ' class="primary"' : ''} onclick="location.href='/mail-workspace'">メール作成</button>
       </div>
       <button onclick="loadAll()">更新</button>
     </div>

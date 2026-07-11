@@ -63,9 +63,10 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('id="keyword"');
   });
 
-  it('returns mail workspace HTML generated from index replacement contract', () => {
+  it('returns mail workspace HTML from page mode without string replacement', () => {
     const indexHtml = controller.index();
     const mailHtml = controller.mailWorkspace();
+    const mailWorkspaceSource = DashboardController.prototype.mailWorkspace.toString();
 
     expectHtmlResponse(mailHtml);
     expectTopNavigation(mailHtml);
@@ -87,5 +88,6 @@ describe('DashboardController HTML contracts', () => {
     expect(mailHtml).toContain('id="checklistRows"');
     expect(indexHtml).toContain('<body class="url-search-page" data-ui-page="url-search">');
     expect(mailHtml).not.toContain('<body class="url-search-page" data-ui-page="url-search">');
+    expect(mailWorkspaceSource).not.toContain('.replace(');
   });
 });
