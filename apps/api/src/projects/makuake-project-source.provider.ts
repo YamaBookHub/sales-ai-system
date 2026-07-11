@@ -103,10 +103,12 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
           }
         })
       ).flat();
-      const enrichedItems = await enrichSearchResults(context, uniqueBy(rawItems, (item) => normalizeUrlForUnique(item.url)));
+      const candidates = sortSearchResults(uniqueBy(rawItems, (item) => normalizeUrlForUnique(item.url)), input)
+        .filter((item) => matchesKeyword(item, input.keyword))
+        .slice(0, Math.max(normalizeLimit(input.limit) * 2, 10));
+      const enrichedItems = await enrichSearchResults(context, candidates);
       const excluded = new Set((input.excludeUrls || []).map((url) => normalizeUrlForUnique(url)));
       const items = sortSearchResults(enrichedItems, input)
-        .filter((item) => matchesKeyword(item, input.keyword))
         .filter((item) => !excluded.has(normalizeUrlForUnique(item.url)))
         .filter((item) => matchesNumericFilters(item, input))
         .slice(0, normalizeLimit(input.limit));

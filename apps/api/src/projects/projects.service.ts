@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ProjectStatus } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { AiService } from '../ai/ai.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CampfireProjectSourceProvider } from './campfire-project-source.provider';
@@ -9,6 +10,8 @@ import { BulkImportProjectsDto, CreateProjectDto, ImportCampfireProjectDto, Impo
 
 @Injectable()
 export class ProjectsService {
+  private readonly searchJobs = new Map<string, SearchJob>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
@@ -59,6 +62,110 @@ export class ProjectsService {
       };
     }
     return result;
+  }
+
+  startSearchJob(dto: SearchProjectsDto) {
+    const provider = this.providerFor(dto.source);
+    const desiredLimit = normalizeResultLimit(dto.limit);
+    this.pruneSearchJobs();
+    const job: SearchJob = {
+      id: randomUUID(),
+      status: 'running',
+      source: provider.source,
+      desiredLimit,
+      items: [],
+      importableCount: 0,
+      searchedLimit: 0,
+      message: '検索を開始しました',
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      cancelled: false
+    };
+    this.searchJobs.set(job.id, job);
+    void this.runSearchJob(job, provider, dto);
+    return this.publicSearchJob(job);
+  }
+
+  getSearchJob(id: string) {
+    const job = this.searchJobs.get(id);
+    if (!job) {
+      throw new BadRequestException('検索ジョブが見つかりません。もう一度検索してください。');
+    }
+    return this.publicSearchJob(job);
+  }
+
+  cancelSearchJob(id: string) {
+    const job = this.searchJobs.get(id);
+    if (!job) {
+      throw new BadRequestException('検索ジョブが見つかりません。もう一度検索してください。');
+    }
+    if (job.status === 'running') {
+      job.cancelled = true;
+      job.status = 'cancelled';
+      job.message = '検索を停止しました';
+      job.updatedAt = new Date().toISOString();
+    }
+    return this.publicSearchJob(job);
+  }
+
+  private async runSearchJob(job: SearchJob, provider: ProjectSourceProvider, dto: SearchCampfireProjectsDto) {
+    try {
+      const existingUrls = await this.existingProjectUrls(provider);
+      for (const limit of progressiveSearchLimits(job.desiredLimit)) {
+        if (job.cancelled) break;
+        job.searchedLimit = limit;
+        job.message = `候補を取得中です（最大${limit}件まで確認中）`;
+        job.updatedAt = new Date().toISOString();
+        const result = await this.searchWithProvider(provider, { ...dto, limit });
+        job.items = mergeSearchItems(job.items, result.items);
+        job.importableCount = countImportableSearchItems(job.items, existingUrls);
+        job.message = `候補 ${job.items.length}件 / 取込可能 ${job.importableCount}件`;
+        job.updatedAt = new Date().toISOString();
+        if (job.importableCount >= job.desiredLimit) break;
+      }
+      if (!job.cancelled) {
+        job.status = 'completed';
+        job.message = `検索完了: 候補 ${job.items.length}件 / 取込可能 ${job.importableCount}件`;
+        job.updatedAt = new Date().toISOString();
+      }
+    } catch (error) {
+      job.status = 'failed';
+      job.message = error instanceof Error ? error.message : '検索に失敗しました';
+      job.updatedAt = new Date().toISOString();
+    }
+  }
+
+  private async existingProjectUrls(provider: ProjectSourceProvider) {
+    const projects = await this.prisma.crowdfundingProject.findMany({
+      where: { platform: { baseUrl: provider.baseUrl } },
+      select: { url: true }
+    });
+    return new Set(projects.map((project) => normalizeSearchUrl(project.url)));
+  }
+
+  private publicSearchJob(job: SearchJob) {
+    return {
+      id: job.id,
+      status: job.status,
+      source: job.source,
+      desiredLimit: job.desiredLimit,
+      searchedLimit: job.searchedLimit,
+      items: job.items,
+      itemCount: job.items.length,
+      importableCount: job.importableCount,
+      message: job.message,
+      startedAt: job.startedAt,
+      updatedAt: job.updatedAt
+    };
+  }
+
+  private pruneSearchJobs() {
+    const threshold = Date.now() - 30 * 60 * 1000;
+    for (const [id, job] of this.searchJobs.entries()) {
+      if (new Date(job.updatedAt).getTime() < threshold) {
+        this.searchJobs.delete(id);
+      }
+    }
   }
 
   campfireCategories() {
@@ -332,6 +439,20 @@ type ImportOptions = {
   userId?: string | null;
 };
 
+type SearchJob = {
+  id: string;
+  status: 'running' | 'completed' | 'cancelled' | 'failed';
+  source: ProjectSource;
+  desiredLimit: number;
+  searchedLimit: number;
+  items: Awaited<ReturnType<ProjectSourceProvider['search']>>['items'];
+  importableCount: number;
+  message: string;
+  startedAt: string;
+  updatedAt: string;
+  cancelled: boolean;
+};
+
 function normalizeProjectSource(source?: string): ProjectSource {
   const normalized = (source || 'campfire').trim().toLowerCase().replace('-', '_');
   if (normalized === 'campfire' || normalized === 'makuake' || normalized === 'green_funding') {
@@ -374,6 +495,32 @@ function sortEndingSoon<T extends { daysLeft?: number | null; isActive?: boolean
   return [...items]
     .filter((item) => item.isActive !== false && typeof item.daysLeft === 'number' && item.daysLeft <= 14)
     .sort((a, b) => Number(a.daysLeft) - Number(b.daysLeft));
+}
+
+function progressiveSearchLimits(desiredLimit: number) {
+  return [10, 50, 100].filter((limit) => limit >= desiredLimit);
+}
+
+function mergeSearchItems<T extends { url: string }>(current: T[], next: T[]) {
+  const map = new Map(current.map((item) => [normalizeSearchUrl(item.url), item]));
+  next.forEach((item) => map.set(normalizeSearchUrl(item.url), item));
+  return Array.from(map.values());
+}
+
+function countImportableSearchItems<T extends { url: string }>(items: T[], existingUrls: Set<string>) {
+  return items.filter((item) => !existingUrls.has(normalizeSearchUrl(item.url))).length;
+}
+
+function normalizeSearchUrl(value: string) {
+  if (!value) return '';
+  try {
+    const url = new URL(value);
+    url.hash = '';
+    url.search = '';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return String(value).split('#')[0].split('?')[0].replace(/\/$/, '');
+  }
 }
 
 async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<void>) {

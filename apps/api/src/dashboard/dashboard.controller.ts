@@ -1865,6 +1865,7 @@ export class DashboardController {
               </div>
               <div class="search-actions">
                 <button class="primary" onclick="searchCampfireCandidates()">検索</button>
+                <button id="stopSearchButton" onclick="cancelCampfireSearch()" disabled>検索停止</button>
                 <button onclick="clearCampfireSearch()">クリア</button>
                 <span id="campfireSearchStatusText" class="status"></span>
               </div>
@@ -2157,7 +2158,9 @@ export class DashboardController {
       campfireCandidates: [],
       candidateImportStatus: {},
       campfireSearchTimerId: null,
+      campfireSearchPollTimerId: null,
       campfireSearchStartedAt: null,
+      campfireSearchJobId: null,
       currentSourcePlatform: null
     };
     const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
@@ -2353,10 +2356,15 @@ export class DashboardController {
       const profileProjectRange = source === 'campfire' ? rangeFieldValue('campfireSearchProfileProjectRange') : { min: null, max: null };
       const hasProfileProjectSearch = profileProjectRange.min !== null || profileProjectRange.max !== null;
       const desiredLimit = numberFieldValue('campfireFetchLimit') || 10;
+      stopCampfireSearchPoll();
+      state.campfireSearchJobId = null;
+      state.campfireCandidates = [];
       startCampfireSearchTimer(hasProfileProjectSearch);
+      document.getElementById('stopSearchButton').disabled = false;
       document.getElementById('campfireCandidateCount').textContent = '検索中';
+      renderCampfireCandidates();
       try {
-        const result = await api('/api/projects/search', {
+        const job = await api('/api/projects/search-jobs', {
           method: 'POST',
           body: JSON.stringify(compactPayload({
             source,
@@ -2368,23 +2376,78 @@ export class DashboardController {
             status: ['campfire', 'makuake'].includes(source) ? (fieldValue('campfireSearchStatus') || 'active') : 'active'
           }))
         });
-        state.campfireCandidates = result.items || [];
-        syncCandidateImportStatuses();
-        renderCampfireCandidates();
-        const importableCount = state.campfireCandidates.filter((item) => isCandidateImportable(item)).length;
-        const countText = '候補 ' + state.campfireCandidates.length + '件 / 取込可能 ' + importableCount + '件';
-        const elapsed = currentSearchElapsedText();
-        stopCampfireSearchTimer();
-        setStatus('campfireSearchStatusText', countText + ' / ' + elapsed, 'ok');
-        if (!state.campfireCandidates.length) {
-          document.getElementById('campfireCandidateCount').textContent = countText;
-        }
+        state.campfireSearchJobId = job.id;
+        applySearchJob(job);
+        pollCampfireSearchJob();
       } catch (error) {
         const elapsed = currentSearchElapsedText();
         stopCampfireSearchTimer();
+        stopCampfireSearchPoll();
+        document.getElementById('stopSearchButton').disabled = true;
         setStatus('campfireSearchStatusText', error.message + (elapsed ? ' / ' + elapsed : ''), 'error');
         document.getElementById('campfireCandidateCount').textContent = '検索失敗';
       }
+    }
+
+    async function pollCampfireSearchJob() {
+      if (!state.campfireSearchJobId) return;
+      try {
+        const job = await api('/api/projects/search-jobs/' + state.campfireSearchJobId);
+        applySearchJob(job);
+        if (job.status === 'running') {
+          state.campfireSearchPollTimerId = window.setTimeout(pollCampfireSearchJob, 1200);
+          return;
+        }
+        stopCampfireSearchTimer();
+        stopCampfireSearchPoll();
+        document.getElementById('stopSearchButton').disabled = true;
+        setStatus('campfireSearchStatusText', job.message + ' / ' + currentSearchElapsedText(), job.status === 'failed' ? 'error' : 'ok');
+      } catch (error) {
+        stopCampfireSearchTimer();
+        stopCampfireSearchPoll();
+        document.getElementById('stopSearchButton').disabled = true;
+        setStatus('campfireSearchStatusText', error.message, 'error');
+      }
+    }
+
+    function applySearchJob(job) {
+      state.campfireCandidates = mergeCandidates(state.campfireCandidates, job.items || []);
+      syncCandidateImportStatuses();
+      renderCampfireCandidates();
+      const importableCount = state.campfireCandidates.filter((item) => isCandidateImportable(item)).length;
+      const runningText = job.status === 'running' ? '取得中' : job.status === 'cancelled' ? '停止済み' : job.status === 'failed' ? '失敗' : '完了';
+      const elapsed = currentSearchElapsedText();
+      const message = runningText + ' / 候補 ' + state.campfireCandidates.length + '件 / 取込可能 ' + importableCount + '件' + (job.searchedLimit ? ' / 確認中 ' + job.searchedLimit + '件枠' : '');
+      document.getElementById('campfireCandidateCount').textContent = message;
+      setStatus('campfireSearchStatusText', message + (elapsed ? ' / ' + elapsed : ''), job.status === 'failed' ? 'error' : job.status === 'running' ? 'warn' : 'ok');
+    }
+
+    async function cancelCampfireSearch() {
+      if (!state.campfireSearchJobId) return;
+      document.getElementById('stopSearchButton').disabled = true;
+      setStatus('campfireSearchStatusText', '検索停止中', 'warn');
+      try {
+        const job = await api('/api/projects/search-jobs/' + state.campfireSearchJobId + '/cancel', { method: 'POST' });
+        applySearchJob(job);
+      } catch (error) {
+        setStatus('campfireSearchStatusText', error.message, 'error');
+      } finally {
+        stopCampfireSearchTimer();
+        stopCampfireSearchPoll();
+      }
+    }
+
+    function stopCampfireSearchPoll() {
+      if (state.campfireSearchPollTimerId) {
+        window.clearTimeout(state.campfireSearchPollTimerId);
+        state.campfireSearchPollTimerId = null;
+      }
+    }
+
+    function mergeCandidates(current, next) {
+      const map = new Map(current.map((item, index) => [stableCandidateKey(item, index), item]));
+      next.forEach((item, index) => map.set(stableCandidateKey(item, current.length + index), item));
+      return Array.from(map.values());
     }
 
     function knownCampfireUrls() {
@@ -2411,7 +2474,10 @@ export class DashboardController {
       state.campfireCandidates = [];
       state.candidateImportStatus = {};
       stopCampfireSearchTimer();
+      stopCampfireSearchPoll();
       state.campfireSearchStartedAt = null;
+      state.campfireSearchJobId = null;
+      document.getElementById('stopSearchButton').disabled = true;
       renderCampfireCandidates();
       setStatus('campfireSearchStatusText', '', '');
       document.getElementById('campfireCandidateCount').textContent = '未検索';
@@ -2807,7 +2873,10 @@ export class DashboardController {
     function renderCampfireCandidates() {
       const container = document.getElementById('campfireCandidates');
       if (!state.campfireCandidates.length) {
-        container.innerHTML = '<div class="muted">検索すると候補URLがここに表示されます。</div>';
+        const message = state.campfireSearchJobId
+          ? '取得中です。見つかった候補から順にここへ追加されます。'
+          : '検索すると候補URLがここに表示されます。';
+        container.innerHTML = '<div class="muted">' + escapeHtml(message) + '</div>';
         document.getElementById('bulkImportButton').disabled = true;
         return;
       }
@@ -2924,6 +2993,10 @@ export class DashboardController {
 
     function candidateImportKey(candidate) {
       return campfireProjectId(candidate?.url) || normalizeComparableUrl(candidate?.url);
+    }
+
+    function stableCandidateKey(candidate, fallbackIndex) {
+      return candidateImportKey(candidate) || candidate?.url || candidate?.title || 'candidate-' + fallbackIndex;
     }
 
     function campfireProjectId(value) {

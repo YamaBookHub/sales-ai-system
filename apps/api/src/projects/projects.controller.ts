@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Query } from '@nestjs/common';
 import { ProjectStatus } from '@prisma/client';
 import { ok } from '../common/api-response';
 import { BulkImportProjectsDto, CreateProjectDto, ImportCampfireProjectDto, ImportProjectDto, SearchCampfireProjectsDto, SearchProjectsDto } from './projects.dto';
@@ -51,5 +51,20 @@ export class ProjectsController {
   @Post('search')
   async searchProjects(@Body() dto: SearchProjectsDto) {
     return ok(await this.projects.searchProjects(dto));
+  }
+
+  @Post('search-jobs')
+  async startSearchJob(@Body() dto: SearchProjectsDto) {
+    return ok(this.projects.startSearchJob(dto));
+  }
+
+  @Get('search-jobs/:id')
+  async getSearchJob(@Param('id') id: string) {
+    return ok(this.projects.getSearchJob(id));
+  }
+
+  @Post('search-jobs/:id/cancel')
+  async cancelSearchJob(@Param('id') id: string) {
+    return ok(this.projects.cancelSearchJob(id));
   }
 }
