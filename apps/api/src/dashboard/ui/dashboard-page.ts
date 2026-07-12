@@ -730,9 +730,18 @@ ${renderClientMailScript()}
     async function saveMail() {
       if (!state.selectedMailId) return;
       const subject = document.getElementById('subject').value;
-      const body = document.getElementById('body').value;
+      let body = document.getElementById('body').value;
       setStatus('mailStatus', '保存中', 'warn');
       try {
+        const mail = currentSelectedMail();
+        if (mail && ['draft', 'rejected'].includes(mail.status)) {
+          const tracked = await autoTrackMaterialUrls(mail.id, body);
+          body = tracked.body;
+          document.getElementById('body').value = body;
+          if (tracked.added) {
+            setStatus('mailStatus', tracked.added + '件の資料URLを追跡リンク化して保存中', 'warn');
+          }
+        }
         await api('/api/mails/' + state.selectedMailId, {
           method: 'PATCH',
           body: JSON.stringify({
@@ -778,7 +787,7 @@ ${renderClientMailScript()}
         const trackingUrl = new URL(result.trackingPath, window.location.origin).toString();
         const body = document.getElementById('body');
         if (body && !body.value.includes(trackingUrl)) {
-          body.value = body.value.trim() + '\n\n会社資料: ' + trackingUrl;
+          body.value = body.value.trim() + '\\n\\n会社資料: ' + trackingUrl;
           updateMailEditorDirtyState();
         }
         document.getElementById('materialUrl').value = '';
@@ -790,6 +799,33 @@ ${renderClientMailScript()}
       } finally {
         updateMailButtons(currentSelectedMail());
       }
+    }
+
+    async function autoTrackMaterialUrls(mailId, body) {
+      const urls = extractMaterialUrls(body);
+      let trackedBody = body;
+      let added = 0;
+      for (const originalUrl of urls) {
+        const result = await api('/api/t/links', {
+          method: 'POST',
+          body: JSON.stringify({ emailId: mailId, originalUrl, label: 'company_material' })
+        });
+        const trackingUrl = new URL(result.trackingPath, window.location.origin).toString();
+        if (trackingUrl === originalUrl) continue;
+        trackedBody = trackedBody.split(originalUrl).join(trackingUrl);
+        added += 1;
+      }
+      return { body: trackedBody, added };
+    }
+
+    function extractMaterialUrls(body) {
+      const matches = body.match(/https?:\\/\\/[^\\s<>"')]+/g) || [];
+      return Array.from(new Set(matches.map((value) => value.replace(/[),。、「」]+$/g, ''))))
+        .filter((url) => !url.includes('/t/click/'))
+        .filter((url) => {
+          const line = body.split('\\n').find((item) => item.includes(url)) || '';
+          return /会社資料|資料|パンフレット|会社案内/.test(line) || /\.(pdf|docx|xlsx|pptx)(?:[?#].*)?$/i.test(url);
+        });
     }
 
     async function loadChecklist() {

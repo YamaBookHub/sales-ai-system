@@ -18,12 +18,23 @@ export class TrackingService {
       throw new NotFoundException('Mail not found');
     }
 
+    const label = dto.label || COMPANY_MATERIAL_LINK_LABEL;
+    const existing = await this.prisma.trackedLink.findFirst({
+      where: { emailId: dto.emailId, originalUrl: dto.originalUrl, label }
+    });
+    if (existing) {
+      return {
+        ...existing,
+        trackingPath: `/t/click/${existing.token}`
+      };
+    }
+
     const link = await this.prisma.trackedLink.create({
       data: {
         emailId: dto.emailId,
         token: createTrackingToken(),
         originalUrl: dto.originalUrl,
-        label: dto.label || COMPANY_MATERIAL_LINK_LABEL
+        label
       }
     });
 

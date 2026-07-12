@@ -13,6 +13,7 @@ describe('TrackingService', () => {
         originalUrl: 'https://example.com/company.pdf',
         label: 'company_material'
       }),
+      findFirst: jest.fn().mockResolvedValue(null),
       findUnique: jest.fn().mockResolvedValue({
         id: 'link_1',
         emailId: 'mail_1',
@@ -84,6 +85,28 @@ describe('TrackingService', () => {
         nextActionAt: expect.any(Date)
       })
     });
+  });
+
+  it('reuses an existing tracked link for the same mail and URL', async () => {
+    const prisma = createPrisma();
+    prisma.trackedLink.findFirst.mockResolvedValue({
+      id: 'link_existing',
+      emailId: 'mail_1',
+      token: 'token_existing',
+      originalUrl: 'https://example.com/company.pdf',
+      label: 'company_material'
+    });
+    const service = new TrackingService(prisma as any);
+
+    await expect(service.createTrackedLink({
+      emailId: 'mail_1',
+      originalUrl: 'https://example.com/company.pdf',
+      label: 'company_material'
+    })).resolves.toMatchObject({
+      id: 'link_existing',
+      trackingPath: '/t/click/token_existing'
+    });
+    expect(prisma.trackedLink.create).not.toHaveBeenCalled();
   });
 
   it('summarizes material engagement for a mail', async () => {
