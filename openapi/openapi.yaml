@@ -183,6 +183,70 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LeadScore' }
+  /api/leads/{leadId}/tasks:
+    get:
+      summary: List tasks for a sales lead
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [active, all]
+            default: active
+      responses:
+        '200':
+          description: Task list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiTaskListResponse' }
+        '404': { description: Lead not found }
+    post:
+      summary: Create a next-action task for a sales lead
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTaskRequest' }
+      responses:
+        '201':
+          description: Created task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiTaskResponse' }
+        '400': { description: Invalid task or assignee }
+        '404': { description: Lead not found }
+        '409': { description: Terminal lead }
+  /api/tasks/{taskId}:
+    patch:
+      summary: Update a next-action task
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTaskRequest' }
+      responses:
+        '200':
+          description: Updated task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiTaskResponse' }
+        '400': { description: Invalid task or assignee }
+        '404': { description: Task not found }
+        '409': { description: Invalid task status transition }
+  /api/task-assignees:
+    get:
+      summary: List active task assignees
+      responses:
+        '200':
+          description: Active users
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiTaskAssigneeListResponse' }
   /api/mails:
     get:
       summary: List mails
@@ -204,6 +268,47 @@ paths:
                   page: { type: integer }
                   limit: { type: integer }
                   total: { type: integer }
+  /api/replies:
+    get:
+      summary: List Reply Inbox items
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: category
+          in: query
+          schema: { $ref: '#/components/schemas/ReplyCategory' }
+        - name: attention
+          in: query
+          schema:
+            type: string
+            enum: [all, needs_action, manager_review, stop_followup]
+            default: all
+        - name: leadStatus
+          in: query
+          schema: { $ref: '#/components/schemas/LeadStatus' }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [receivedAt, priority, confidence]
+            default: receivedAt
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Reply Inbox list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiReplyInboxResponse' }
+        '400':
+          description: Invalid filter or pagination
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /api/mails/draft:
     post:
       summary: Create AI assisted mail draft
@@ -464,6 +569,9 @@ components:
     LeadPriority:
       type: string
       enum: [high, medium, low]
+    TaskStatus:
+      type: string
+      enum: [todo, doing, done, cancelled]
     EmailStatus:
       type: string
       enum: [draft, in_review, rejected, approved, queued, sending, sent, failed, cancelled]
@@ -668,6 +776,63 @@ components:
         page: { type: integer }
         limit: { type: integer }
         total: { type: integer }
+    TaskAssignee:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, nullable: true }
+        email: { type: string, format: email }
+    Task:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        leadId: { type: string, format: uuid }
+        title: { type: string, maxLength: 120 }
+        description: { type: string, nullable: true }
+        status: { $ref: '#/components/schemas/TaskStatus' }
+        dueAt: { type: string, format: date-time, nullable: true }
+        doneAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        assignee: { $ref: '#/components/schemas/TaskAssignee' }
+    CreateTaskRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 5000 }
+        dueAt: { type: string, format: date-time, nullable: true }
+        assigneeId: { type: string, format: uuid, nullable: true }
+    UpdateTaskRequest:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, nullable: true, maxLength: 5000 }
+        dueAt: { type: string, format: date-time, nullable: true }
+        assigneeId: { type: string, format: uuid, nullable: true }
+        status: { $ref: '#/components/schemas/TaskStatus' }
+    ApiTaskResponse:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/Task' }
+        meta: { type: object, nullable: true }
+        error: { type: object, nullable: true }
+    ApiTaskListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Task' }
+        meta: { type: object, nullable: true }
+        error: { type: object, nullable: true }
+    ApiTaskAssigneeListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/TaskAssignee' }
+        meta: { type: object, nullable: true }
+        error: { type: object, nullable: true }
     LeadScore:
       type: object
       properties:
@@ -723,6 +888,8 @@ components:
             scores:
               type: array
               items: { $ref: '#/components/schemas/LeadScore' }
+            nextTask: { $ref: '#/components/schemas/Task' }
+            activeTaskCount: { type: integer }
     UpdateMailRequest:
       type: object
       properties:
@@ -815,12 +982,86 @@ components:
       properties:
         id: { type: string, format: uuid }
         emailId: { type: string, format: uuid }
+        gmailMessageId: { type: string, nullable: true }
         fromEmail: { type: string, nullable: true }
+        body: { type: string }
         bodyText: { type: string, nullable: true }
         category: { $ref: '#/components/schemas/ReplyCategory' }
         confidence: { type: number }
         summary: { type: string, nullable: true }
         nextAction: { type: string, nullable: true }
+        receivedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    ApiReplyInboxResponse:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/ReplyInboxList' }
+        meta: { type: object, nullable: true }
+        error: { $ref: '#/components/schemas/ErrorResponse' }
+    ReplyInboxList:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ReplyInboxItem' } }
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+    ReplyInboxItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        emailId: { type: string, format: uuid }
+        fromEmail: { type: string, nullable: true }
+        bodyText: { type: string }
+        category: { $ref: '#/components/schemas/ReplyCategory' }
+        categoryLabel: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        summary: { type: string, nullable: true }
+        nextAction: { type: string }
+        receivedAt: { type: string, format: date-time }
+        priority: { type: string, enum: [critical, high, normal, low] }
+        priorityRank: { type: integer }
+        mail: { $ref: '#/components/schemas/ReplyInboxMailSummary' }
+        company: { $ref: '#/components/schemas/ReplyInboxCompanySummary' }
+        contact: { $ref: '#/components/schemas/ReplyInboxContactSummary' }
+        lead: { $ref: '#/components/schemas/ReplyInboxLeadSummary' }
+        flags: { $ref: '#/components/schemas/ReplyInboxFlags' }
+    ReplyInboxMailSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        subject: { type: string }
+        status: { $ref: '#/components/schemas/EmailStatus' }
+        gmailThreadId: { type: string, nullable: true }
+        sentAt: { type: string, format: date-time, nullable: true }
+    ReplyInboxCompanySummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        isBlocked: { type: boolean }
+    ReplyInboxContactSummary:
+      type: object
+      nullable: true
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        isUnsubscribed: { type: boolean }
+    ReplyInboxLeadSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid, nullable: true }
+        status: { $ref: '#/components/schemas/LeadStatus' }
+        priority: { $ref: '#/components/schemas/LeadPriority' }
+        score: { type: integer, nullable: true }
+        nextActionAt: { type: string, format: date-time, nullable: true }
+        project: { $ref: '#/components/schemas/CrowdfundingProject' }
+    ReplyInboxFlags:
+      type: object
+      properties:
+        managerReviewRequired: { type: boolean }
+        stopFollowup: { type: boolean }
+        hasReply: { type: boolean, example: true }
     MailThreadResponse:
       type: object
       properties:

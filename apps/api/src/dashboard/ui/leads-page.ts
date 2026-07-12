@@ -1,514 +1,11 @@
+import { renderLeadsPageDocument } from './leads-page-static';
+
 export function renderLeadsPage() {
-    return `<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>営業案件詳細</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --bg: #f6f7f9;
-      --panel: #ffffff;
-      --text: #172026;
-      --muted: #66737f;
-      --line: #dfe4ea;
-      --accent: #136f63;
-      --warn: #9f5a00;
-      --danger: #a83232;
-      --ok: #1d7b45;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
-      font-size: 14px;
-    }
-    header {
-      min-height: 58px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 0 24px;
-      border-bottom: 1px solid var(--line);
-      background: var(--panel);
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    h1 { font-size: 18px; margin: 0; }
-    .top-nav {
-      display: inline-flex;
-      gap: 4px;
-      padding: 4px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #f4f6f8;
-    }
-    .top-nav button {
-      border-color: transparent;
-      background: transparent;
-    }
-    .top-nav button.primary {
-      background: var(--accent);
-      color: white;
-    }
-    .nav-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 18px;
-      height: 18px;
-      margin-left: 4px;
-      padding: 0 5px;
-      border-radius: 9px;
-      background: var(--warn);
-      color: white;
-      font-size: 11px;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-    }
-    .nav-badge[hidden] { display: none; }
-    button, input, select { font: inherit; }
-    button {
-      border: 1px solid var(--line);
-      background: var(--panel);
-      color: var(--text);
-      height: 34px;
-      border-radius: 6px;
-      padding: 0 12px;
-      cursor: pointer;
-    }
-    button.primary { background: var(--accent); border-color: var(--accent); color: white; }
-    input, select {
-      height: 36px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 0 10px;
-      background: white;
-      min-width: 0;
-    }
-    main { padding: 12px; display: grid; gap: 10px; }
-    section {
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    .section-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--line);
-    }
-    h2 { font-size: 15px; margin: 0; }
-    .body { padding: 12px; }
-    .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .filters {
-      display: grid;
-      grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(150px, 180px));
-      gap: 8px;
-    }
-    .summary-panel { order: 1; }
-    .filters-panel { order: 2; }
-    .lead-list-main { order: 3; }
-    .export-tools { order: 4; }
-    .collapsible-panel summary {
-      min-height: 48px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 0 16px;
-      cursor: pointer;
-      font-weight: 700;
-    }
-    .collapsible-panel details[open] summary {
-      border-bottom: 1px solid var(--line);
-    }
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 10px;
-    }
-    .export-panel {
-      display: grid;
-      grid-template-columns: minmax(170px, 220px) minmax(170px, 220px) minmax(190px, 260px) auto minmax(180px, 1fr);
-      gap: 10px;
-      align-items: center;
-    }
-    .export-preview {
-      color: var(--muted);
-      font-size: 13px;
-    }
-    .attention-reason {
-      font-weight: 600;
-      line-height: 1.45;
-      overflow-wrap: anywhere;
-    }
-    .stat {
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      padding: 10px;
-      background: #fbfcfd;
-      height: auto;
-      text-align: left;
-    }
-    .stat strong { display: block; font-size: 22px; margin-bottom: 4px; }
-    .stat[data-active="true"] {
-      border-color: var(--accent);
-      background: #eef8f5;
-      color: var(--text);
-    }
-    .muted { color: var(--muted); }
-    .status { font-size: 13px; }
-    .ui-state-loading { color: var(--muted); }
-    .ui-state-empty { color: var(--muted); }
-    .ui-state-error { color: var(--danger); font-weight: 600; }
-    .split {
-      display: grid;
-      grid-template-columns: minmax(0, 1.65fr) minmax(360px, .75fr);
-      gap: 10px;
-      align-items: start;
-    }
-    .lead-detail-panel {
-      position: sticky;
-      top: 70px;
-      max-height: calc(100vh - 82px);
-      overflow: auto;
-    }
-    .detail-next-action {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 10px;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--line);
-      background: #f5faf8;
-    }
-    .detail-next-action strong,
-    .detail-next-action span { overflow-wrap: anywhere; }
-    .lead-detail-stack {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: 10px;
-    }
-    .detail-shell {
-      display: grid;
-      grid-template-columns: minmax(0, 1.1fr) minmax(360px, .9fr);
-      gap: 10px;
-      align-items: start;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-    .table-scroll {
-      overflow: auto;
-      border-top: 0;
-    }
-    .table-scroll table {
-      margin: 0;
-      min-width: 1180px;
-    }
-    .table-scroll thead th {
-      position: sticky;
-      top: 0;
-      z-index: 2;
-      border-bottom: 1px solid var(--line);
-    }
-    .lead-list-scroll {
-      max-height: 420px;
-    }
-    th, td {
-      padding: 12px 10px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      vertical-align: top;
-      line-height: 1.55;
-    }
-    th {
-      font-size: 12px;
-      color: var(--muted);
-      background: #fbfcfd;
-      position: static;
-      line-height: 1.4;
-    }
-    th.sortable {
-      cursor: pointer;
-      user-select: none;
-      white-space: nowrap;
-    }
-    th.sortable:hover {
-      color: var(--accent);
-      background: #eef7f4;
-    }
-    .sort-mark {
-      margin-left: 4px;
-      color: var(--accent);
-      font-size: 12px;
-    }
-    tr { cursor: pointer; }
-    tr:hover { background: #f8fbfa; }
-    tr[data-selected="true"] { background: #eef8f5; }
-    .clip {
-      display: block;
-      min-height: 1.55em;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      line-height: 1.55;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      min-height: 24px;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      padding: 2px 8px;
-      font-size: 12px;
-      background: white;
-    }
-    .badge.ok { color: var(--ok); border-color: #bddfc9; background: #f1fbf4; }
-    .badge.warn { color: var(--warn); border-color: #ecd2a8; background: #fff8eb; }
-    .badge.danger { color: var(--danger); border-color: #ecc4c4; background: #fff4f4; }
-    .detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-    .detail-item { border: 1px solid var(--line); border-radius: 4px; padding: 8px; }
-    .detail-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-    .detail-value { word-break: break-word; }
-    .row { margin-top: 12px; }
-    .row label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; }
-    .detail-text {
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      padding: 8px;
-      background: #fbfcfd;
-      white-space: pre-wrap;
-      max-height: 180px;
-      overflow: auto;
-    }
-    .ai-evidence-section {
-      margin-top: 12px;
-      padding-top: 10px;
-      border-top: 1px solid var(--line);
-    }
-    .ai-evidence-heading {
-      margin: 0 0 7px;
-      font-size: 13px;
-    }
-    .ai-evidence-risk {
-      border-left: 4px solid var(--warn);
-      padding-left: 10px;
-      background: #fffaf1;
-    }
-    .ai-evidence-risk .ai-evidence-heading { color: var(--warn); }
-    textarea {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      padding: 8px;
-      font: inherit;
-      line-height: 1.7;
-      resize: vertical;
-      min-height: 82px;
-    }
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 8px;
-    }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    footer {
-      padding: 0 12px 14px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-    @media (max-width: 1100px) {
-      .filters, .stats, .split, .detail-grid, .detail-shell, .form-grid, .export-panel { grid-template-columns: 1fr; }
-      .lead-detail-panel {
-        position: static;
-        max-height: none;
-        overflow: visible;
-      }
-      .detail-next-action { grid-template-columns: 1fr; }
-      th { position: static; }
-    }
-  </style>
-</head>
-<body data-ui-page="leads">
-  <header>
-    <h1>営業案件詳細</h1>
-    <div class="toolbar">
-      <span id="pageStatus" class="status ui-state-loading">読み込み中</span>
-      <div class="top-nav" data-ui="top-nav">
-        <button onclick="location.href='/today'">今日の営業 <span class="nav-badge" data-nav-badge="today" hidden></span></button>
-        <button onclick="location.href='/'">候補を探す</button>
-        <button class="primary" onclick="location.href='/leads-view'">営業案件 <span class="nav-badge" data-nav-badge="leads" hidden></span></button>
-        <button onclick="location.href='/mail-workspace'">作成・レビュー <span class="nav-badge" data-nav-badge="mail" hidden></span></button>
-      </div>
-      <button class="primary" onclick="loadAll()">更新</button>
-    </div>
-  </header>
-  <main>
-    <section class="summary-panel">
-      <div class="section-head">
-        <h2>状態サマリー</h2>
-        <div class="toolbar">
-          <span id="summaryFilterStatus" class="status muted">全件</span>
-          <button id="clearSummaryFilterButton" onclick="setSummaryFilter('all')" disabled>絞り込み解除</button>
-        </div>
-      </div>
-      <div class="body">
-        <div class="stats" id="stats"></div>
-      </div>
-    </section>
-
-    <section class="export-tools collapsible-panel" data-ui="lead-export-tools">
-      <details>
-        <summary>
-          <span>その他の操作</span>
-          <span class="status muted">CSV / TSV出力</span>
-        </summary>
-        <div class="body export-panel">
-          <select id="exportScope" onchange="updateExportPreview()">
-            <option value="visible">表示中だけ出力</option>
-            <option value="all">全件出力</option>
-          </select>
-          <select id="exportFormat" onchange="updateExportPreview()">
-            <option value="csv">CSV</option>
-            <option value="tsv">TSV</option>
-          </select>
-          <select id="exportColumns" onchange="updateExportPreview()">
-            <option value="summary">一覧用</option>
-            <option value="detail">詳細用</option>
-          </select>
-          <button class="primary" onclick="exportLeads()">出力する</button>
-          <span id="exportPreview" class="export-preview">表示中の営業案件をCSVで出力します</span>
-          <span id="exportStatus" class="status muted"></span>
-        </div>
-      </details>
-    </section>
-
-    <div class="split lead-list-main" data-ui="lead-list-workspace">
-      <section>
-        <div class="section-head">
-          <h2>営業案件</h2>
-          <span id="listCount" class="status muted">0件</span>
-        </div>
-        <div class="body table-scroll lead-list-scroll" style="padding:0">
-          <table>
-            <thead>
-              <tr>
-                <th class="sortable" onclick="toggleSort('lead','company')" style="width:16%">会社<span id="leadSort-company" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','project')">案件<span id="leadSort-project" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','source')" style="width:92px">取得元<span id="leadSort-source" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','status')" style="width:90px">状態<span id="leadSort-status" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','priority')" style="width:70px">優先度<span id="leadSort-priority" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','score')" style="width:70px">点数<span id="leadSort-score" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','contact')" style="width:130px">連絡/手段<span id="leadSort-contact" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','mail')" style="width:110px">最新メール<span id="leadSort-mail" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','attentionReason')" style="width:180px">今対応する理由<span id="leadSort-attentionReason" class="sort-mark"></span></th>
-              </tr>
-            </thead>
-            <tbody id="leadRows"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="lead-detail-panel" data-ui="lead-detail-panel">
-        <div class="section-head">
-          <h2>選択案件の詳細</h2>
-          <div class="toolbar">
-            <button onclick="openProject()" id="openProjectButton" disabled>URLを開く</button>
-          </div>
-        </div>
-        <div class="detail-next-action" id="detailNextAction">
-          <strong>案件を選択してください</strong>
-          <span class="muted">次の操作がここに表示されます</span>
-        </div>
-        <div class="body lead-detail-stack">
-          <div id="leadDetail">
-            <div class="muted">営業案件から案件を選択してください</div>
-          </div>
-          <div id="leadAnalysis">
-            <div class="muted">案件を選択すると分析結果が表示されます</div>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <section class="filters-panel collapsible-panel">
-      <details>
-        <summary>
-          <span>検索・絞り込み</span>
-          <span class="muted">必要な時だけ開く</span>
-        </summary>
-        <div class="body">
-          <div class="filters">
-            <input id="keyword" placeholder="会社・案件・URL・メモで検索" oninput="render()" />
-            <select id="sourceFilter" onchange="render()">
-              <option value="">取得元 すべて</option>
-            </select>
-            <select id="statusFilter" onchange="render()">
-              <option value="">状態 すべて</option>
-              <option value="discovered">発見</option>
-              <option value="qualified">候補</option>
-              <option value="drafted">下書き済み</option>
-              <option value="reviewing">確認中</option>
-              <option value="approved">承認済み</option>
-              <option value="queued">送信待ち</option>
-              <option value="contacted">連絡済み</option>
-              <option value="replied">返信あり</option>
-              <option value="meeting_candidate">商談候補</option>
-              <option value="rejected">対象外</option>
-            </select>
-            <select id="priorityFilter" onchange="render()">
-              <option value="">優先度 すべて</option>
-              <option value="high">高</option>
-              <option value="medium">中</option>
-              <option value="low">低</option>
-            </select>
-            <select id="contactFilter" onchange="render()">
-              <option value="">連絡先 すべて</option>
-              <option value="has">連絡先あり</option>
-              <option value="none">連絡先なし</option>
-            </select>
-            <select id="mailFilter" onchange="render()">
-              <option value="">メール すべて</option>
-              <option value="none">未生成</option>
-              <option value="draft">下書き</option>
-              <option value="in_review">確認待ち</option>
-                <option value="approved">承認済み</option>
-                <option value="queued">送信待ち</option>
-                <option value="sent">送信済み</option>
-                <option value="failed">送信失敗</option>
-            </select>
-          </div>
-        </div>
-      </details>
-    </section>
-
-  </main>
-  <footer>Sales AI System</footer>
-  <script>
-    const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
-    const state = { leads: [], mails: [], aiGenerations: [], selectedLeadId: null, summaryFilter: 'all', sort: { table: 'lead', key: '', direction: 'asc' } };
+    return renderLeadsPageDocument(`    const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
+    const state = { leads: [], mails: [], aiGenerations: [], tasks: [], assignees: [], selectedLeadId: null, editingTaskId: null, listPage: 1, pageSize: 20, leadFilterSignature: '', summaryFilter: 'all', sort: { table: 'lead', key: '', direction: 'asc' } };
 
     async function api(path, options = {}) {
-      const operatorEmail = window.localStorage.getItem('salesAiSystem.operatorEmail') || '';
-      const response = await fetch(path, {
-        ...options,
-        headers: { 'Content-Type': 'application/json', ...(operatorEmail ? { 'X-Operator-Email': operatorEmail } : {}), ...(options.headers || {}) }
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.message || payload.error?.message || 'APIエラー');
-      return payload.data;
+      return window.SalesAiApi.request(path, options, { includeOperatorEmail: true });
     }
 
     async function loadAll() {
@@ -525,6 +22,8 @@ export function renderLeadsPage() {
         applyUrlFilters();
         populateSourceFilterOptions('sourceFilter');
         render();
+        void loadTaskAssignees();
+        void loadLeadTasks();
         setPageStatus(state.leads.length ? '読み込み完了' : '営業案件は0件です', state.leads.length ? 'ok' : 'empty');
       } catch (error) {
         setPageStatus('読み込みに失敗しました: ' + error.message + '。更新を押して再試行してください。', 'error');
@@ -555,7 +54,7 @@ export function renderLeadsPage() {
     function countTodayItems() {
       const today = tokyoDateKey(new Date());
       return state.leads.filter((lead) => {
-        const dueKey = tokyoDateKey(lead.nextActionAt || lead.nextFollowUpAt);
+        const dueKey = tokyoDateKey(lead.nextTask?.dueAt || lead.nextActionAt || lead.nextFollowUpAt);
         const mail = latestMail(lead.id);
         return (dueKey && dueKey <= today) || lead.status === 'replied' || ['failed', 'draft', 'approved', 'queued'].includes(mail?.status);
       }).length;
@@ -574,10 +73,12 @@ export function renderLeadsPage() {
     }
 
     function render() {
+      syncLeadPaginationState();
       renderStats();
       renderRows();
       renderDetail();
       renderLeadAnalysis();
+      renderTaskWorkspace();
       updateExportPreview();
     }
 
@@ -617,13 +118,17 @@ export function renderLeadsPage() {
     function renderRows() {
       const listScroll = document.querySelector('[data-ui="lead-list-workspace"] .lead-list-scroll');
       const listScrollTop = listScroll ? listScroll.scrollTop : 0;
-      const visibleLeads = filteredLeads();
+      const allVisibleLeads = filteredLeads();
+      const pageCount = Math.max(1, Math.ceil(allVisibleLeads.length / state.pageSize));
+      state.listPage = Math.min(state.listPage, pageCount);
+      const pageStart = (state.listPage - 1) * state.pageSize;
+      const visibleLeads = allVisibleLeads.slice(pageStart, pageStart + state.pageSize);
       const rows = visibleLeads.map((lead) => {
         const mail = latestMail(lead.id);
         const project = lead.project || {};
         const contact = contactSummary(lead);
         const sendMethod = lead.sendMethod || suggestSendMethod(lead);
-        return '<tr data-selected="' + (lead.id === state.selectedLeadId) + '" onclick="selectLead(\\'' + lead.id + '\\')">' +
+        return '<tr data-selected="' + (lead.id === state.selectedLeadId) + '" data-lead-id="' + escapeAttr(lead.id) + '" tabindex="0" onclick="selectLead(this.dataset.leadId)" onkeydown="selectLeadFromKeyboard(event)">' +
           '<td><div class="clip">' + escapeHtml(lead.company?.name || lead.companyId) + '</div></td>' +
           '<td><div class="clip">' + escapeHtml(project.title || '案件名なし') + '</div><div class="muted clip">' + escapeHtml(project.url || '') + '</div></td>' +
           '<td><span class="badge">' + escapeHtml(projectPlatformLabel(project)) + '</span></td>' +
@@ -637,8 +142,43 @@ export function renderLeadsPage() {
       }).join('');
       document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="9" class="ui-state-empty">条件に合う営業案件がありません</td></tr>';
       if (listScroll) listScroll.scrollTop = listScrollTop;
-      document.getElementById('listCount').textContent = visibleLeads.length + '件';
+      document.getElementById('listCount').textContent = allVisibleLeads.length + '件';
+      renderLeadPagination(allVisibleLeads.length);
       renderSortMarks('lead', ['company', 'project', 'source', 'status', 'priority', 'score', 'contact', 'mail', 'attentionReason']);
+    }
+
+    function syncLeadPaginationState() {
+      const signature = leadFilterSignature();
+      if (state.leadFilterSignature !== signature) {
+        state.leadFilterSignature = signature;
+        state.listPage = 1;
+      }
+    }
+
+    function leadFilterSignature() {
+      return ['keyword', 'sourceFilter', 'statusFilter', 'priorityFilter', 'contactFilter', 'mailFilter']
+        .map((id) => value(id)).join('|') + '|' + state.summaryFilter + '|' +
+        state.sort.table + '|' + state.sort.key + '|' + state.sort.direction;
+    }
+
+    function renderLeadPagination(total) {
+      const container = document.getElementById('leadPagination');
+      if (!container) return;
+      const pageCount = Math.max(1, Math.ceil(total / state.pageSize));
+      if (pageCount <= 1) {
+        container.innerHTML = '';
+        return;
+      }
+      container.innerHTML =
+        '<button type="button" onclick="changeLeadPage(-1)"' + (state.listPage <= 1 ? ' disabled' : '') + '>前へ</button>' +
+        '<span aria-live="polite">' + state.listPage + ' / ' + pageCount + '</span>' +
+        '<button type="button" onclick="changeLeadPage(1)"' + (state.listPage >= pageCount ? ' disabled' : '') + '>次へ</button>';
+    }
+
+    function changeLeadPage(delta) {
+      const pageCount = Math.max(1, Math.ceil(filteredLeads().length / state.pageSize));
+      state.listPage = Math.min(pageCount, Math.max(1, state.listPage + delta));
+      render();
     }
 
     function renderDetail() {
@@ -740,6 +280,162 @@ export function renderLeadsPage() {
             '<div class="row"><label>生成履歴</label><div class="ai-history">' + renderAiHistory() + '</div></div>' +
           '</div>' +
         '</section>';
+    }
+
+    async function loadTaskAssignees() {
+      try {
+        const assignees = await api('/api/task-assignees');
+        state.assignees = Array.isArray(assignees) ? assignees : [];
+        renderTaskWorkspace();
+      } catch (error) {
+        state.assignees = [];
+        setInlineStatus('taskWorkspaceStatus', '担当候補を読み込めませんでした', 'warn');
+      }
+    }
+
+    async function loadLeadTasks() {
+      const leadId = state.selectedLeadId;
+      state.tasks = [];
+      renderTaskWorkspace();
+      if (!leadId) return;
+      setInlineStatus('taskWorkspaceStatus', '読み込み中', 'warn');
+      try {
+        const tasks = await api('/api/leads/' + leadId + '/tasks?scope=all');
+        if (leadId !== state.selectedLeadId) return;
+        state.tasks = Array.isArray(tasks) ? tasks : [];
+        renderTaskWorkspace();
+      } catch (error) {
+        if (leadId !== state.selectedLeadId) return;
+        state.tasks = [];
+        renderTaskWorkspace();
+        setInlineStatus('taskWorkspaceStatus', '次回対応を読み込めませんでした', 'error');
+      }
+    }
+
+    function renderTaskWorkspace() {
+      const container = document.getElementById('leadTaskWorkspace');
+      if (!container) return;
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      if (!lead) {
+        container.innerHTML = '<div class="ui-state-empty">案件を選択すると次回対応を管理できます</div>';
+        return;
+      }
+      const editing = state.tasks.find((task) => task.id === state.editingTaskId) || null;
+      const draft = editing ? {
+        title: editing.title,
+        description: editing.description || '',
+        dueAt: toTokyoDateTimeLocal(editing.dueAt),
+        assigneeId: editing.assignee?.id || ''
+      } : { title: '', description: '', dueAt: '', assigneeId: '' };
+      const assigneeOptions = '<option value="">担当未設定</option>' + state.assignees.map((assignee) => {
+        const label = assignee.name || assignee.email || '担当未設定';
+        return '<option value="' + escapeAttr(assignee.id) + '"' + (assignee.id === draft.assigneeId ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+      }).join('');
+      const taskRows = state.tasks.map((task) => {
+        const assignee = task.assignee?.name || task.assignee?.email || '担当未設定';
+        const due = task.dueAt ? formatTaskDate(task.dueAt) : '日付未定';
+        const actions = task.status === 'done' || task.status === 'cancelled'
+          ? '<button type="button" data-task-id="' + escapeAttr(task.id) + '" onclick="editTask(this.dataset.taskId)">編集</button><button type="button" data-task-id="' + escapeAttr(task.id) + '" data-task-status="todo" onclick="updateTaskStatus(this.dataset.taskId, this.dataset.taskStatus)">再開</button>'
+          : '<button type="button" data-task-id="' + escapeAttr(task.id) + '" onclick="editTask(this.dataset.taskId)">編集</button>' +
+            (task.status === 'todo' ? '<button type="button" data-task-id="' + escapeAttr(task.id) + '" data-task-status="doing" onclick="updateTaskStatus(this.dataset.taskId, this.dataset.taskStatus)">着手</button>' : '<button type="button" data-task-id="' + escapeAttr(task.id) + '" data-task-status="todo" onclick="updateTaskStatus(this.dataset.taskId, this.dataset.taskStatus)">未着手</button>') +
+            '<button type="button" data-task-id="' + escapeAttr(task.id) + '" data-task-status="done" onclick="updateTaskStatus(this.dataset.taskId, this.dataset.taskStatus)">完了</button><button type="button" data-task-id="' + escapeAttr(task.id) + '" data-task-status="cancelled" onclick="updateTaskStatus(this.dataset.taskId, this.dataset.taskStatus)">取消</button>';
+        return '<div class="task-row"><div class="task-row-main"><strong>' + escapeHtml(task.title) + '</strong><span class="task-row-meta">' + escapeHtml(taskStatusLabel(task.status)) + ' / ' + escapeHtml(due) + ' / ' + escapeHtml(assignee) + '</span>' + (task.description ? '<span class="task-row-description">' + escapeHtml(task.description) + '</span>' : '') + '</div><div class="toolbar">' + actions + '</div></div>';
+      }).join('');
+      container.innerHTML =
+        '<div class="section-head"><h3>次回対応</h3><div class="toolbar"><span class="status muted" aria-live="polite">未完了 ' + escapeHtml(lead.activeTaskCount || 0) + '件</span></div></div>' +
+        '<div class="body"><div class="task-list">' + (taskRows || '<div class="ui-state-empty">次回対応はありません</div>') + '</div>' +
+        '<div class="task-form">' +
+          '<label class="full" for="taskTitle">対応内容<input id="taskTitle" maxlength="120" value="' + escapeAttr(draft.title) + '" placeholder="例: 資料を送る"></label>' +
+          '<label for="taskDueAt">次回対応日時<input id="taskDueAt" type="datetime-local" value="' + escapeAttr(draft.dueAt) + '"></label>' +
+          '<label for="taskAssignee">担当<select id="taskAssignee">' + assigneeOptions + '</select></label>' +
+          '<label class="full" for="taskDescription">補足<textarea id="taskDescription" maxlength="5000" placeholder="返信内容や確認事項">' + escapeHtml(draft.description) + '</textarea></label>' +
+          '<div class="task-form-actions"><button type="button" class="primary" id="taskSaveButton" onclick="saveTask()">' + (editing ? '次回対応を更新' : '次回対応を保存') + '</button><button type="button" onclick="resetTaskForm()"' + (editing ? '' : ' disabled') + '>入力をクリア</button><span id="taskWorkspaceStatus" class="status muted" aria-live="polite"></span></div>' +
+        '</div></div>';
+    }
+
+    function taskStatusLabel(status) {
+      return ({ todo: '未着手', doing: '対応中', done: '完了', cancelled: '取消' })[status] || status || '未設定';
+    }
+
+    function formatTaskDate(value) {
+      if (!value) return '日付未定';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '日付未定';
+      return date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function toTokyoDateTimeLocal(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(date);
+      const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+      return values.year + '-' + values.month + '-' + values.day + 'T' + values.hour + ':' + values.minute;
+    }
+
+    function taskDueAtValue(id) {
+      const raw = value(id);
+      return raw ? new Date(raw + ':00+09:00').toISOString() : null;
+    }
+
+    function editTask(taskId) {
+      state.editingTaskId = taskId;
+      renderTaskWorkspace();
+    }
+
+    function resetTaskForm() {
+      state.editingTaskId = null;
+      renderTaskWorkspace();
+    }
+
+    async function saveTask() {
+      const leadId = state.selectedLeadId;
+      if (!leadId) return;
+      const title = value('taskTitle');
+      if (!title) {
+        setInlineStatus('taskWorkspaceStatus', '対応内容を入力してください', 'warn');
+        return;
+      }
+      const taskId = state.editingTaskId;
+      const payload = {
+        title,
+        description: value('taskDescription') || null,
+        dueAt: taskDueAtValue('taskDueAt'),
+        assigneeId: value('taskAssignee') || null
+      };
+      setInlineStatus('taskWorkspaceStatus', taskId ? '更新中' : '保存中', 'warn');
+      try {
+        await api(taskId ? '/api/tasks/' + taskId : '/api/leads/' + leadId + '/tasks', { method: taskId ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
+        state.editingTaskId = null;
+        await refreshSelectedLead(leadId);
+        setInlineStatus('taskWorkspaceStatus', '保存しました', 'ok');
+      } catch (error) {
+        setInlineStatus('taskWorkspaceStatus', '保存に失敗しました: ' + error.message, 'error');
+      }
+    }
+
+    async function updateTaskStatus(taskId, status) {
+      setInlineStatus('taskWorkspaceStatus', '更新中', 'warn');
+      try {
+        await api('/api/tasks/' + taskId, { method: 'PATCH', body: JSON.stringify({ status }) });
+        state.editingTaskId = null;
+        await refreshSelectedLead(state.selectedLeadId);
+        setInlineStatus('taskWorkspaceStatus', '保存しました', 'ok');
+      } catch (error) {
+        setInlineStatus('taskWorkspaceStatus', '保存に失敗しました: ' + error.message, 'error');
+      }
+    }
+
+    async function refreshSelectedLead(leadId) {
+      if (!leadId || leadId !== state.selectedLeadId) return;
+      const [lead, tasks] = await Promise.all([
+        api('/api/leads/' + leadId),
+        api('/api/leads/' + leadId + '/tasks?scope=all')
+      ]);
+      if (leadId !== state.selectedLeadId) return;
+      state.leads = state.leads.map((item) => item.id === leadId ? lead : item);
+      state.tasks = Array.isArray(tasks) ? tasks : [];
+      render();
     }
 
     function renderAiEvidenceSection(label, values, type) {
@@ -925,19 +621,11 @@ export function renderLeadsPage() {
     }
 
     function sortItems(items, sort, valueGetter) {
-      if (!sort?.key) return items;
-      const direction = sort.direction === 'desc' ? -1 : 1;
-      return [...items].sort((left, right) => compareValues(valueGetter(left, sort.key), valueGetter(right, sort.key)) * direction);
+      return window.SalesAiViewRules.sortItems(items, sort, valueGetter, window.SalesAiViewRules.compareValues);
     }
 
     function compareValues(left, right) {
-      const leftEmpty = left === null || left === undefined || left === '';
-      const rightEmpty = right === null || right === undefined || right === '';
-      if (leftEmpty && rightEmpty) return 0;
-      if (leftEmpty) return 1;
-      if (rightEmpty) return -1;
-      if (typeof left === 'number' && typeof right === 'number') return left - right;
-      return String(left).localeCompare(String(right), 'ja', { numeric: true, sensitivity: 'base' });
+      return window.SalesAiViewRules.compareValues(left, right);
     }
 
     function defaultSortDirection(key) {
@@ -994,7 +682,15 @@ export function renderLeadsPage() {
       renderRows();
       renderDetail();
       renderLeadAnalysis();
+      renderTaskWorkspace();
+      void loadLeadTasks();
       void loadLeadAnalysis();
+    }
+
+    function selectLeadFromKeyboard(event) {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      selectLead(event.currentTarget.dataset.leadId);
     }
 
     function persistSelectedLead(id) {
@@ -1016,19 +712,11 @@ export function renderLeadsPage() {
     }
 
     function nextActionLabel(lead, mail) {
-      if (!hasContact(lead)) return '連絡先確認';
-      if (!mail) return 'AI分析後にメール生成';
-      if (mail.status === 'draft') return '本文確認';
-      if (mail.status === 'in_review') return '上長確認';
-      if (mail.status === 'rejected') return '修正して再依頼';
-      if (mail.status === 'approved') return 'キュー投入';
-      if (mail.status === 'queued') return '送信待ち';
-      if (mail.status === 'sent') return '返信確認';
-      return '確認';
+      return window.SalesAiViewRules.nextActionLabel(lead, mail, hasContact(lead));
     }
 
     function attentionReason(lead, mail, now = new Date()) {
-      const nextActionReason = dueDateReason(lead.nextActionAt, '次対応', now);
+      const nextActionReason = dueDateReason(lead.nextTask?.dueAt || lead.nextActionAt, '次対応', now);
       if (nextActionReason) return nextActionReason;
       const followUpReason = dueDateReason(lead.nextFollowUpAt, '次回確認', now);
       if (followUpReason) return followUpReason;
@@ -1092,7 +780,7 @@ export function renderLeadsPage() {
     }
 
     function nextActionDateLabel(lead) {
-      const value = lead.nextFollowUpAt || lead.nextActionAt;
+      const value = lead.nextTask?.dueAt || lead.nextActionAt || lead.nextFollowUpAt;
       return value ? formatDate(value) : '日付未定';
     }
 
@@ -1402,7 +1090,7 @@ export function renderLeadsPage() {
       if (!value) return '';
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return '';
-      return date.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     }
 
     function formatCurrency(value) {
@@ -1443,36 +1131,15 @@ export function renderLeadsPage() {
     }
 
     function labelLeadStatus(status) {
-      return ({
-        discovered: '発見',
-        qualified: '候補',
-        drafted: '下書き済み',
-        reviewing: '確認中',
-        approved: '承認済み',
-        queued: '送信待ち',
-        contacted: '連絡済み',
-        replied: '返信あり',
-        meeting_candidate: '商談候補',
-        rejected: '対象外'
-      })[status] || status || '未設定';
+      return window.SalesAiViewRules.labelLeadStatus(status);
     }
 
     function labelPriority(priority) {
-      return ({ high: '高', medium: '中', low: '低' })[priority] || priority || '未設定';
+      return window.SalesAiViewRules.labelPriority(priority);
     }
 
     function labelMailStatus(status) {
-      return ({
-        draft: '下書き',
-        in_review: '確認待ち',
-        rejected: '棄却',
-        approved: '承認済み',
-        queued: '送信待ち',
-        sending: '送信中',
-        sent: '送信済み',
-        failed: '送信失敗',
-        cancelled: 'キャンセル'
-      })[status] || status || '未設定';
+      return window.SalesAiViewRules.labelMailStatus(status);
     }
 
     function labelAiGenerationType(type) {
@@ -1506,8 +1173,5 @@ export function renderLeadsPage() {
       return escapeHtml(value);
     }
 
-    loadAll();
-  </script>
-</body>
-</html>`;
+    loadAll();`);
 }

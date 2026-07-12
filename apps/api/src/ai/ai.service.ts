@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AnalyzeLeadUseCase } from './application/analyze-lead.usecase';
 import { ClassifyReplyUseCase } from './application/classify-reply.usecase';
+import { CheckMailSemanticConsistencyUseCase } from './application/check-mail-semantic-consistency.usecase';
 import { GenerateMailDraftUseCase } from './application/generate-mail-draft.usecase';
 import { ListLeadGenerationsUseCase } from './application/list-lead-generations.usecase';
 import { PolishMailUseCase } from './application/polish-mail.usecase';
@@ -13,7 +14,8 @@ export class AiService {
     private readonly generateMailDraftUseCase: GenerateMailDraftUseCase,
     private readonly polishMailUseCase: PolishMailUseCase,
     private readonly classifyReplyUseCase: ClassifyReplyUseCase,
-    private readonly listLeadGenerationsUseCase: ListLeadGenerationsUseCase
+    private readonly listLeadGenerationsUseCase: ListLeadGenerationsUseCase,
+    private readonly checkMailSemanticConsistencyUseCase: CheckMailSemanticConsistencyUseCase
   ) {}
 
   async analyzeLead(leadId: string) {
@@ -34,5 +36,9 @@ export class AiService {
 
   async listLeadGenerations(leadId: string) {
     return this.listLeadGenerationsUseCase.execute(leadId);
+  }
+
+  async checkMailSemanticConsistency(mailId: string) {
+    return this.checkMailSemanticConsistencyUseCase.execute(mailId);
   }
 }

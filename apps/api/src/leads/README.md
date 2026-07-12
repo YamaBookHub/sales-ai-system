@@ -7,6 +7,8 @@
 - API変更: `leads.controller.ts` / `leads.dto.ts`
 - 業務操作: `leads.service.ts` / `application/`
 - 状態・優先度・次アクションの業務ルール: `domain/lead-policy.ts`
+- 次回対応の状態遷移: `domain/task-policy.ts`
+- 次回対応のAPI操作: `tasks.controller.ts` / `application/*task*.usecase.ts`
 - スコア計算ルール: `domain/lead-score.ts`
 - DB保存: `infrastructure/`
 
@@ -17,10 +19,14 @@
 - 次アクション日時・次回フォロー日時の既定値は `applyLeadPolicy` に集約する
 - `rejected` / `archived` のような終端状態では未処理の次アクションを残さない
 - 明示的に入力された優先度・日時は、終端状態のクリア規則を除いて尊重する
+- Taskの `todo` / `doing` だけを未完了の次回対応として表示する
+- Taskの `doneAt` は `status = done` のときだけ保存する
+- Taskの担当者は `User.isActive = true` の既存Userだけを受け付ける
 
 ## AI向け注意
 今後リード判断が複雑になったら、`leads.service.ts` に直接増やさず、状態・優先度・次アクションは `domain/lead-policy.ts`、点数計算は `domain/lead-score.ts` に純粋関数として追加する。
 DBや外部サービスが必要な処理は `application` / `infrastructure` へ分離する。スコア更新は `application/score-lead.usecase.ts` と `infrastructure/prisma-lead.repository.ts` を見る。
+TaskのAPI・DB queryを変える場合は `tasks.controller.ts`、`application/`、`infrastructure/prisma-task.repository.ts`、`domain/task-policy.ts` を確認する。
 
 ## テスト
 - 業務ルールは `domain/*.spec.ts` に追加する

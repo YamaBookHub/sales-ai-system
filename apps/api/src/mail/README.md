@@ -8,6 +8,8 @@
 - API変更: `mail.controller.ts` / `mail.dto.ts`
 - 業務操作: `application/*.usecase.ts`
 - 状態遷移・禁止ルール: `domain/mail-policy.ts`
+- 返信一覧表示変換: `domain/reply-inbox.ts`
+- 返信一覧query: `infrastructure/prisma-reply-inbox.repository.ts`
 - 実送信provider契約: `domain/mail-sender.ts`
 - DB保存・イベント作成: `infrastructure/prisma-mail-workflow.repository.ts`
 - 実送信provider実装: `infrastructure/*mail.sender.ts`
@@ -35,3 +37,6 @@
 Gmailの認証設定は `infrastructure/gmail-mail-sender.config.ts` を見る。
 資料閲覧による営業温度感は `tracking/domain/material-engagement-policy.ts` と `tracking/tracking.service.ts` を見る。
 定型文の取り込み・編集保存は `MailService.saveTemplate` / `MailService.importTemplates` を見る。メール用だけでなく `site_message` や `contact_form` 用の文面も同じテンプレート管理で扱う。
+Reply Inboxの分類表示、優先度、安全フラグは `domain/reply-inbox.ts` の純粋関数で変換する。DB queryはG03のrepositoryに置く。
+Reply InboxのPrisma条件・pagination・sortを変える場合は `infrastructure/prisma-reply-inbox.repository.ts` とそのspecを確認する。ControllerやHTMLにquery条件を追加しない。
+G04でAPIへ接続するときは `domain/reply-inbox.repository.ts` のquery/result型をUseCaseのportとして再利用する。

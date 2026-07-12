@@ -1,5 +1,13 @@
 import type { DashboardPageMode } from './dashboard-page-mode';
 import { getDashboardPageShell } from './shared-shell';
+import { renderSharedStyles } from './shared-styles';
+import { renderCandidateListSection, renderCandidateSearchSection, renderUrlSearchEntry } from './url-search-page';
+import { renderMailLeadQueue, renderMailWorkspace } from './mail-workspace-page';
+import { renderClientViewRulesScript } from '../client/view-rules';
+import { renderClientApiScript } from '../client/api-client';
+import { renderClientProjectsScript } from '../client/render-projects';
+import { renderClientLeadsScript } from '../client/render-leads';
+import { renderClientMailScript } from '../client/render-mail';
 
 export function renderDashboardPage(pageMode: DashboardPageMode) {
     const shell = getDashboardPageShell(pageMode);
@@ -10,876 +18,16 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Sales AI System</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --bg: #f6f7f9;
-      --panel: #ffffff;
-      --text: #172026;
-      --muted: #66737f;
-      --line: #dfe4ea;
-      --accent: #136f63;
-      --accent-strong: #0f554c;
-      --warn: #9f5a00;
-      --danger: #a83232;
-      --ok: #1d7b45;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
-      font-size: 14px;
-    }
-    header {
-      min-height: 56px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 24px;
-      border-bottom: 1px solid var(--line);
-      background: var(--panel);
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    h1 { font-size: 18px; margin: 0; letter-spacing: 0; }
-    .top-nav {
-      display: inline-flex;
-      gap: 4px;
-      padding: 4px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #f4f6f8;
-    }
-    .top-nav button {
-      border-color: transparent;
-      background: transparent;
-    }
-    .top-nav button.primary {
-      background: var(--accent);
-      color: white;
-    }
-    .nav-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 18px;
-      height: 18px;
-      margin-left: 4px;
-      padding: 0 5px;
-      border-radius: 9px;
-      background: var(--warn);
-      color: white;
-      font-size: 11px;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-    }
-    .nav-badge[hidden] { display: none; }
-    button, input, select, textarea {
-      font: inherit;
-    }
-    button {
-      border: 1px solid var(--line);
-      background: var(--panel);
-      color: var(--text);
-      height: 34px;
-      border-radius: 6px;
-      padding: 0 12px;
-      cursor: pointer;
-    }
-    button.primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: white;
-    }
-    button.primary:hover { background: var(--accent-strong); }
-    button:disabled { opacity: .55; cursor: not-allowed; }
-    main {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: 10px;
-      padding: 12px;
-      min-height: calc(100vh - 56px);
-    }
-    .workflow {
-      display: none;
-    }
-    section {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      min-width: 0;
-    }
-    .left, .right { display: grid; gap: 10px; align-content: start; min-width: 0; }
-    .section-head {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--line);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    h2 { font-size: 15px; margin: 0; }
-    .body { padding: 12px; }
-    .row { display: grid; gap: 8px; margin-bottom: 12px; }
-    label { color: var(--muted); font-size: 12px; }
-    input, select, textarea {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      background: white;
-      color: var(--text);
-      padding: 9px 10px;
-    }
-    textarea { min-height: 300px; resize: vertical; line-height: 1.8; }
-    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .muted { color: var(--muted); }
-    .status { font-size: 12px; min-height: 18px; }
-    .status.ok { color: var(--ok); }
-    .status.warn { color: var(--warn); }
-    .status.error { color: var(--danger); }
-    .ui-state-loading { color: var(--muted); }
-    .ui-state-empty { color: var(--muted); }
-    .ui-state-error { color: var(--danger); font-weight: 600; }
-    .notice {
-      border: 1px solid #f0d4aa;
-      border-left: 4px solid var(--warn);
-      background: #fff8ee;
-      border-radius: 6px;
-      padding: 8px 10px;
-      margin-bottom: 12px;
-      line-height: 1.6;
-    }
-    .notice strong { display: block; margin-bottom: 4px; }
-    .draft-consistency-warning {
-      margin-bottom: 12px;
-      border: 1px solid #e1c48c;
-      border-radius: 6px;
-      background: #fff9ed;
-      color: #6f4700;
-      padding: 10px 12px;
-      line-height: 1.6;
-    }
-    .draft-consistency-warning ul { margin: 6px 0 0; padding-left: 20px; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-    th, td {
-      border-bottom: 1px solid var(--line);
-      padding: 9px 10px;
-      text-align: left;
-      vertical-align: top;
-    }
-    th {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 600;
-      background: #fafbfc;
-    }
-    th.sortable {
-      cursor: pointer;
-      user-select: none;
-      white-space: nowrap;
-    }
-    th.sortable:hover {
-      color: var(--accent);
-      background: #eef7f4;
-    }
-    .sort-mark {
-      margin-left: 4px;
-      color: var(--accent);
-      font-size: 12px;
-    }
-    .table-scroll {
-      overflow: auto;
-      border-top: 0;
-    }
-    .table-scroll table {
-      margin: 0;
-    }
-    .table-scroll thead th {
-      position: sticky;
-      top: 0;
-      z-index: 2;
-      border-bottom: 1px solid var(--line);
-    }
-    .lead-list-scroll {
-      max-height: 280px;
-    }
-    .mail-history-scroll {
-      max-height: 220px;
-    }
-    tr[data-selected="true"] { background: #edf7f5; }
-    tr:hover { background: #f7faf9; }
-    .clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      min-height: 22px;
-      padding: 2px 8px;
-      border-radius: 4px;
-      background: #edf0f2;
-      color: #3b4750;
-      font-size: 12px;
-    }
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    .checklist {
-      display: grid;
-      gap: 10px;
-      padding: 0;
-      margin: 0;
-      list-style: none;
-    }
-    .checklist label {
-      display: grid;
-      grid-template-columns: 24px 1fr;
-      gap: 10px;
-      align-items: center;
-      min-height: 46px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #fafbfc;
-      padding: 10px 12px;
-      color: var(--text);
-      font-size: 13px;
-      line-height: 1.5;
-      cursor: pointer;
-      user-select: none;
-    }
-    .checklist label:hover {
-      border-color: #b8c7d1;
-      background: #f4f8f7;
-    }
-    .checklist label:has(input:checked) {
-      border-color: #9fc9c1;
-      background: #eef8f6;
-    }
-    .checklist input {
-      width: 20px;
-      height: 20px;
-      margin: 0;
-      accent-color: var(--accent);
-      cursor: pointer;
-    }
-    .split {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: 12px;
-    }
-    .detail-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      margin-bottom: 14px;
-    }
-    .detail-item {
-      min-width: 0;
-      border-left: 3px solid var(--line);
-      padding-left: 10px;
-    }
-    .detail-label {
-      color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 4px;
-    }
-    .detail-value {
-      overflow-wrap: anywhere;
-      line-height: 1.5;
-    }
-    .detail-text {
-      white-space: pre-wrap;
-      line-height: 1.7;
-      color: #26323a;
-    }
-    .info-columns {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-    }
-    .info-card {
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      background: #fbfcfd;
-      padding: 10px;
-      min-width: 0;
-    }
-    .info-card h3 {
-      margin: 0 0 8px;
-      font-size: 13px;
-    }
-    .info-card ul {
-      margin: 0;
-      padding-left: 18px;
-      line-height: 1.7;
-    }
-    .info-card li + li {
-      margin-top: 4px;
-    }
-    .list-block {
-      display: grid;
-      gap: 6px;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .list-block li {
-      border-left: 3px solid var(--line);
-      padding-left: 10px;
-      line-height: 1.6;
-    }
-    .ai-history {
-      display: grid;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    .ai-history button {
-      height: auto;
-      min-height: 34px;
-      text-align: left;
-      padding: 8px 10px;
-    }
-    .ai-evidence-section {
-      margin-top: 12px;
-      padding-top: 10px;
-      border-top: 1px solid var(--line);
-    }
-    .ai-evidence-heading {
-      margin: 0 0 7px;
-      font-size: 13px;
-    }
-    .ai-evidence-risk {
-      border-left: 4px solid var(--warn);
-      padding-left: 10px;
-      background: #fffaf1;
-    }
-    .ai-evidence-risk .ai-evidence-heading { color: var(--warn); }
-    .tabs {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 16px;
-    }
-    .tab-button {
-      background: #eef1f4;
-      border-color: #d7dee5;
-      color: #34424d;
-    }
-    .tab-button[data-active="true"] {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-    }
-    .tab-panel { display: none; }
-    .tab-panel[data-active="true"] { display: block; }
-    body.url-search-page .left section:not(:first-child),
-    body.url-search-page .tabs,
-    body.url-search-page .tab-panel,
-    body.url-search-page .workflow {
-      display: none;
-    }
-    body.mail-workspace-page .left section:first-child,
-    body.mail-workspace-page .right > section:first-child,
-    body.mail-workspace-page .tabs,
-    body.mail-workspace-page [data-tab-panel="detail"],
-    body.mail-workspace-page [data-tab-panel="ai"] {
-      display: none;
-    }
-    body.mail-workspace-page [data-tab-panel="mail"] {
-      display: block;
-    }
-    body.url-search-page main {
-      grid-template-columns: minmax(0, 1fr);
-      max-width: 1240px;
-      width: 100%;
-      margin: 0 auto;
-      align-content: start;
-      gap: 10px;
-    }
-    body.mail-workspace-page main {
-      grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
-      max-width: 1240px;
-      width: 100%;
-      margin: 0 auto;
-      align-content: start;
-      gap: 12px;
-    }
-    body.mail-workspace-page .left {
-      grid-template-rows: auto minmax(0, 1fr);
-      align-content: stretch;
-      height: calc(100vh - 80px);
-      position: sticky;
-      top: 68px;
-      overflow: hidden;
-    }
-    body.mail-workspace-page .right {
-      display: block;
-    }
-    body.mail-workspace-page [data-ui="mail-lead-queue"] {
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    body.mail-workspace-page [data-ui="mail-lead-queue"] .lead-list-scroll {
-      flex: 1;
-      min-height: 0;
-      max-height: none;
-    }
-    body.mail-workspace-page [data-ui="mail-lead-queue"] th:nth-child(n+2):nth-child(-n+7),
-    body.mail-workspace-page [data-ui="mail-lead-queue"] td:nth-child(n+2):nth-child(-n+7) {
-      display: none;
-    }
-    body.mail-workspace-page [data-ui="mail-lead-queue"] th:first-child { width: auto !important; }
-    body.mail-workspace-page [data-ui="mail-lead-queue"] th:last-child { width: 90px !important; }
-    .mail-lead-filter { display: none; }
-    body.mail-workspace-page .mail-lead-filter {
-      display: block;
-    }
-    .mail-filter-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 180px;
-      gap: 8px;
-    }
-    .search-panel {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      margin-top: 14px;
-    }
-    .search-panel .toolbar { grid-column: 1 / -1; }
-    .search-console .body {
-      display: grid;
-      gap: 8px;
-      padding: 10px 12px;
-    }
-    .direct-import,
-    .quick-search,
-    .source-selector {
-      display: grid;
-      gap: 8px;
-      align-items: center;
-      max-width: 980px;
-    }
-    .source-selector {
-      grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
-      justify-content: start;
-    }
-    .direct-import {
-      grid-template-columns: minmax(320px, 720px) 180px;
-      justify-content: start;
-    }
-    .quick-search {
-      grid-template-columns: minmax(320px, 720px);
-      justify-content: start;
-    }
-    .search-filter-row {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(180px, 240px));
-      gap: 8px;
-      padding-top: 0;
-      justify-content: start;
-    }
-    .search-actions {
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 8px;
-      max-width: 980px;
-    }
-    .search-actions .status {
-      min-width: 180px;
-    }
-    .direct-import .status,
-    .quick-search .status {
-      grid-column: 1 / -1;
-    }
-    .advanced-search {
-      min-width: 170px;
-    }
-    .advanced-search summary,
-    .display-filter summary {
-      height: 34px;
-      display: inline-flex;
-      align-items: center;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 0 12px;
-      background: #fff;
-      cursor: pointer;
-      color: #34424d;
-      white-space: nowrap;
-    }
-    .advanced-search[open] summary,
-    .display-filter[open] summary {
-      border-color: #b9c8d1;
-      background: #f8fafb;
-    }
-    .advanced-search .search-panel {
-      margin-top: 10px;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      min-width: min(760px, calc(100vw - 48px));
-    }
-    body.url-search-page .left,
-    body.url-search-page .right {
-      display: block;
-    }
-    body.url-search-page .left {
-      order: 1;
-    }
-    body.url-search-page .right {
-      order: 2;
-    }
-    body.url-search-page .search-console {
-      border-radius: 4px;
-    }
-    .search-drawer > summary,
-    .mail-filter-drawer > summary {
-      min-height: 42px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 0 12px;
-      cursor: pointer;
-      font-weight: 700;
-      border-bottom: 1px solid transparent;
-    }
-    .search-drawer[open] > summary,
-    .mail-filter-drawer[open] > summary {
-      border-bottom-color: var(--line);
-    }
-    .search-drawer .body,
-    .mail-filter-drawer .body {
-      padding-top: 10px;
-    }
-    .search-block {
-      display: grid;
-      grid-template-columns: 150px minmax(0, 1fr);
-      gap: 8px 12px;
-      align-items: center;
-    }
-    .search-block-title {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
-    }
-    .search-block .direct-import,
-    .search-block .quick-search,
-    .search-block .source-selector,
-    .search-block .search-filter-row,
-    .search-block .search-actions {
-      grid-column: 2;
-    }
-    details[open] .when-closed,
-    details:not([open]) .when-open {
-      display: none;
-    }
-    body.url-search-page .right > section {
-      border-radius: 4px;
-    }
-    .result-filter-panel {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .display-filter {
-      position: relative;
-      margin-top: 0;
-    }
-    .display-filter .result-filter-panel {
-      position: absolute;
-      right: 0;
-      top: 40px;
-      z-index: 20;
-      width: min(760px, calc(100vw - 48px));
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #fff;
-      box-shadow: 0 12px 28px rgba(23, 32, 38, .14);
-    }
-    .candidate-table-wrap {
-      overflow: auto;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-    }
-    .candidate-table {
-      min-width: 980px;
-      table-layout: fixed;
-    }
-    .candidate-table th,
-    .candidate-table td {
-      vertical-align: top;
-    }
-    .candidate-table th {
-      position: sticky;
-      top: 0;
-      z-index: 1;
-    }
-    .candidate-table td {
-      background: #fff;
-    }
-    .candidate-table tr:hover td {
-      background: #f8fbfa;
-    }
-    .candidate-title-cell {
-      font-weight: 700;
-      line-height: 1.45;
-      overflow-wrap: anywhere;
-    }
-    .candidate-summary {
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.55;
-      margin-top: 5px;
-      overflow-wrap: anywhere;
-    }
-    .num-cell {
-      white-space: nowrap;
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-    }
-    .center-cell {
-      text-align: center;
-      white-space: nowrap;
-    }
-    .action-cell {
-      white-space: nowrap;
-      text-align: right;
-    }
-    .link-button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      height: 34px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 0 10px;
-      background: #fff;
-      color: var(--text);
-      font-size: 13px;
-      font-weight: 700;
-      text-decoration: none;
-      white-space: nowrap;
-    }
-    .link-button:hover {
-      border-color: #b8c7d1;
-      background: #f8fafb;
-      text-decoration: none;
-    }
-    .compact-summary {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-    }
-    .mail-actions {
-      border-top: 1px solid var(--line);
-      margin-top: 12px;
-      padding-top: 12px;
-    }
-    .mail-flow {
-      display: grid;
-      gap: 12px;
-    }
-    .mail-work-tab-list {
-      display: flex;
-      gap: 4px;
-      overflow-x: auto;
-      padding-bottom: 2px;
-      border-bottom: 1px solid var(--line);
-    }
-    .mail-work-tab {
-      flex: 0 0 auto;
-      border-color: transparent;
-      background: transparent;
-      color: var(--muted);
-    }
-    .mail-work-tab[data-active="true"] {
-      border-color: var(--accent);
-      background: #eef8f5;
-      color: var(--text);
-      font-weight: 700;
-    }
-    .mail-work-panel { display: none; }
-    .mail-work-panel[data-active="true"] {
-      display: grid;
-      gap: 12px;
-    }
-    .mail-context {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: 10px;
-    }
-    .mail-stage {
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      background: #fff;
-      overflow: hidden;
-    }
-    .mail-stage-head {
-      min-height: 42px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--line);
-      background: #fbfcfd;
-    }
-    .mail-stage-head h3 {
-      margin: 0;
-      font-size: 14px;
-    }
-    .mail-stage-body {
-      padding: 12px;
-    }
-    .mail-context-bar {
-      display: grid;
-      grid-template-columns: minmax(180px, 1.4fr) minmax(120px, .65fr) minmax(120px, .65fr) minmax(220px, 1.3fr);
-      gap: 8px;
-      align-items: center;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      background: var(--panel);
-    }
-    body.mail-workspace-page .mail-context-bar {
-      position: sticky;
-      top: 58px;
-      z-index: 8;
-      box-shadow: 0 2px 8px rgba(23, 32, 38, .08);
-    }
-    .mail-context-item {
-      min-width: 0;
-    }
-    .mail-context-label {
-      display: block;
-      margin-bottom: 3px;
-      color: var(--muted);
-      font-size: 11px;
-    }
-    .mail-context-value {
-      display: block;
-      overflow-wrap: anywhere;
-      line-height: 1.45;
-    }
-    .mail-create-bar {
-      display: grid;
-      grid-template-columns: minmax(180px, 240px) auto minmax(240px, 1fr);
-      gap: 8px;
-      align-items: center;
-    }
-    .mail-editor-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.35fr) minmax(360px, .65fr);
-      gap: 12px;
-      align-items: start;
-    }
-    .mail-project-comparison {
-      min-width: 0;
-      padding-left: 12px;
-      border-left: 1px solid var(--line);
-    }
-    .mail-project-comparison h4 {
-      margin: 0 0 10px;
-      font-size: 14px;
-    }
-    .mail-comparison-list { display: grid; gap: 0; }
-    .mail-comparison-item {
-      display: grid;
-      grid-template-columns: 96px minmax(0, 1fr);
-      gap: 8px;
-      padding: 7px 0;
-      border-bottom: 1px solid var(--line);
-    }
-    .mail-comparison-item span:first-child {
-      color: var(--muted);
-      font-size: 12px;
-    }
-    .mail-comparison-item span:last-child {
-      min-width: 0;
-      overflow-wrap: anywhere;
-      line-height: 1.55;
-    }
-    .next-action-strip {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 8px;
-    }
-    .next-action-card {
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      padding: 8px 10px;
-      background: #fbfcfd;
-    }
-    .next-action-card strong {
-      display: block;
-      font-size: 13px;
-      margin-bottom: 4px;
-    }
-    footer {
-      max-width: 1240px;
-      margin: 0 auto;
-      padding: 0 12px 14px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-    a {
-      color: var(--accent);
-      text-decoration: none;
-    }
-    a:hover { text-decoration: underline; }
-    @media (max-width: 980px) {
-      main, .workflow, .split, .grid-2, .detail-grid, .compact-summary, .mail-create-bar, .mail-editor-grid, .next-action-strip, .info-columns { grid-template-columns: 1fr; }
-      body.mail-workspace-page main { grid-template-columns: minmax(0, 1fr); }
-      body.mail-workspace-page .left {
-        height: auto;
-        position: static;
-        overflow: visible;
-      }
-      body.mail-workspace-page [data-ui="mail-lead-queue"] .lead-list-scroll { max-height: 280px; }
-      body.mail-workspace-page [data-ui="mail-project-comparison"] {
-        order: -1;
-        padding: 0 0 12px;
-        border-left: 0;
-        border-bottom: 1px solid var(--line);
-      }
-      header { padding: 0 14px; }
-      .mail-context-bar { grid-template-columns: 1fr; }
-      body.mail-workspace-page .mail-context-bar { position: static; box-shadow: none; }
-      .direct-import, .quick-search, .source-selector, .search-filter-row, .mail-filter-row, .result-filter-panel, .search-block { grid-template-columns: 1fr; }
-      .search-actions { flex-wrap: wrap; }
-      .display-filter .result-filter-panel {
-        position: static;
-        width: auto;
-        margin-top: 8px;
-        box-shadow: none;
-      }
-      .search-block .direct-import,
-      .search-block .quick-search,
-      .search-block .source-selector,
-      .search-block .search-filter-row,
-      .search-block .search-actions {
-        grid-column: 1;
-      }
-    }
-  </style>
+  ${renderSharedStyles('dashboard')}
 </head>
 <body class="${shell.bodyClass}" data-ui-page="${pageMode}">
   <header>
     <h1>${shell.heading}</h1>
     <div class="toolbar">
-      <span id="apiStatus" class="status ui-state-loading">API確認中</span>
+      <span id="apiStatus" class="status ui-state-loading" aria-live="polite">API確認中</span>
       <div class="top-nav" data-ui="top-nav">
         <button onclick="location.href='/today'">今日の営業 <span class="nav-badge" data-nav-badge="today" hidden></span></button>
+        <button onclick="location.href='/replies'">返信</button>
         <button${shell.urlSearchButtonClass} onclick="location.href='/'">候補を探す</button>
         <button onclick="location.href='/leads-view'">営業案件 <span class="nav-badge" data-nav-badge="leads" hidden></span></button>
         <button${shell.mailWorkspaceButtonClass} onclick="location.href='/mail-workspace'">作成・レビュー <span class="nav-badge" data-nav-badge="mail" hidden></span></button>
@@ -902,372 +50,18 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
         <span>生成、本文確認、レビュー、承認</span>
       </div>
     </section>
+    ${pageMode === 'url-search' ? renderUrlSearchEntry() : ''}
 
     <div class="left">
-      <section class="search-console" data-ui="candidate-search">
-        <details class="search-drawer"${pageMode === 'url-search' ? ' open' : ''}>
-          <summary>
-            <span>取得元・URL取り込み</span>
-            <span class="muted"><span class="when-closed">開く</span><span class="when-open">閉じる</span></span>
-          </summary>
-          <div class="body">
-            <div class="search-block">
-              <div class="search-block-title">取得元</div>
-              <div class="source-selector">
-                <select id="sourcePlatform" onchange="onSourcePlatformChange()">
-                  <option value="campfire">CAMPFIRE</option>
-                  <option value="makuake">Makuake</option>
-                  <option value="green_funding" disabled>GREEN FUNDING（準備中）</option>
-                </select>
-                <span id="sourcePlatformStatus" class="status muted">CAMPFIREの募集中プロジェクトに対応</span>
-              </div>
-            </div>
-            <div class="search-block">
-              <div class="search-block-title">URL直接取り込み</div>
-              <div class="direct-import">
-                <input id="campfireUrl" placeholder="https://camp-fire.jp/projects/.../view" />
-                <button class="primary" onclick="importCampfire()">このURLを取り込む</button>
-                <span id="importStatus" class="status"></span>
-              </div>
-            </div>
-            <div class="search-block">
-              <div class="search-block-title">候補を探す</div>
-              <div class="quick-search">
-                <input id="campfireSearchKeyword" placeholder="キーワード・商品名で候補検索" />
-              </div>
-              <div class="search-filter-row">
-                <select id="campfireSearchCategory" data-source-field="campfire">
-                  <option value="">カテゴリを取得中</option>
-                </select>
-                <select id="campfireFetchLimit">
-                  <option value="10">取得上限 10件</option>
-                  <option value="50">取得上限 50件</option>
-                  <option value="100">取得上限 100件</option>
-                </select>
-                <select id="campfireSearchStatus">
-                  <option value="active">募集中のみ</option>
-                  <option value="endingSoon">終了間近順</option>
-                </select>
-                <select id="campfireEndingSoonDays">
-                  <option value="7">7日以内</option>
-                  <option value="14" selected>14日以内</option>
-                  <option value="20">20日以内</option>
-                  <option value="30">30日以内</option>
-                </select>
-                <select id="campfireSearchProfileProjectRange" data-source-field="campfire">
-                  <option value="">過去プロジェクト すべて</option>
-                  <option value="0:0">初回のみ</option>
-                  <option value="1:3">1〜3件</option>
-                  <option value="4:9">4〜9件</option>
-                  <option value="10:29">10〜29件</option>
-                  <option value="30:99">30〜99件</option>
-                  <option value="100:">100件以上</option>
-                </select>
-              </div>
-              <div class="search-actions">
-                <button class="primary" onclick="searchCampfireCandidates()">検索</button>
-                <button id="stopSearchButton" onclick="cancelCampfireSearch()" disabled>検索停止</button>
-                <button onclick="clearCampfireSearch()">クリア</button>
-                <span id="campfireSearchStatusText" class="status"></span>
-              </div>
-            </div>
-          </div>
-        </details>
-      </section>
+      ${renderCandidateSearchSection(pageMode)}
 
-      <section class="mail-lead-filter">
-        <details class="mail-filter-drawer">
-          <summary>
-            <span>対象検索</span>
-            <span class="muted"><span class="when-closed">開く</span><span class="when-open">閉じる</span></span>
-          </summary>
-          <div class="body">
-            <div class="mail-filter-row">
-              <input id="mailLeadKeyword" placeholder="会社・案件・理由で検索" oninput="renderLeads()" />
-              <select id="mailLeadSourceFilter" onchange="renderLeads()">
-                <option value="">取得元 すべて</option>
-              </select>
-              <select id="mailLeadStatusFilter" onchange="renderLeads()">
-                <option value="">状態 すべて</option>
-                <option value="discovered">発見</option>
-                <option value="qualified">候補</option>
-                <option value="drafted">下書き済み</option>
-                <option value="reviewing">確認中</option>
-                <option value="approved">承認済み</option>
-                <option value="queued">送信待ち</option>
-                <option value="rejected">対象外</option>
-              </select>
-            </div>
-          </div>
-        </details>
-      </section>
-
-      <section data-ui="mail-lead-queue">
-        <div class="section-head">
-          <h2>営業対象一覧</h2>
-          <span id="mailLeadCount" class="status muted">0件</span>
-        </div>
-        <div class="body table-scroll lead-list-scroll" style="padding:0">
-          <table>
-            <thead>
-              <tr>
-                <th class="sortable" onclick="toggleDashboardSort('lead','company')" style="width:22%">会社<span id="leadSort-company" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleDashboardSort('lead','project')">案件<span id="leadSort-project" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleDashboardSort('lead','source')" style="width:92px">取得元<span id="leadSort-source" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleDashboardSort('lead','status')" style="width:90px">状態<span id="leadSort-status" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleDashboardSort('lead','score')" style="width:76px">点数<span id="leadSort-score" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleDashboardSort('lead','priority')" style="width:76px">優先度<span id="leadSort-priority" class="sort-mark"></span></th>
-                <th style="width:76px">URL</th>
-                <th style="width:90px">選択</th>
-              </tr>
-            </thead>
-            <tbody id="leadRows"></tbody>
-          </table>
-        </div>
-      </section>
+      ${renderMailLeadQueue()}
     </div>
 
     <div class="right">
-      <section>
-        <div class="section-head">
-          <h2>候補URL一覧</h2>
-          <div class="toolbar">
-            <span id="campfireCandidateCount" class="status muted">未検索</span>
-            <details class="display-filter">
-              <summary>表示条件</summary>
-              <div class="result-filter-panel">
-                <select id="campfireResultLimit" onchange="renderCampfireCandidates()">
-                  <option value="10">最大表示 10件</option>
-                  <option value="50">最大表示 50件</option>
-                  <option value="100">最大表示 100件</option>
-                </select>
-                <select id="campfireDisplayStatus" onchange="renderCampfireCandidates()">
-                  <option value="">公開状態 すべて</option>
-                  <option value="active">募集中のみ</option>
-                  <option value="endingSoon">終了間近</option>
-                </select>
-                <select id="campfireDisplayEndingSoonDays" onchange="renderCampfireCandidates()">
-                  <option value="7">7日以内</option>
-                  <option value="14" selected>14日以内</option>
-                  <option value="20">20日以内</option>
-                  <option value="30">30日以内</option>
-                </select>
-                <select id="campfireDisplayAmountRange" onchange="renderCampfireCandidates()">
-                  <option value="">支援額 すべて</option>
-                  <option value="0:500000">50万円未満</option>
-                  <option value="500000:1000000">50万〜100万円</option>
-                  <option value="1000000:3000000">100万〜300万円</option>
-                  <option value="3000000:5000000">300万〜500万円</option>
-                  <option value="5000000:10000000">500万〜1,000万円</option>
-                  <option value="10000000:">1,000万円以上</option>
-                </select>
-                <select id="campfireDisplaySupporterRange" onchange="renderCampfireCandidates()">
-                  <option value="">サポーター すべて</option>
-                  <option value="0:30">30人未満</option>
-                  <option value="30:50">30〜50人</option>
-                  <option value="50:100">50〜100人</option>
-                  <option value="100:300">100〜300人</option>
-                  <option value="300:500">300〜500人</option>
-                  <option value="500:">500人以上</option>
-                </select>
-                <select id="campfireDisplayProfileProjectRange" onchange="renderCampfireCandidates()">
-                  <option value="">過去プロジェクト すべて</option>
-                  <option value="0:0">初回のみ</option>
-                  <option value="1:3">1〜3件</option>
-                  <option value="4:9">4〜9件</option>
-                  <option value="10:29">10〜29件</option>
-                  <option value="30:99">30〜99件</option>
-                  <option value="100:">100件以上</option>
-                </select>
-              </div>
-            </details>
-            <button onclick="bulkImportVisibleCandidates()" id="bulkImportButton" disabled>表示中を一括取り込み</button>
-            <span id="bulkImportStatus" class="status"></span>
-          </div>
-        </div>
-        <div class="body">
-          <div id="campfireCandidates">
-            <div class="ui-state-empty">検索すると候補URLがここに表示されます。</div>
-          </div>
-        </div>
-      </section>
+      ${renderCandidateListSection()}
 
-      <div class="tabs" aria-label="機能タブ">
-        <button class="tab-button" data-tab-button="detail" data-active="true" onclick="switchTab('detail')">案件詳細</button>
-        <button class="tab-button" data-tab-button="ai" onclick="switchTab('ai')">AI分析</button>
-        <button class="tab-button" data-tab-button="mail" onclick="switchTab('mail')">メール確認</button>
-      </div>
-
-      <section class="tab-panel" data-tab-panel="detail" data-active="true">
-        <div class="section-head">
-          <h2>3. 案件詳細</h2>
-          <div class="toolbar">
-            <button id="openProjectButton" onclick="openSelectedProject()" disabled>URLを開く</button>
-          </div>
-        </div>
-        <div class="body" id="leadDetail">
-          <div class="muted">営業案件から案件を選択してください</div>
-        </div>
-      </section>
-
-      <section class="tab-panel" data-tab-panel="ai">
-        <div class="section-head">
-          <h2>4. AI分析</h2>
-          <div class="toolbar">
-            <button onclick="analyzeLead()" id="analysisButton" disabled>AI分析を再実行</button>
-          </div>
-        </div>
-        <div class="body" id="aiAnalysis">
-          <div class="muted">営業案件から案件を選択してください</div>
-        </div>
-      </section>
-
-      <section class="tab-panel" data-tab-panel="mail" data-ui="mail-focus-workspace">
-        <div class="section-head">
-          <h2>作成・レビュー・確認</h2>
-          <div class="toolbar">
-            <span id="mailStatus" class="status"></span>
-            <button id="nextLeadButton" type="button" onclick="selectNextLead()" disabled>次の案件へ</button>
-          </div>
-        </div>
-        <div class="body mail-flow">
-          <div class="mail-context-bar" id="mailContextBar" data-ui="mail-context-bar">
-            <div class="mail-context-item"><span class="mail-context-label">会社</span><strong class="mail-context-value">未選択</strong></div>
-            <div class="mail-context-item"><span class="mail-context-label">メール状態</span><strong class="mail-context-value">未生成</strong></div>
-            <div class="mail-context-item"><span class="mail-context-label">チェック</span><strong class="mail-context-value">未選択</strong></div>
-            <div class="mail-context-item"><span class="mail-context-label">次操作</span><strong class="mail-context-value">対象を選択してください</strong></div>
-          </div>
-
-          <div class="mail-work-tab-list" role="tablist" aria-label="メール作業">
-            <button class="mail-work-tab" type="button" role="tab" data-mail-work-tab="overview" data-active="true" aria-selected="true" onclick="switchMailWorkTab('overview')">概要</button>
-            <button class="mail-work-tab" type="button" role="tab" data-mail-work-tab="draft" data-active="false" aria-selected="false" tabindex="-1" onclick="switchMailWorkTab('draft')">下書き</button>
-            <button class="mail-work-tab" type="button" role="tab" data-mail-work-tab="review" data-active="false" aria-selected="false" tabindex="-1" onclick="switchMailWorkTab('review')">チェック・承認</button>
-            <button class="mail-work-tab" type="button" role="tab" data-mail-work-tab="history" data-active="false" aria-selected="false" tabindex="-1" onclick="switchMailWorkTab('history')">履歴</button>
-          </div>
-
-          <div class="mail-work-panel" role="tabpanel" data-mail-work-panel="overview" data-active="true">
-          <div class="mail-stage">
-            <div class="mail-stage-head">
-              <h3>選択中の営業対象</h3>
-              <span id="mailNextAction" class="status muted"></span>
-            </div>
-            <div class="mail-stage-body">
-              <div id="mailLeadSummary" data-ui="mail-lead-summary">上の営業対象一覧から、作成・レビューする案件を選択してください。</div>
-              <div class="mail-create-bar" style="margin-top:12px">
-                <select id="templateKey">
-                  <option value="normal">通常版</option>
-                  <option value="sns_video_ad">SNS動画・広告版</option>
-                </select>
-                <button id="generateButton" onclick="generateMail()" disabled>AI下書きを生成</button>
-                <span id="generateHelp" class="status muted">対象を選択してください</span>
-              </div>
-            </div>
-          </div>
-          </div>
-
-          <div class="mail-work-panel" role="tabpanel" data-mail-work-panel="history" data-active="false">
-          <div class="mail-stage">
-            <div class="mail-stage-head">
-              <h3>作成履歴</h3>
-            </div>
-            <div class="mail-stage-body table-scroll mail-history-scroll" data-ui="mail-history" style="padding:0">
-              <table>
-                <thead>
-                  <tr>
-                    <th class="sortable" onclick="toggleDashboardSort('mail','subject')">作成履歴<span id="mailSort-subject" class="sort-mark"></span></th>
-                    <th class="sortable" onclick="toggleDashboardSort('mail','status')" style="width:92px">状態<span id="mailSort-status" class="sort-mark"></span></th>
-                    <th class="sortable" onclick="toggleDashboardSort('mail','createdAt')" style="width:120px">作成日<span id="mailSort-createdAt" class="sort-mark"></span></th>
-                  </tr>
-                </thead>
-                <tbody id="mailRows"></tbody>
-              </table>
-            </div>
-          </div>
-          <div class="mail-stage">
-            <div class="mail-stage-head">
-              <h3>返信メモ</h3>
-              <span class="status muted">送信後に使う欄</span>
-            </div>
-            <div class="mail-stage-body">
-              <div class="row">
-                <label for="replyBody">返信記録</label>
-                <input id="replyFromEmail" placeholder="返信元メールアドレス 任意" />
-                <textarea id="replyBody" style="min-height:110px" placeholder="返信内容を貼り付け"></textarea>
-                <div class="toolbar">
-                  <button onclick="recordReply()" id="replyButton" disabled>返信を記録</button>
-                  <span id="replyStatus" class="status"></span>
-                </div>
-              </div>
-            </div>
-          </div>
-          </div>
-
-          <div class="mail-work-panel" role="tabpanel" data-mail-work-panel="draft" data-active="false">
-          <div class="mail-stage">
-            <div class="mail-stage-head">
-              <h3>本文編集</h3>
-              <div class="toolbar">
-                <span id="mailEditorSaveState" class="status muted">メール未選択</span>
-                <button onclick="polishMail()" id="polishButton" disabled>AIで整える</button>
-                <button onclick="saveMail()" id="saveButton" disabled>保存</button>
-              </div>
-            </div>
-            <div class="mail-stage-body mail-editor-grid" data-ui="mail-draft-editor">
-              <div>
-                <div id="rejectReasonBox"></div>
-                <div class="row">
-                  <label for="subject">件名</label>
-                <input id="subject" oninput="updateMailEditorDirtyState()" />
-              </div>
-                <div class="row">
-                  <label for="body">本文</label>
-                  <textarea id="body" oninput="updateMailEditorDirtyState()"></textarea>
-                </div>
-              </div>
-              <div class="mail-project-comparison" id="mailProjectComparison" data-ui="mail-project-comparison">
-                <h4>案件情報と見比べる</h4>
-                <div class="mail-comparison-list">
-                  <div class="mail-comparison-item"><span>会社名</span><span id="selectedLead">未選択</span></div>
-                  <div class="mail-comparison-item"><span>メール状態</span><span id="selectedMail">未選択</span></div>
-                </div>
-                <div class="row">
-                  <label>次に押すボタン</label>
-                  <div id="mailActionGuide" class="detail-text">メールを選択してください</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          </div>
-
-          <div class="mail-work-panel" role="tabpanel" data-mail-work-panel="review" data-active="false">
-          <div class="mail-stage" data-ui="mail-review-panel">
-            <div class="mail-stage-head">
-              <h3>送信前チェック・レビュー</h3>
-              <span id="checklistStatus" class="status muted"></span>
-            </div>
-            <div class="mail-stage-body">
-              <div id="draftConsistencyWarning" class="draft-consistency-warning" hidden></div>
-              <div class="next-action-strip" id="mailStageCards"></div>
-              <div class="row">
-                <label>送信前チェック</label>
-                <ul class="checklist" id="checklistRows">
-                  <li class="muted">メールを選択してください</li>
-                </ul>
-              </div>
-              <div class="toolbar mail-actions">
-                <button onclick="requestReview()" id="reviewButton" disabled>レビュー依頼</button>
-                <button onclick="requestReReview()" id="reReviewButton" disabled>再レビュー依頼</button>
-                <button onclick="rejectMail()" id="rejectButton" disabled>棄却</button>
-                <button onclick="approveMail()" id="approveButton" disabled>承認</button>
-                <button onclick="queueMail()" id="queueButton" disabled>送信待ちにする</button>
-                <button onclick="markMailSent()" id="markSentButton" disabled>送信済みにする</button>
-              </div>
-            </div>
-          </div>
-          </div>
-
-        </div>
-      </section>
+      ${renderMailWorkspace()}
     </div>
   </main>
   <footer>
@@ -1275,14 +69,23 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
   </footer>
 
   <script>
+${renderClientViewRulesScript()}
+${renderClientApiScript()}
+${renderClientProjectsScript()}
+${renderClientLeadsScript()}
+${renderClientMailScript()}
     const state = {
       leads: [],
       mails: [],
+      mailTemplates: [],
       checklist: [],
       aiGenerations: [],
       checklistComplete: false,
       selectedLeadId: null,
       selectedMailId: null,
+      selectedTemplateKey: '',
+      mailEngagement: null,
+      mailEngagementLoadingId: null,
       campfireCategories: [],
       campfireCandidates: [],
       candidateImportStatus: {},
@@ -1300,16 +103,7 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
     const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
 
     async function api(path, options = {}) {
-      const operatorEmail = window.localStorage.getItem('salesAiSystem.operatorEmail') || '';
-      const response = await fetch(path, {
-        ...options,
-        headers: { 'Content-Type': 'application/json', ...(operatorEmail ? { 'X-Operator-Email': operatorEmail } : {}), ...(options.headers || {}) }
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.message || payload.error?.message || 'APIエラー');
-      }
-      return payload.data;
+      return window.SalesAiApi.request(path, options, { includeOperatorEmail: true });
     }
 
     function setStatus(id, message, type = '') {
@@ -1437,9 +231,168 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
         if (state.selectedLeadId) void loadAiAnalysis();
         if (!state.campfireCategories.length) void loadCampfireCategories();
         onSourcePlatformChange();
+        void loadTemplates();
         setStatus('apiStatus', 'API接続OK', 'ok');
       } catch (error) {
         setStatus('apiStatus', 'API接続に失敗しました: ' + error.message + '。更新を押して再試行してください。', 'error');
+      }
+    }
+
+    async function loadTemplates() {
+      try {
+        const result = await api('/api/mails/templates');
+        state.mailTemplates = Array.isArray(result) ? result : (result.items || []);
+        renderTemplateOptions();
+        const selected = state.selectedTemplateKey || state.mailTemplates[0]?.key || '';
+        if (selected) await loadTemplateForEdit(selected);
+        else clearTemplateForm(false);
+      } catch (error) {
+        setStatus('templateStatus', '定型文の読み込みに失敗しました: ' + error.message, 'error');
+      }
+    }
+
+    function renderTemplateOptions() {
+      const select = document.getElementById('templateManagerList');
+      if (!select) return;
+      const current = state.selectedTemplateKey || select.value;
+      select.innerHTML = '<option value="">新規作成</option>' +
+        state.mailTemplates.map((template) =>
+          '<option value="' + escapeAttr(template.key) + '">' +
+          escapeHtml((template.name || template.key) + ' / ' + (template.channel || 'email')) +
+          '</option>'
+        ).join('');
+      if (state.mailTemplates.some((template) => template.key === current)) {
+        select.value = current;
+      }
+      renderTemplateGenerationOptions();
+    }
+
+    function renderTemplateGenerationOptions() {
+      const select = document.getElementById('templateKey');
+      if (!select) return;
+      const current = select.value;
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      const channel = templateChannelForLead(lead);
+      const defaultOptions = [
+        ['normal', '通常版'],
+        ['sns_video_ad', 'SNS動画・広告版']
+      ];
+      const channelTemplates = state.mailTemplates
+        .filter((template) => template.channel === channel && template.isActive !== false);
+      select.innerHTML = defaultOptions.map(([value, label]) =>
+        '<option value="' + escapeAttr(value) + '">' + escapeHtml(label) + '</option>'
+      ).join('') + channelTemplates.map((template) =>
+        '<option value="' + escapeAttr(template.key) + '">' + escapeHtml(template.name || template.key) + '</option>'
+      ).join('');
+      if (Array.from(select.options).some((option) => option.value === current)) {
+        select.value = current;
+      } else if (channelTemplates.length) {
+        select.value = channelTemplates[0].key;
+      }
+    }
+
+    function templateChannelForLead(lead) {
+      const method = lead?.sendMethod || suggestSendMethod(lead || {});
+      if (method === 'site_message' || method === 'サイト内メッセージ') return 'site_message';
+      if (method === 'contact_form' || method === '問い合わせフォーム' || method === 'フォーム') return 'contact_form';
+      return 'email';
+    }
+
+    async function loadTemplateForEdit(key) {
+      if (!key) {
+        clearTemplateForm();
+        return;
+      }
+      setStatus('templateStatus', '読み込み中', 'warn');
+      try {
+        const template = await api('/api/mails/templates/' + encodeURIComponent(key));
+        state.selectedTemplateKey = template.key;
+        setTemplateForm(template);
+        renderTemplateOptions();
+        setStatus('templateStatus', '読み込み完了', 'ok');
+      } catch (error) {
+        setStatus('templateStatus', '定型文の読み込みに失敗しました: ' + error.message, 'error');
+      }
+    }
+
+    function setTemplateForm(template) {
+      document.getElementById('templateManagerKey').value = template?.key || '';
+      document.getElementById('templateManagerName').value = template?.name || '';
+      document.getElementById('templateManagerChannel').value = template?.channel || 'email';
+      document.getElementById('templateManagerSubject').value = template?.subject || '';
+      document.getElementById('templateManagerDescription').value = template?.description || '';
+      document.getElementById('templateManagerBody').value = template?.body || '';
+      document.getElementById('templateManagerActive').checked = template?.isActive !== false;
+    }
+
+    function clearTemplateForm(showStatus = true) {
+      state.selectedTemplateKey = '';
+      const select = document.getElementById('templateManagerList');
+      if (select) select.value = '';
+      setTemplateForm({ channel: 'email', isActive: true });
+      if (showStatus) setStatus('templateStatus', '新規定型文', 'ok');
+    }
+
+    async function saveTemplate() {
+      const key = fieldValue('templateManagerKey').trim();
+      const name = fieldValue('templateManagerName').trim();
+      const body = fieldValue('templateManagerBody').trim();
+      if (!key || !name || !body) {
+        setStatus('templateStatus', 'Key、名前、本文を入力してください', 'warn');
+        return;
+      }
+      setStatus('templateStatus', '保存中', 'warn');
+      try {
+        const template = await api('/api/mails/templates', {
+          method: 'POST',
+          body: JSON.stringify({
+            key,
+            name,
+            channel: fieldValue('templateManagerChannel') || 'email',
+            subject: fieldValue('templateManagerSubject'),
+            body,
+            description: fieldValue('templateManagerDescription'),
+            isActive: document.getElementById('templateManagerActive').checked
+          })
+        });
+        state.selectedTemplateKey = template.key;
+        await loadTemplates();
+        setStatus('templateStatus', '定型文を保存しました', 'ok');
+      } catch (error) {
+        setStatus('templateStatus', '定型文の保存に失敗しました: ' + error.message, 'error');
+      }
+    }
+
+    async function importTemplates() {
+      const raw = fieldValue('templateImportJson').trim();
+      if (!raw) {
+        setStatus('templateStatus', '取り込むJSONを入力してください', 'warn');
+        return;
+      }
+      let templates;
+      try {
+        const parsed = JSON.parse(raw);
+        templates = Array.isArray(parsed) ? parsed : parsed.templates;
+      } catch (error) {
+        setStatus('templateStatus', 'JSON形式を確認してください', 'error');
+        return;
+      }
+      if (!Array.isArray(templates) || !templates.length) {
+        setStatus('templateStatus', 'テンプレート配列がありません', 'warn');
+        return;
+      }
+      setStatus('templateStatus', '取り込み中', 'warn');
+      try {
+        const result = await api('/api/mails/templates/import', {
+          method: 'POST',
+          body: JSON.stringify({ templates })
+        });
+        document.getElementById('templateImportJson').value = '';
+        state.selectedTemplateKey = '';
+        await loadTemplates();
+        setStatus('templateStatus', (result.imported || templates.length) + '件の定型文を取り込みました', 'ok');
+      } catch (error) {
+        setStatus('templateStatus', '定型文の取り込みに失敗しました: ' + error.message, 'error');
       }
     }
 
@@ -1788,6 +741,7 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
           })
         });
         setMailEditorBaseline(state.selectedMailId, subject, body);
+        renderSemanticConsistencyResult(null);
         setStatus('mailStatus', '保存しました', 'ok');
         await loadAll();
       } catch (error) {
@@ -1872,6 +826,55 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
         setStatus('mailStatus', '本文チェックに失敗したため、レビュー依頼を停止しました', 'error');
         return false;
       }
+    }
+
+    async function checkMailSemanticConsistency() {
+      const mail = currentSelectedMail();
+      if (!mail) return;
+      if (hasUnsavedMailEditorChanges()) {
+        setStatus('mailStatus', '先に本文を保存してからAI意味確認を実行してください', 'warn');
+        return;
+      }
+      const button = document.getElementById('semanticCheckButton');
+      if (button) button.disabled = true;
+      setStatus('mailStatus', 'AIで案件との意味整合性を確認中', 'warn');
+      try {
+        const result = await api('/api/ai/mails/' + mail.id + '/semantic-consistency', { method: 'POST' });
+        renderSemanticConsistencyResult(result);
+        setStatus('mailStatus', 'AI意味確認が完了しました。人間の本文確認は必要です。', result.matchesProject ? 'ok' : 'warn');
+      } catch (error) {
+        renderSemanticConsistencyResult({ error: error.message });
+        setStatus('mailStatus', 'AI意味確認に失敗しました。本文と案件情報を人間が確認してください。', 'error');
+      } finally {
+        updateMailButtons(currentSelectedMail());
+      }
+    }
+
+    function renderSemanticConsistencyResult(result) {
+      const container = document.getElementById('semanticConsistencyResult');
+      if (!container) return;
+      if (!result) {
+        container.hidden = true;
+        container.innerHTML = '';
+        return;
+      }
+      if (result.error) {
+        container.className = 'semantic-consistency-result warn';
+        container.innerHTML = '<strong>AI意味確認は未完了</strong><span>' + escapeHtml(result.error) + '</span>';
+        container.hidden = false;
+        return;
+      }
+      const suspected = (result.suspectedForeignFacts || []).map((item) => '<li>' + escapeHtml(item) + '</li>').join('');
+      const matches = result.matchesProject === true && !suspected;
+      const confidence = Math.round(Math.max(0, Math.min(1, Number(result.confidence) || 0)) * 100);
+      container.className = 'semantic-consistency-result ' + (matches ? '' : 'warn');
+      container.innerHTML =
+        '<strong>AI意味確認（助言）</strong>' +
+        '<span>' + escapeHtml(matches ? '案件との大きな不一致は見つかりませんでした。' : '案件との不一致または別案件情報の混入を確認してください。') + '</span>' +
+        '<span>' + escapeHtml(result.reason || '理由未取得') + ' 信頼度 ' + confidence + '%</span>' +
+        (suspected ? '<ul>' + suspected + '</ul>' : '') +
+        '<span class="muted">この結果で人間の確認は自動完了しません。</span>';
+      container.hidden = false;
     }
 
     function renderDraftConsistencyWarning(result) {
@@ -1989,36 +992,8 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
     }
 
     function renderLeads() {
-      const leadQueue = document.querySelector('[data-ui="mail-lead-queue"] .lead-list-scroll');
-      const leadQueueScrollTop = leadQueue ? leadQueue.scrollTop : 0;
-      const sortedLeads = visibleMailLeads();
-      const rows = sortedLeads.map((lead) => {
-        const company = lead.company?.name || lead.companyId;
-        const project = lead.project?.title || '案件名なし';
-        const projectUrl = lead.project?.url || '';
-        return '<tr data-selected="' + (lead.id === state.selectedLeadId) + '" onclick="selectLead(\\'' + lead.id + '\\')">' +
-          '<td><div class="clip">' + escapeHtml(company) + '</div></td>' +
-          '<td><div class="clip">' + escapeHtml(project) + '</div><div class="muted clip">' + escapeHtml(lead.reason || '') + '</div></td>' +
-          '<td><span class="badge">' + escapeHtml(projectPlatformLabel(lead.project || {})) + '</span></td>' +
-          '<td><span class="badge">' + escapeHtml(labelLeadStatus(lead.status)) + '</span></td>' +
-          '<td>' + Number(lead.score || 0) + '</td>' +
-          '<td>' + escapeHtml(labelPriority(lead.priority)) + '</td>' +
-          '<td>' + (projectUrl ? '<a href="' + escapeAttr(projectUrl) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">開く</a>' : '-') + '</td>' +
-          '<td><button class="primary" onclick="selectLeadFromButton(event, \\'' + lead.id + '\\')">' + (lead.id === state.selectedLeadId ? '選択中' : '選択') + '</button></td>' +
-        '</tr>';
-      }).join('');
-      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="8" class="ui-state-empty">営業案件はまだありません</td></tr>';
-      if (leadQueue) leadQueue.scrollTop = leadQueueScrollTop;
-      const mailLeadCount = document.getElementById('mailLeadCount');
-      if (mailLeadCount) mailLeadCount.textContent = sortedLeads.length + '件';
-      updateNextLeadButton(sortedLeads);
-      renderDashboardSortMarks('lead', ['company', 'project', 'source', 'status', 'score', 'priority']);
-      document.getElementById('generateButton').disabled = !canGenerateMail();
-      document.getElementById('analysisButton').disabled = !state.selectedLeadId;
-      const selected = state.leads.find((lead) => lead.id === state.selectedLeadId);
-      document.getElementById('selectedLead').textContent = selected ? (selected.company?.name || selected.id) : '未選択';
+      return window.SalesAiRenderAreas.renderLeads();
     }
-
     function updateNextLeadButton(leads = visibleMailLeads()) {
       const button = document.getElementById('nextLeadButton');
       if (!button) return;
@@ -2058,6 +1033,7 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
       if (!container) return;
       const lead = state.leads.find((item) => item.id === state.selectedLeadId);
       if (!lead) {
+        renderTemplateGenerationOptions();
         container.innerHTML = '<div class="muted">上の営業対象一覧から、メールを作成・確認する案件を選択してください。</div>';
         const next = document.getElementById('mailNextAction');
         if (next) next.textContent = '';
@@ -2065,6 +1041,7 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
       }
       const company = lead.company || {};
       const project = lead.project || {};
+      renderTemplateGenerationOptions();
       const mails = selectedLeadMails();
       const mail = mails[0];
       const next = document.getElementById('mailNextAction');
@@ -2087,74 +1064,73 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
         rowBlock('商品説明', project.description || '未取得');
     }
 
-    function renderCampfireCandidates() {
-      const container = document.getElementById('campfireCandidates');
-      if (!state.campfireCandidates.length) {
-        const message = state.campfireSearchJobId
-          ? '取得中です。見つかった候補から順にここへ追加されます。'
-          : '検索すると候補URLがここに表示されます。';
-        container.innerHTML = '<div class="' + (state.campfireSearchJobId ? 'ui-state-loading' : 'ui-state-empty') + '">' + escapeHtml(message) + '</div>';
-        document.getElementById('bulkImportButton').disabled = true;
+    async function loadMailEngagement(mail) {
+      const container = document.getElementById('mailMaterialEngagement');
+      if (!mail) {
+        state.mailEngagement = null;
+        state.mailEngagementLoadingId = null;
+        renderMailEngagement(null);
         return;
       }
-      const visibleCandidates = getVisibleCandidateEntries();
-      const importableCount = visibleCandidates.filter(({ item }) => isCandidateImportable(item)).length;
-      document.getElementById('bulkImportButton').disabled = !importableCount;
-      document.getElementById('campfireCandidateCount').textContent =
-        '表示 ' + visibleCandidates.length + '件 / 取得 ' + state.campfireCandidates.length + '件 / 取込可能 ' + importableCount + '件';
-      if (!visibleCandidates.length) {
-        container.innerHTML = '<div class="ui-state-empty">表示条件に合う候補がありません。条件をゆるめてください。</div>';
+      if (state.mailEngagement?.emailId === mail.id) {
+        renderMailEngagement(state.mailEngagement);
         return;
       }
-      const rows = visibleCandidates.map(({ item, originalIndex }) => {
-        const projectUrl = escapeAttr(item.url);
-        const importState = getCandidateImportState(item);
-        const importDisabled = importState.status === 'existing' || importState.status === 'imported' || importState.status === 'importing';
-        const pastProjects = item.profileProjectCount === null
-          ? '-'
-          : item.profileProjectCount === 0
-            ? '初回'
-            : item.profileProjectCount + '件';
-        return '<tr>' +
-          '<td>' +
-            '<div class="candidate-title-cell"><a href="' + projectUrl + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(item.title || '案件名なし') + '</a></div>' +
-            (item.summary ? '<div class="candidate-summary">' + escapeHtml(truncateText(item.summary, 90)) + '</div>' : '') +
-          '</td>' +
-          '<td class="num-cell">' + formatCurrency(item.amount) + '</td>' +
-          '<td class="num-cell">' + formatNumber(item.supporterCount) + '人</td>' +
-          '<td class="center-cell">' + (item.daysLeft === null ? '-' : escapeHtml(item.daysLeft + '日')) + '</td>' +
-          '<td class="center-cell">' + escapeHtml(pastProjects) + '</td>' +
-          '<td>' + escapeHtml(item.category || '-') + '</td>' +
-          '<td>' +
-            '<span class="badge ' + candidateImportBadgeClass(importState.status) + '">' + escapeHtml(labelCandidateImportStatus(importState.status)) + '</span>' +
-            (importState.message ? '<div class="muted clip" title="' + escapeAttr(importState.message) + '">' + escapeHtml(importState.message) + '</div>' : '') +
-          '</td>' +
-          '<td class="center-cell"><a class="link-button" href="' + projectUrl + '" target="_blank" rel="noopener noreferrer">開く</a></td>' +
-          '<td class="action-cell"><button class="primary" onclick="importCampfireCandidate(' + originalIndex + ')" ' + (importDisabled ? 'disabled' : '') + '>' + escapeHtml(candidateImportButtonLabel(importState.status)) + '</button></td>' +
-        '</tr>';
-      }).join('');
-      container.innerHTML =
-        '<div class="candidate-table-wrap">' +
-          '<table class="candidate-table">' +
-            '<thead>' +
-              '<tr>' +
-                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;title&quot;)" style="width:34%">案件<span id="candidateSort-title" class="sort-mark"></span></th>' +
-                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;amount&quot;)" style="width:110px">支援額<span id="candidateSort-amount" class="sort-mark"></span></th>' +
-                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;supporterCount&quot;)" style="width:96px">支援者<span id="candidateSort-supporterCount" class="sort-mark"></span></th>' +
-                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;daysLeft&quot;)" style="width:76px">残り<span id="candidateSort-daysLeft" class="sort-mark"></span></th>' +
-                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;profileProjectCount&quot;)" style="width:96px">過去PJ<span id="candidateSort-profileProjectCount" class="sort-mark"></span></th>' +
-                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;category&quot;)" style="width:130px">カテゴリ<span id="candidateSort-category" class="sort-mark"></span></th>' +
-                '<th class="sortable" onclick="toggleDashboardSort(&quot;candidate&quot;,&quot;importStatus&quot;)" style="width:130px">取込状態<span id="candidateSort-importStatus" class="sort-mark"></span></th>' +
-                '<th style="width:76px">URL</th>' +
-                '<th style="width:104px">操作</th>' +
-              '</tr>' +
-            '</thead>' +
-            '<tbody>' + rows + '</tbody>' +
-          '</table>' +
-        '</div>';
-      renderDashboardSortMarks('candidate', ['title', 'amount', 'supporterCount', 'daysLeft', 'profileProjectCount', 'category', 'importStatus']);
+      if (state.mailEngagementLoadingId === mail.id) return;
+      state.mailEngagementLoadingId = mail.id;
+      if (container) renderMailEngagement(null, 'loading');
+      try {
+        const result = await api('/api/t/mails/' + encodeURIComponent(mail.id) + '/engagement');
+        if (state.selectedMailId !== mail.id) return;
+        state.mailEngagement = result;
+        renderMailEngagement(result);
+      } catch (error) {
+        if (state.selectedMailId !== mail.id) return;
+        state.mailEngagement = null;
+        renderMailEngagement(null, error.message);
+      } finally {
+        if (state.mailEngagementLoadingId === mail.id) state.mailEngagementLoadingId = null;
+      }
     }
 
+    function renderMailEngagement(engagement, stateMessage = '') {
+      const container = document.getElementById('mailMaterialEngagement');
+      if (!container) return;
+      if (stateMessage === 'loading') {
+        container.innerHTML = '<span class="muted">会社資料の閲覧状況を確認中...</span>';
+        return;
+      }
+      if (stateMessage) {
+        container.innerHTML = '<span class="status error">資料閲覧状況を取得できませんでした: ' + escapeHtml(stateMessage) + '</span>';
+        return;
+      }
+      if (!engagement) {
+        container.innerHTML = '<span class="muted">会社資料の閲覧状況: メールを選択してください</span>';
+        return;
+      }
+      const angle = materialAppointmentAngleLabel(engagement.appointmentAngle);
+      const badgeClass = engagement.appointmentAngle === 'hot' ? 'ok' : engagement.appointmentAngle === 'interested' ? 'warn' : 'muted';
+      const links = (engagement.trackedLinks || []).map((link) =>
+        '<div>' + escapeHtml(link.label || '資料リンク') + ': ' + escapeHtml(String(link.clickCount || 0)) + '回' +
+        (link.lastClickedAt ? ' / 最終 ' + escapeHtml(formatDate(link.lastClickedAt)) : '') + '</div>'
+      ).join('');
+      container.innerHTML =
+        '<div class="mail-material-head"><strong>会社資料の閲覧状況</strong><span class="badge ' + badgeClass + '">' + escapeHtml(angle) + '</span></div>' +
+        '<div class="mail-material-meta">' +
+          '<div><span>閲覧</span><strong>' + (engagement.materialViewed ? 'あり' : 'なし') + '</strong></div>' +
+          '<div><span>閲覧回数</span><strong>' + escapeHtml(String(engagement.materialClickCount || 0)) + '回</strong></div>' +
+          '<div><span>最終閲覧</span><strong>' + escapeHtml(engagement.lastMaterialClickAt ? formatDate(engagement.lastMaterialClickAt) : '未閲覧') + '</strong></div>' +
+        '</div>' +
+        (links ? '<div class="mail-material-links">' + links + '</div>' : '<div class="muted" style="margin-top:8px">追跡対象の会社資料リンクはまだありません。</div>');
+    }
+
+    function materialAppointmentAngleLabel(value) {
+      return ({ none: 'アポ角度: 未確認', interested: 'アポ角度: 高め', hot: 'アポ角度: 非常に高い' })[value] || 'アポ角度: 未確認';
+    }
+
+    function renderCampfireCandidates() {
+      return window.SalesAiRenderProjects.renderCampfireCandidates();
+    }
     function syncCandidateImportStatuses() {
       state.campfireCandidates.forEach((candidate) => {
         const existing = findExistingLeadForCandidate(candidate);
@@ -2612,44 +1588,8 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
     }
 
     function renderMails() {
-      const mails = selectedLeadMails();
-      if (!state.selectedLeadId) {
-        document.getElementById('mailRows').innerHTML = '<tr><td colspan="3" class="muted">対象を選択すると、その企業・案件の作成・レビュー履歴が表示されます</td></tr>';
-        renderMailProjectComparison(null, null);
-        document.getElementById('selectedMail').textContent = '未選択';
-        populateMailEditor(null);
-        renderRejectReason(null);
-        updateMailButtons(null);
-        renderMailStageCards(null);
-        syncMailWorkTab(null);
-        return;
-      }
-      if (state.selectedMailId && !mails.some((mail) => mail.id === state.selectedMailId)) {
-        state.selectedMailId = null;
-      }
-      if (!state.selectedMailId && mails.length) {
-        state.selectedMailId = mails[0].id;
-      }
-      const rows = mails.map((mail) => {
-        return '<tr data-selected="' + (mail.id === state.selectedMailId) + '" onclick="selectMail(\\'' + mail.id + '\\')">' +
-          '<td><div class="clip">' + escapeHtml(mail.subject) + '</div><div class="muted clip">' + escapeHtml(mail.company?.name || '') + '</div></td>' +
-          '<td><span class="badge">' + escapeHtml(labelMailStatus(mail.status)) + '</span></td>' +
-          '<td>' + formatDate(mail.createdAt) + '</td>' +
-        '</tr>';
-      }).join('');
-      document.getElementById('mailRows').innerHTML = rows || '<tr><td colspan="3" class="muted">この対象の作成・レビュー履歴は0件です。メール生成で新規作成できます。</td></tr>';
-      renderDashboardSortMarks('mail', ['subject', 'status', 'createdAt']);
-      const selected = mails.find((mail) => mail.id === state.selectedMailId);
-      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
-      renderMailProjectComparison(lead, selected);
-      document.getElementById('selectedMail').textContent = selected ? labelMailStatus(selected.status) : '未選択';
-      populateMailEditor(selected);
-      renderRejectReason(selected);
-      updateMailButtons(selected);
-      renderMailStageCards(selected);
-      syncMailWorkTab(selected);
+      return window.SalesAiRenderAreas.renderMails();
     }
-
     function renderMailProjectComparison(lead, mail) {
       const container = document.getElementById('mailProjectComparison');
       if (!container) return;
@@ -2737,19 +1677,11 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
     }
 
     function sortDashboardItems(items, sort, valueGetter) {
-      if (!sort?.key) return items;
-      const direction = sort.direction === 'desc' ? -1 : 1;
-      return [...items].sort((left, right) => compareDashboardValues(valueGetter(left, sort.key), valueGetter(right, sort.key)) * direction);
+      return window.SalesAiViewRules.sortItems(items, sort, valueGetter, window.SalesAiViewRules.compareValues);
     }
 
     function compareDashboardValues(left, right) {
-      const leftEmpty = left === null || left === undefined || left === '';
-      const rightEmpty = right === null || right === undefined || right === '';
-      if (leftEmpty && rightEmpty) return 0;
-      if (leftEmpty) return 1;
-      if (rightEmpty) return -1;
-      if (typeof left === 'number' && typeof right === 'number') return left - right;
-      return String(left).localeCompare(String(right), 'ja', { numeric: true, sensitivity: 'base' });
+      return window.SalesAiViewRules.compareValues(left, right);
     }
 
     function defaultDashboardSortDirection(key) {
@@ -2860,6 +1792,12 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
       const dirty = hasUnsavedMailEditorChanges();
       element.textContent = dirty ? '未保存' : '保存済み';
       element.className = 'status ' + (dirty ? 'warn' : 'ok');
+      const semanticButton = document.getElementById('semanticCheckButton');
+      const mail = currentSelectedMail();
+      if (semanticButton) {
+        semanticButton.disabled = !mail || !['draft', 'rejected'].includes(mail.status) || dirty;
+        semanticButton.title = dirty ? '先に本文を保存してください' : 'OpenAI APIを使って案件との意味整合性を確認します';
+      }
     }
 
     function clearMailEditor() {
@@ -2869,6 +1807,7 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
       populateMailEditor(null, true);
       document.getElementById('selectedMail').textContent = '未選択';
       renderDraftConsistencyWarning(null);
+      renderSemanticConsistencyResult(null);
       renderRejectReason(null);
       renderChecklist();
       updateMailButtons(null);
@@ -2910,6 +1849,12 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
     function selectLeadFromButton(event, id) {
       event.stopPropagation();
       selectLead(id);
+    }
+
+    function selectLeadFromKeyboard(event) {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      selectLead(event.currentTarget.dataset.leadId);
     }
 
     function selectLead(id, options = {}) {
@@ -3049,10 +1994,17 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
       if (url) window.open(url, '_blank', 'noopener');
     }
 
+    function selectMailFromKeyboard(event) {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      selectMail(event.currentTarget.dataset.mailId);
+    }
+
     function selectMail(id, options = {}) {
       if (id !== state.selectedMailId && !options.discardConfirmed && !confirmDiscardUnsavedMailChanges()) return false;
       state.selectedMailId = id;
       renderDraftConsistencyWarning(null);
+      renderSemanticConsistencyResult(null);
       state.checklist = [];
       state.checklistComplete = false;
       const mail = selectedLeadMails().find((item) => item.id === id) || state.mails.find((item) => item.id === id);
@@ -3092,6 +2044,12 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
         : ['draft', 'rejected'].includes(mail.status)
           ? 'OpenAI APIを使って本文を整えます'
           : '承認・送信フロー中のメールはAI整形できません';
+      const semanticButton = document.getElementById('semanticCheckButton');
+      if (semanticButton) {
+        const dirty = hasUnsavedMailEditorChanges();
+        semanticButton.disabled = !mail || !['draft', 'rejected'].includes(mail.status) || dirty;
+        semanticButton.title = dirty ? '先に本文を保存してください' : 'OpenAI APIを使って案件との意味整合性を確認します';
+      }
       document.getElementById('reviewButton').disabled = !mail || mail.status !== 'draft';
       document.getElementById('reReviewButton').disabled = !mail || mail.status !== 'rejected';
       document.getElementById('rejectButton').disabled = !mail || !['in_review', 'approved'].includes(mail.status);
@@ -3224,17 +2182,7 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
     }
 
     function labelMailStatus(status) {
-      return ({
-        draft: '下書き',
-        in_review: '確認待ち',
-        rejected: '棄却',
-        approved: '承認済み',
-        queued: '送信待ち',
-        sending: '送信中',
-        sent: '送信済み',
-        failed: '送信失敗',
-        cancelled: 'キャンセル'
-      })[status] || status || '未設定';
+      return window.SalesAiViewRules.labelMailStatus(status);
     }
 
     function labelAiGenerationType(type) {
@@ -3299,28 +2247,11 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
     }
 
     function labelLeadStatus(status) {
-      return ({
-        discovered: '発見',
-        qualified: '候補',
-        drafted: '下書き済み',
-        reviewing: '確認中',
-        approved: '承認済み',
-        queued: '送信待ち',
-        contacted: '連絡済み',
-        replied: '返信あり',
-        meeting_candidate: '商談候補',
-        rejected: '対象外',
-        no_response: '返信なし',
-        archived: 'アーカイブ'
-      })[status] || status || '未設定';
+      return window.SalesAiViewRules.labelLeadStatus(status);
     }
 
     function labelPriority(priority) {
-      return ({
-        high: '高',
-        medium: '中',
-        low: '低'
-      })[priority] || priority || '未設定';
+      return window.SalesAiViewRules.labelPriority(priority);
     }
 
     function formatNumber(value) {
@@ -3438,8 +2369,7 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
     }
 
     function truncateText(value, maxLength) {
-      const text = String(value || '');
-      return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
+      return window.SalesAiViewRules.truncateText(value, maxLength);
     }
 
     function escapeHtml(value) {

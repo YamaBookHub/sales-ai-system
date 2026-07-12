@@ -27,7 +27,11 @@ export class GenerateMailDraftUseCase {
       throw new ConflictException('この営業対象には既存メールがあります。履歴からメールを選択して編集・レビューしてください。');
     }
 
-    const aiInput = buildLocalMailInput(lead, dto);
+    const template = await this.prisma.mailTemplate.findUnique({ where: { key: dto.templateKey } });
+    const activeTemplate = template?.isActive
+      ? { key: template.key, subject: template.subject, body: template.body }
+      : undefined;
+    const aiInput = buildLocalMailInput(lead, dto, activeTemplate);
     const draft = buildLocalMailDraft(aiInput);
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -81,4 +85,3 @@ export class GenerateMailDraftUseCase {
     };
   }
 }
-

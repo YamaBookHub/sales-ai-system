@@ -1,5 +1,6 @@
 import { PATH_METADATA } from '@nestjs/common/constants';
 import { DashboardController } from './dashboard.controller';
+import { renderRepliesPage } from './ui/replies-page';
 
 describe('DashboardController HTML contracts', () => {
   const controller = new DashboardController();
@@ -13,15 +14,24 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('.ui-state-loading');
     expect(html).toContain('.ui-state-empty');
     expect(html).toContain('.ui-state-error');
+    expect(html).toContain('--space-1');
+    expect(html).toContain('--radius-control');
+    expect(html).toContain('--control-height');
+    expect(html).toContain('--shadow-panel');
+    expect(html).toContain(':focus-visible');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('SalesAiApi');
   }
 
   function expectTopNavigation(html: string) {
     expect(html).toContain('class="top-nav" data-ui="top-nav"');
     expect(html).toContain("location.href='/today'");
+    expect(html).toContain("location.href='/replies'");
     expect(html).toContain("location.href='/'");
     expect(html).toContain("location.href='/leads-view'");
     expect(html).toContain("location.href='/mail-workspace'");
     expect(html).toContain('候補を探す');
+    expect(html).toContain('返信');
     expect(html).toContain('営業案件');
     expect(html).toContain('作成・レビュー');
   }
@@ -44,9 +54,27 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('data-ui="today-lead-list"');
     expect(html).toContain('id="todayStats"');
     expect(html).toContain('id="todayRows"');
+    expect(html).toContain('lead.nextTask?.dueAt || lead.nextActionAt || lead.nextFollowUpAt');
     expect(html).toContain('function classifyToday(lead)');
     expect(html).toContain('今日の対応はありません');
     expect(html).toContain("location.href = '/leads-view'");
+  });
+
+  it('returns Reply Inbox HTML with API and safety-state markers', () => {
+    const html = renderRepliesPage();
+
+    expectHtmlResponse(html);
+    expectTopNavigation(html);
+    expect(html).toContain('<body data-ui-page="replies">');
+    expect(html).toContain('<h1>返信対応</h1>');
+    expect(html).toContain('data-ui="reply-inbox"');
+    expect(html).toContain('data-ui="reply-filters"');
+    expect(html).toContain('data-ui="reply-list"');
+    expect(html).toContain("'/api/replies?' + params.toString()");
+    expect(html).toContain('manager確認');
+    expect(html).toContain('追客停止');
+    expect(html).toContain('表示できる返信はありません');
+    expect(html).toContain('function changePage(delta)');
   });
 
   it('returns URL search HTML with key DOM ids and navigation', () => {
@@ -62,10 +90,14 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('id="campfireUrl"');
     expect(html).toContain('id="campfireSearchKeyword"');
     expect(html).toContain('id="campfireCandidates"');
+    expect(html).toContain('data-ui="today-entry"');
+    expect(html).toContain("location.href='/today'");
     expect(html).toContain('<div class="ui-state-empty">検索すると候補URLがここに表示されます。</div>');
     expect(html).toContain('id="bulkImportButton"');
     expect(html).toContain('id="leadRows"');
     expect(html).toContain('id="leadDetail"');
+    expect(html).toContain('onkeydown="selectLeadFromKeyboard(event)"');
+    expect(html).toContain('tabindex="0"');
   });
 
   it('returns leads view HTML with key DOM ids and navigation', () => {
@@ -86,6 +118,14 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('今対応する理由');
     expect(html).toContain('data-ui="lead-attention-reason"');
     expect(html).toContain('data-ui="lead-detail-panel"');
+    expect(html).toContain('data-ui="lead-task-workspace"');
+    expect(html).toContain('id="taskTitle"');
+    expect(html).toContain('id="taskDueAt"');
+    expect(html).toContain('id="taskAssignee"');
+    expect(html).toContain("'/api/leads/' + leadId + '/tasks?scope=all'");
+    expect(html).toContain("'/api/tasks/' + taskId");
+    expect(html).toContain('function saveTask()');
+    expect(html).toContain('function updateTaskStatus(taskId, status)');
     expect(html).toContain('id="detailNextAction"');
     expect(html).toContain('const listScrollTop = listScroll ? listScroll.scrollTop : 0;');
     expect(html).toContain('if (listScroll) listScroll.scrollTop = listScrollTop;');
@@ -98,6 +138,9 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('id="exportScope"');
     expect(html).toContain('id="exportFormat"');
     expect(html).toContain('id="leadRows"');
+    expect(html).toContain('id="leadPagination"');
+    expect(html).toContain('pageSize: 20');
+    expect(html).toContain('function changeLeadPage(delta)');
     expect(html).toContain('id="leadDetail"');
     expect(html).toContain('id="leadAnalysis"');
     expect(html).toContain('function renderAiEvidenceSection(label, values, type)');
@@ -136,6 +179,9 @@ describe('DashboardController HTML contracts', () => {
     expect(mailHtml).toContain('id="draftConsistencyWarning"');
     expect(mailHtml).toContain('function confirmDraftConsistency()');
     expect(mailHtml).toContain("'/api/mails/' + state.selectedMailId + '/consistency'");
+    expect(mailHtml).toContain('id="semanticConsistencyResult"');
+    expect(mailHtml).toContain('function checkMailSemanticConsistency()');
+    expect(mailHtml).toContain("'/api/ai/mails/' + mail.id + '/semantic-consistency'");
     expect(mailHtml).toContain('id="mailContextBar" data-ui="mail-context-bar"');
     expect(mailHtml).toContain('id="nextLeadButton"');
     expect(mailHtml).toContain('id="mailEditorSaveState"');
@@ -147,8 +193,20 @@ describe('DashboardController HTML contracts', () => {
     expect(mailHtml).toContain('const leadQueueScrollTop = leadQueue ? leadQueue.scrollTop : 0;');
     expect(mailHtml).toContain('if (leadQueue) leadQueue.scrollTop = leadQueueScrollTop;');
     expect(mailHtml).toContain('id="mailLeadSummary"');
+    expect(mailHtml).toContain('id="mailMaterialEngagement"');
+    expect(mailHtml).toContain('function loadMailEngagement(mail)');
+    expect(mailHtml).toContain("'/api/t/mails/' + encodeURIComponent(mail.id) + '/engagement'");
+    expect(mailHtml).toContain('アポ角度: 非常に高い');
     expect(mailHtml).toContain('id="templateKey"');
+    expect(mailHtml).toContain('data-ui="template-manager"');
+    expect(mailHtml).toContain('id="templateManagerList"');
+    expect(mailHtml).toContain('id="templateManagerBody"');
+    expect(mailHtml).toContain("'/api/mails/templates'");
+    expect(mailHtml).toContain("'/api/mails/templates/import'");
+    expect(mailHtml).toContain('function saveTemplate()');
+    expect(mailHtml).toContain('function importTemplates()');
     expect(mailHtml).toContain('id="mailRows"');
+    expect(mailHtml).toContain('onkeydown="selectMailFromKeyboard(event)"');
     expect(mailHtml).toContain('id="subject"');
     expect(mailHtml).toContain('id="body"');
     expect(mailHtml).toContain('id="checklistRows"');

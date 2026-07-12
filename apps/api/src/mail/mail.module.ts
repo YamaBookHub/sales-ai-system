@@ -10,14 +10,19 @@ import { RetryMailUseCase } from './application/retry-mail.usecase';
 import { SendQueuedMailUseCase } from './application/send-queued-mail.usecase';
 import { mailSenderProvider } from './infrastructure/mail-sender.config';
 import { PrismaMailWorkflowRepository } from './infrastructure/prisma-mail-workflow.repository';
+import { PrismaReplyInboxRepository } from './infrastructure/prisma-reply-inbox.repository';
+import { ListReplyInboxUseCase } from './application/list-reply-inbox.usecase';
 import { MailController } from './mail.controller';
 import { MailService } from './mail.service';
+import { ReplyInboxController } from './reply-inbox.controller';
 
 @Module({
-  controllers: [MailController],
+  controllers: [MailController, ReplyInboxController],
   providers: [
     MailService,
     PrismaMailWorkflowRepository,
+    PrismaReplyInboxRepository,
+    ListReplyInboxUseCase,
     CheckMailDraftConsistencyUseCase,
     RequestMailReviewUseCase,
     RequestMailReReviewUseCase,

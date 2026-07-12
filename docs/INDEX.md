@@ -31,6 +31,8 @@
 | 22 | 22_AI_MODEL_ROUTING.md | 作業リスクに応じたモデル選択・自動昇格・委譲ルール | 作成済み |
 | 23 | 23_UIUX_MODEL_ROUTING_POLICY.md | UI/UX改善専用のモデル選択・切り替え・監査方針 | 作成済み |
 | 24 | 24_SALES_LIST_DATA_MAPPING.md | 営業案件一覧・今日の営業で再利用するdata対応表 | 作成済み |
+| 25 | 25_REPLY_INBOX_API_DESIGN.md | 返信一覧APIの現状監査・DTO・filter・pagination設計 | 作成済み |
+| 26 | 26_NEXT_ACTION_DESIGN.md | 次回対応のTask利用、状態遷移、API、DB差分設計 | 作成済み |
 
 ## 付属仕様
 - `../prisma/schema.prisma`

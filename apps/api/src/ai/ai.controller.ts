@@ -27,6 +27,11 @@ export class AiController {
     return ok(await this.ai.polishMail(mailId));
   }
 
+  @Post('mails/:mailId/semantic-consistency')
+  async checkMailSemanticConsistency(@Param('mailId') mailId: string) {
+    return ok(await this.ai.checkMailSemanticConsistency(mailId));
+  }
+
   @Get('leads/:leadId/generations')
   async listLeadGenerations(@Param('leadId') leadId: string) {
     return ok(await this.ai.listLeadGenerations(leadId));

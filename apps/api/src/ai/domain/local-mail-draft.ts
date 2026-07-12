@@ -1,4 +1,5 @@
 import { GenerateMailDto } from '../ai.dto';
+import { MailTemplateForDraft, renderMailTemplate } from './template-mail-draft';
 
 export type LocalMailDraftInput = {
   templateKey: string;
@@ -14,11 +15,14 @@ export type LocalMailDraftInput = {
   leadReason?: string | null;
   brandAnalysisMemo?: string | null;
   snsAnalysisMemo?: string | null;
+  sendMethod?: string | null;
+  template?: MailTemplateForDraft;
 };
 
 export function buildLocalMailInput(
   lead: {
     reason?: string | null;
+    sendMethod?: string | null;
     brandAnalysisMemo?: string | null;
     snsAnalysisMemo?: string | null;
     company: { name: string };
@@ -32,7 +36,8 @@ export function buildLocalMailInput(
       supporterCount?: number | null;
     } | null;
   },
-  dto: GenerateMailDto
+  dto: GenerateMailDto,
+  template?: MailTemplateForDraft
 ): LocalMailDraftInput {
   return {
     templateKey: dto.templateKey,
@@ -47,7 +52,9 @@ export function buildLocalMailInput(
     supporterCount: lead.project?.supporterCount,
     leadReason: lead.reason,
     brandAnalysisMemo: lead.brandAnalysisMemo,
-    snsAnalysisMemo: lead.snsAnalysisMemo
+    snsAnalysisMemo: lead.snsAnalysisMemo,
+    sendMethod: lead.sendMethod,
+    template
   };
 }
 
@@ -63,7 +70,7 @@ export function buildLocalMailDraft(input: LocalMailDraftInput) {
     input.snsAnalysisMemo
   );
   const subjectNoun = placeholders.subjectType === '取り組み' ? 'プロジェクト' : '商品';
-  const body = [
+  const defaultBody = [
     `${placeholders.companyRecipient}`,
     '',
     'お世話になっております。',
@@ -85,10 +92,29 @@ export function buildLocalMailDraft(input: LocalMailDraftInput) {
     'お気軽にご連絡いただけますと幸いです。'
   ].join('\n');
 
+  const renderedTemplate = input.template
+    ? renderMailTemplate(input.template, {
+        companyName: input.companyName,
+        projectTitle: placeholders.productName,
+        platformName,
+        projectUrl: input.projectUrl,
+        category: input.projectCategory,
+        appeal: placeholders.appeal,
+        targetUser: placeholders.targetUser,
+        subjectType: placeholders.subjectType
+      })
+    : null;
+  const body = renderedTemplate?.body || defaultBody;
+  const templateFacts = input.template ? [`定型文: ${input.template.key}`] : [];
+  const templateRisks = renderedTemplate?.unresolvedVariables.length
+    ? [`未置換の定型文変数があります: ${renderedTemplate.unresolvedVariables.join(', ')}`]
+    : [];
+
   return {
-    subject: `${platformName}でのプロジェクトを拝見しご連絡いたしました`,
+    subject: renderedTemplate?.subject || `${platformName}でのプロジェクトを拝見しご連絡いたしました`,
     body,
     factsUsed: [
+      ...templateFacts,
       `会社名: ${input.companyName}`,
       `取得元: ${platformName}`,
       `プロジェクト名: ${placeholders.productName}`,
@@ -98,11 +124,14 @@ export function buildLocalMailDraft(input: LocalMailDraftInput) {
       input.snsAnalysisMemo ? `SNS分析メモ: ${input.snsAnalysisMemo}` : ''
     ].filter(Boolean),
     assumptions: ['OpenAI APIを使わず、無料分析で作成した置換項目から本文を作成しています。'],
-    riskFlags: ['送信前に、会社名・商品名・商品の魅力が相手の案件と合っているか確認してください。'],
+    riskFlags: [
+      '送信前に、会社名・商品名・商品の魅力が相手の案件と合っているか確認してください。',
+      ...templateRisks
+    ],
     usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, costUsd: 0 },
     model: 'local-template-v2',
     latencyMs: 0,
-    rawOutput: { placeholders }
+    rawOutput: { placeholders, templateKey: input.template?.key || null, unresolvedVariables: renderedTemplate?.unresolvedVariables || [] }
   };
 }
 

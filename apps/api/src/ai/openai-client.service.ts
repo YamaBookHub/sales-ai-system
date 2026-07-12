@@ -1,12 +1,19 @@
 import { BadGatewayException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { parseMailDraftJson } from './domain/ai-output-validator';
 import {
+  parseSemanticConsistencyJson,
+  SemanticConsistencyInput,
+  SemanticConsistencyResult,
+  SEMANTIC_CONSISTENCY_JSON_SCHEMA
+} from './domain/semantic-consistency';
+import {
   compactSalesMailDraftInput,
   normalizeOpenAiSalesMailDraft,
   SalesMailDraftInput,
   SalesMailDraftOutput
 } from './domain/openai-sales-mail-draft';
 import { buildSalesMailDraftSystemPrompt } from './prompts/sales-mail-draft.prompt';
+import { buildSemanticConsistencySystemPrompt, compactSemanticConsistencyInput } from './prompts/semantic-consistency.prompt';
 
 type ChatCompletionResponse = {
   choices?: Array<{ message?: { content?: string } }>;
@@ -79,6 +86,57 @@ export class OpenAiClientService {
       model,
       latencyMs: Date.now() - startedAt,
       rawOutput: parsed
+    };
+  }
+
+  async checkSemanticConsistency(input: SemanticConsistencyInput): Promise<SemanticConsistencyResult & { model: string; latencyMs: number }> {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new ServiceUnavailableException('OpenAI APIキーが未設定です。.env の OPENAI_API_KEY を確認してください。');
+    }
+
+    const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+    const startedAt = Date.now();
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0,
+        max_tokens: numberFromEnv('OPENAI_SEMANTIC_CHECK_MAX_OUTPUT_TOKENS', 400),
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'mail_semantic_consistency',
+            strict: true,
+            schema: SEMANTIC_CONSISTENCY_JSON_SCHEMA
+          }
+        },
+        messages: [
+          { role: 'system', content: buildSemanticConsistencySystemPrompt() },
+          { role: 'user', content: JSON.stringify(compactSemanticConsistencyInput(input)) }
+        ]
+      })
+    });
+
+    const rawText = await response.text();
+    if (!response.ok) {
+      throw new BadGatewayException(toJapaneseOpenAiError(rawText, response.status));
+    }
+
+    const payload = parseChatCompletionResponse(rawText);
+    const content = payload.choices?.[0]?.message?.content;
+    if (!content) {
+      throw new BadGatewayException('AIの意味整合性確認結果が空でした。');
+    }
+
+    return {
+      ...parseSemanticConsistencyJson(content),
+      model,
+      latencyMs: Date.now() - startedAt
     };
   }
 }

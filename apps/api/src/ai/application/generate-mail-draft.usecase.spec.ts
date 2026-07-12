@@ -36,6 +36,9 @@ describe('GenerateMailDraftUseCase', () => {
       salesLead: {
         findUnique: jest.fn().mockResolvedValue(lead)
       },
+      mailTemplate: {
+        findUnique: jest.fn().mockResolvedValue(null)
+      },
       outreachEmail: {
         findFirst: jest.fn().mockResolvedValue(null)
       },
@@ -84,5 +87,36 @@ describe('GenerateMailDraftUseCase', () => {
 
     await expect(useCase.execute(lead.id, { templateKey: 'normal' })).rejects.toThrow(ConflictException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('uses an active email template from the database', async () => {
+    const { prisma, tx } = createPrisma();
+    prisma.mailTemplate.findUnique.mockResolvedValue({
+      key: 'email-custom',
+      channel: 'email',
+      isActive: true,
+      subject: '{{companyName}}様へのご提案',
+      body: '{{companyName}} ご担当者様\n{{projectTitle}}を拝見しました。'
+    });
+    const useCase = new GenerateMailDraftUseCase(prisma as any);
+
+    const result = await useCase.execute(lead.id, { templateKey: 'email-custom' });
+
+    expect(tx.outreachEmail.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          subject: 'テスト株式会社様へのご提案',
+          body: expect.stringContaining('真空保存できる米びつを拝見しました。')
+        })
+      })
+    );
+    expect(result.factsUsed).toContain('定型文: email-custom');
+    expect(tx.aiGeneration.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          inputJson: expect.objectContaining({ template: expect.objectContaining({ key: 'email-custom' }) })
+        })
+      })
+    );
   });
 });

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { LeadPriority, LeadStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { applyLeadPolicy } from './domain/lead-policy';
+import { ACTIVE_TASK_STATUSES, TaskRecord, toTaskView } from './domain/task';
 import { CreateLeadDto, UpdateLeadDto } from './leads.dto';
 import { ScoreLeadUseCase } from './application/score-lead.usecase';
 
@@ -24,13 +25,20 @@ export class LeadsService {
         include: {
           company: true,
           project: { include: { platform: true } },
-          scores: { orderBy: { createdAt: 'desc' }, take: 1 }
+          scores: { orderBy: { createdAt: 'desc' }, take: 1 },
+          tasks: {
+            where: { status: { in: ACTIVE_TASK_STATUSES } },
+            orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
+            take: 1,
+            include: { assignee: { select: { id: true, name: true, email: true } } }
+          },
+          _count: { select: { tasks: { where: { status: { in: ACTIVE_TASK_STATUSES } } } } }
         }
       }),
       this.prisma.salesLead.count({ where })
     ]);
 
-    return { items: items.map(sanitizeLeadMemos), page, limit, total };
+    return { items: items.map((lead) => withTaskSummary(sanitizeLeadMemos(lead))), page, limit, total };
   }
 
   create(dto: CreateLeadDto) {
@@ -69,7 +77,14 @@ export class LeadsService {
       include: {
         company: true,
         project: { include: { platform: true } },
-        scores: { orderBy: { createdAt: 'desc' }, take: 1 }
+        scores: { orderBy: { createdAt: 'desc' }, take: 1 },
+        tasks: {
+          where: { status: { in: ACTIVE_TASK_STATUSES } },
+          orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
+          take: 1,
+          include: { assignee: { select: { id: true, name: true, email: true } } }
+        },
+        _count: { select: { tasks: { where: { status: { in: ACTIVE_TASK_STATUSES } } } } }
       }
     });
 
@@ -77,7 +92,7 @@ export class LeadsService {
       throw new NotFoundException('Lead not found');
     }
 
-    return sanitizeLeadMemos(lead);
+    return withTaskSummary(sanitizeLeadMemos(lead));
   }
 
   async update(id: string, dto: UpdateLeadDto) {
@@ -212,6 +227,13 @@ function sanitizeLeadMemos<T extends { project?: { title?: string | null; descri
     brandAnalysisMemo: isMemoCompatibleWithProject(lead.brandAnalysisMemo, source) ? lead.brandAnalysisMemo : null,
     snsAnalysisMemo: isMemoCompatibleWithProject(lead.snsAnalysisMemo, source) ? lead.snsAnalysisMemo : null
   };
+}
+
+function withTaskSummary<T extends { tasks?: TaskRecord[]; _count?: { tasks: number } }>(lead: T) {
+  const nextTask = lead.tasks?.[0] ? toTaskView(lead.tasks[0]) : null;
+  const activeTaskCount = lead._count?.tasks || 0;
+  const { tasks: _tasks, _count: _count, ...rest } = lead;
+  return { ...rest, nextTask, activeTaskCount };
 }
 
 function isMemoCompatibleWithProject(memo?: string | null, projectSource = '') {
