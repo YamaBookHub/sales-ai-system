@@ -9,8 +9,9 @@ describe('GmailMailSender', () => {
     fromEmail: 'sales@example.com'
   };
 
-  const createResponse = (ok: boolean, body: unknown, statusText = 'error') => ({
+  const createResponse = (ok: boolean, body: unknown, statusText = 'error', status?: number) => ({
     ok,
+    status,
     statusText,
     json: jest.fn().mockResolvedValue(body),
     text: jest.fn().mockResolvedValue(typeof body === 'string' ? body : JSON.stringify(body))
@@ -90,6 +91,29 @@ describe('GmailMailSender', () => {
       subject: '件名',
       body: '本文'
     })).rejects.toThrow(ServiceUnavailableException);
+  });
+
+  it('retries transient OAuth failures but does not retry the send request', async () => {
+    const httpPost = jest
+      .fn()
+      .mockResolvedValueOnce(createResponse(false, { error: 'temporary' }, 'unavailable', 503))
+      .mockResolvedValueOnce(createResponse(true, { access_token: 'access' }))
+      .mockResolvedValueOnce(createResponse(true, { id: 'message_1', threadId: 'thread_1' }));
+    const sleep = jest.fn().mockResolvedValue(undefined);
+    const sender = new GmailMailSender(config, httpPost, sleep);
+
+    await expect(sender.send({
+      idempotencyKey: 'key',
+      toEmail: 'to@example.com',
+      subject: '件名',
+      body: '本文'
+    })).resolves.toMatchObject({ messageId: 'message_1' });
+
+    expect(httpPost).toHaveBeenCalledTimes(3);
+    expect(httpPost.mock.calls[0][0]).toBe('https://oauth2.googleapis.com/token');
+    expect(httpPost.mock.calls[1][0]).toBe('https://oauth2.googleapis.com/token');
+    expect(httpPost.mock.calls[2][0]).toBe('https://gmail.googleapis.com/gmail/v1/users/me/messages/send');
+    expect(sleep).toHaveBeenCalledWith(250);
   });
 
   it('builds base64url encoded RFC822 message', () => {

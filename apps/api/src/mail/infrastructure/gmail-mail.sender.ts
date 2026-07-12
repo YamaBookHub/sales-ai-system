@@ -16,12 +16,16 @@ type GmailSendResponse = {
 };
 
 type HttpPost = (url: string, init: RequestInit) => Promise<Response>;
+type Sleep = (milliseconds: number) => Promise<void>;
+
+const OAUTH_MAX_ATTEMPTS = 3;
 
 @Injectable()
 export class GmailMailSender implements MailSender {
   constructor(
     private readonly config: GmailMailSenderConfig = requireGmailMailSenderConfig(),
-    private readonly httpPost: HttpPost = fetch
+    private readonly httpPost: HttpPost = fetch,
+    private readonly sleep: Sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
   ) {}
 
   validate(request: MailSendRequest) {
@@ -67,7 +71,7 @@ export class GmailMailSender implements MailSender {
   }
 
   private async fetchAccessToken() {
-    const response = await this.httpPost('https://oauth2.googleapis.com/token', {
+    const response = await this.postOAuthTokenWithRetry('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -84,6 +88,19 @@ export class GmailMailSender implements MailSender {
     }
 
     return data.access_token;
+  }
+
+  private async postOAuthTokenWithRetry(url: string, init: RequestInit) {
+    for (let attempt = 1; attempt <= OAUTH_MAX_ATTEMPTS; attempt += 1) {
+      const response = await this.httpPost(url, init);
+      if (response.ok || !isTransientStatus(response.status) || attempt === OAUTH_MAX_ATTEMPTS) {
+        return response;
+      }
+
+      await this.sleep(250 * 2 ** (attempt - 1));
+    }
+
+    throw new ServiceUnavailableException('Gmail OAuth認証に失敗しました。');
   }
 }
 
@@ -132,4 +149,8 @@ async function responseText(response: Response) {
   } catch {
     return response.statusText;
   }
+}
+
+function isTransientStatus(status: number) {
+  return [408, 429, 500, 502, 503, 504].includes(status);
 }
