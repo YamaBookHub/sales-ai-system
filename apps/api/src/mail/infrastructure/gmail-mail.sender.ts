@@ -25,6 +25,9 @@ export class GmailMailSender implements MailSender {
   ) {}
 
   async send(request: MailSendRequest): Promise<MailSendResult> {
+    if (!isEmailSendMethod(request.sendMethod)) {
+      throw new BadRequestException('現在の実送信providerはメールのみ対応しています。サイト内メッセージや問い合わせフォームは専用providerを設定してください。');
+    }
     if (!request.toEmail) {
       throw new BadRequestException('送信先メールアドレスが未設定です。');
     }
@@ -78,6 +81,11 @@ export class GmailMailSender implements MailSender {
 
     return data.access_token;
   }
+}
+
+export function isEmailSendMethod(value?: string | null) {
+  if (!value) return true;
+  return ['email', 'メール'].includes(value.trim().toLowerCase());
 }
 
 export function buildRawGmailMessage(input: {

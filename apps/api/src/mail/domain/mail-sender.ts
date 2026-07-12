@@ -3,6 +3,9 @@ export const MAIL_SENDER = Symbol('MAIL_SENDER');
 export type MailSendRequest = {
   idempotencyKey: string;
   toEmail?: string | null;
+  sendMethod?: string | null;
+  contactFormUrl?: string | null;
+  siteMessageUrl?: string | null;
   subject: string;
   body: string;
 };

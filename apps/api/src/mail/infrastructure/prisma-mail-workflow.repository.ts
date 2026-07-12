@@ -79,7 +79,18 @@ export class PrismaMailWorkflowRepository {
         throw new ConflictException('このメールはすでに送信処理中、または送信対象ではありません。');
       }
 
-      const claimedEmail = await tx.outreachEmail.findUniqueOrThrow({ where: { id } });
+      const claimedEmail = await tx.outreachEmail.findUniqueOrThrow({
+        where: { id },
+        include: {
+          lead: {
+            select: {
+              sendMethod: true,
+              contactFormUrl: true,
+              siteMessageUrl: true
+            }
+          }
+        }
+      });
       await tx.emailEvent.create({
         data: {
           emailId: id,

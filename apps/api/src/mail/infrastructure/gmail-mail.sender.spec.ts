@@ -66,6 +66,20 @@ describe('GmailMailSender', () => {
     expect(httpPost).not.toHaveBeenCalled();
   });
 
+  it('rejects non-email channels before calling Gmail', async () => {
+    const httpPost = jest.fn();
+    const sender = new GmailMailSender(config, httpPost);
+
+    await expect(sender.send({
+      idempotencyKey: 'key',
+      sendMethod: 'site_message',
+      toEmail: 'to@example.com',
+      subject: '件名',
+      body: '本文'
+    })).rejects.toThrow(BadRequestException);
+    expect(httpPost).not.toHaveBeenCalled();
+  });
+
   it('rejects OAuth failure', async () => {
     const httpPost = jest.fn().mockResolvedValueOnce(createResponse(false, { error: 'invalid_grant' }));
     const sender = new GmailMailSender(config, httpPost);

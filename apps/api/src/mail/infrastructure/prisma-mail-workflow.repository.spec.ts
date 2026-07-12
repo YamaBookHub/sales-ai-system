@@ -22,6 +22,18 @@ describe('PrismaMailWorkflowRepository', () => {
       where: { id: 'mail_1', status: 'queued' },
       data: { status: 'sending' }
     });
+    expect(tx.outreachEmail.findUniqueOrThrow).toHaveBeenCalledWith({
+      where: { id: 'mail_1' },
+      include: {
+        lead: {
+          select: {
+            sendMethod: true,
+            contactFormUrl: true,
+            siteMessageUrl: true
+          }
+        }
+      }
+    });
     expect(tx.emailEvent.create).toHaveBeenCalledWith({
       data: {
         emailId: 'mail_1',

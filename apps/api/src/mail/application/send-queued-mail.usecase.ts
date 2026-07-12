@@ -20,12 +20,18 @@ export class SendQueuedMailUseCase {
     const claimedEmail = await this.mails.claimForSending(id, idempotencyKey);
 
     try {
-      const result = await this.sender.send({
+      const request = {
         idempotencyKey,
         toEmail: claimedEmail.toEmail,
         subject: claimedEmail.subject,
         body: claimedEmail.body
-      });
+      } as Parameters<MailSender['send']>[0];
+      if (claimedEmail.lead) {
+        request.sendMethod = claimedEmail.lead.sendMethod;
+        request.contactFormUrl = claimedEmail.lead.contactFormUrl;
+        request.siteMessageUrl = claimedEmail.lead.siteMessageUrl;
+      }
+      const result = await this.sender.send(request);
       return this.mails.markSentAfterSend(id, result, idempotencyKey);
     } catch (error) {
       await this.mails.markFailedAfterSend(id, error, idempotencyKey);
