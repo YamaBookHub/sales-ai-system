@@ -203,6 +203,8 @@ describe('DashboardController HTML contracts', () => {
     expect(mailHtml).toContain("'/api/t/links'");
     expect(mailHtml).toContain('function autoTrackMaterialUrls(mailId, body)');
     expect(mailHtml).toContain('function extractMaterialUrls(body)');
+    expect(mailHtml).toContain('function leadSendMethodLabel(lead)');
+    expect(mailHtml).toContain('手動送信済みにする');
     expect(mailHtml).toContain('id="templateKey"');
     expect(mailHtml).toContain('data-ui="template-manager"');
     expect(mailHtml).toContain('id="templateManagerList"');
