@@ -17,21 +17,12 @@ export class SendQueuedMailUseCase {
     assertCanSendQueued(email.status, checklistComplete);
 
     const idempotencyKey = buildMailSendIdempotencyKey(email);
+    const request = buildMailSendRequest(email, idempotencyKey);
+    this.sender.validate?.(request);
     const claimedEmail = await this.mails.claimForSending(id, idempotencyKey);
 
     try {
-      const request = {
-        idempotencyKey,
-        toEmail: claimedEmail.toEmail,
-        subject: claimedEmail.subject,
-        body: claimedEmail.body
-      } as Parameters<MailSender['send']>[0];
-      if (claimedEmail.lead) {
-        request.sendMethod = claimedEmail.lead.sendMethod;
-        request.contactFormUrl = claimedEmail.lead.contactFormUrl;
-        request.siteMessageUrl = claimedEmail.lead.siteMessageUrl;
-      }
-      const result = await this.sender.send(request);
+      const result = await this.sender.send(buildMailSendRequest(claimedEmail, idempotencyKey));
       return this.mails.markSentAfterSend(id, result, idempotencyKey);
     } catch (error) {
       await this.mails.markFailedAfterSend(id, error, idempotencyKey);
@@ -42,4 +33,21 @@ export class SendQueuedMailUseCase {
 
 function buildMailSendIdempotencyKey(email: { id: string; retryCount?: number | null }) {
   return `mail:${email.id}:retry:${email.retryCount ?? 0}`;
+}
+
+function buildMailSendRequest(email: {
+  toEmail?: string | null;
+  subject: string;
+  body: string;
+  lead?: { sendMethod?: string | null; contactFormUrl?: string | null; siteMessageUrl?: string | null } | null;
+}, idempotencyKey: string) {
+  return {
+    idempotencyKey,
+    toEmail: email.toEmail,
+    subject: email.subject,
+    body: email.body,
+    sendMethod: email.lead?.sendMethod,
+    contactFormUrl: email.lead?.contactFormUrl,
+    siteMessageUrl: email.lead?.siteMessageUrl
+  };
 }

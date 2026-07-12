@@ -18,5 +18,6 @@ export type MailSendResult = {
 };
 
 export interface MailSender {
+  validate?(request: MailSendRequest): void;
   send(request: MailSendRequest): Promise<MailSendResult>;
 }

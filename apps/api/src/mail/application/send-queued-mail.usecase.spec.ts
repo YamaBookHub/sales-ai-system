@@ -20,6 +20,7 @@ describe('SendQueuedMailUseCase', () => {
       markFailedAfterSend: jest.fn().mockResolvedValue({ ...email, status: 'failed' })
     };
     const sender = {
+      validate: jest.fn(),
       send: jest.fn().mockResolvedValue({
         provider: 'test',
         messageId: 'message_1',
@@ -87,6 +88,20 @@ describe('SendQueuedMailUseCase', () => {
 
     await expect(useCase.execute(email.id)).rejects.toThrow(ConflictException);
     expect(sender.send).not.toHaveBeenCalled();
+    expect(mails.markFailedAfterSend).not.toHaveBeenCalled();
+  });
+
+  it('does not claim a queued non-email channel when the provider rejects it', async () => {
+    const { mails, sender } = createDeps();
+    mails.get.mockResolvedValue({ ...email, lead: { sendMethod: 'site_message' } });
+    sender.validate = jest.fn().mockImplementation(() => {
+      throw new ServiceUnavailableException('site provider missing');
+    });
+    const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
+
+    await expect(useCase.execute(email.id)).rejects.toThrow(ServiceUnavailableException);
+    expect(sender.validate).toHaveBeenCalledWith(expect.objectContaining({ sendMethod: 'site_message' }));
+    expect(mails.claimForSending).not.toHaveBeenCalled();
     expect(mails.markFailedAfterSend).not.toHaveBeenCalled();
   });
 });

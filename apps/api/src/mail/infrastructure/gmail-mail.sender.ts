@@ -24,10 +24,14 @@ export class GmailMailSender implements MailSender {
     private readonly httpPost: HttpPost = fetch
   ) {}
 
-  async send(request: MailSendRequest): Promise<MailSendResult> {
+  validate(request: MailSendRequest) {
     if (!isEmailSendMethod(request.sendMethod)) {
       throw new BadRequestException('現在の実送信providerはメールのみ対応しています。サイト内メッセージや問い合わせフォームは専用providerを設定してください。');
     }
+  }
+
+  async send(request: MailSendRequest): Promise<MailSendResult> {
+    this.validate(request);
     if (!request.toEmail) {
       throw new BadRequestException('送信先メールアドレスが未設定です。');
     }

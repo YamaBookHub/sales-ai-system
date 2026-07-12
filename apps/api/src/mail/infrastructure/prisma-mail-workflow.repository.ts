@@ -9,7 +9,18 @@ export class PrismaMailWorkflowRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async get(id: string) {
-    const email = await this.prisma.outreachEmail.findUnique({ where: { id } });
+    const email = await this.prisma.outreachEmail.findUnique({
+      where: { id },
+      include: {
+        lead: {
+          select: {
+            sendMethod: true,
+            contactFormUrl: true,
+            siteMessageUrl: true
+          }
+        }
+      }
+    });
 
     if (!email) {
       throw new NotFoundException('Mail not found');
