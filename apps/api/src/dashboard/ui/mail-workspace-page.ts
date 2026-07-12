@@ -210,6 +210,14 @@ export function renderMailWorkspace(): string {
                   <label for="body">本文</label>
                   <textarea id="body" oninput="updateMailEditorDirtyState()"></textarea>
                 </div>
+                <div class="material-link-tools" data-ui="material-link-tools">
+                  <label for="materialUrl">会社資料URL</label>
+                  <div class="material-link-row">
+                    <input id="materialUrl" type="url" placeholder="https://example.com/company.pdf" />
+                    <button type="button" id="materialLinkButton" onclick="createMaterialTrackingLink()" disabled>追跡リンクを本文へ追加</button>
+                  </div>
+                  <span id="materialLinkStatus" class="status muted" aria-live="polite">下書きまたは棄却後のメールで利用できます</span>
+                </div>
               </div>
               <div class="mail-project-comparison" id="mailProjectComparison" data-ui="mail-project-comparison">
                 <h4>案件情報と見比べる</h4>

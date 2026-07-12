@@ -902,6 +902,20 @@ export function renderSharedStyles(page: SharedStylePage): string {
       color: var(--muted);
       font-size: 12px;
     }
+    .material-link-tools {
+      display: grid;
+      gap: 5px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .material-link-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+    }
     .mail-editor-grid {
       display: grid;
       grid-template-columns: minmax(0, 1.35fr) minmax(360px, .65fr);
@@ -963,7 +977,7 @@ export function renderSharedStyles(page: SharedStylePage): string {
     }
     a:hover { text-decoration: underline; }
     @media (max-width: 980px) {
-      main, .workflow, .split, .grid-2, .detail-grid, .compact-summary, .mail-create-bar, .mail-editor-grid, .next-action-strip, .info-columns, .template-manager-grid, .mail-material-meta { grid-template-columns: 1fr; }
+      main, .workflow, .split, .grid-2, .detail-grid, .compact-summary, .mail-create-bar, .mail-editor-grid, .next-action-strip, .info-columns, .template-manager-grid, .mail-material-meta, .material-link-row { grid-template-columns: 1fr; }
       body.mail-workspace-page main { grid-template-columns: minmax(0, 1fr); }
       body.mail-workspace-page .left {
         height: auto;

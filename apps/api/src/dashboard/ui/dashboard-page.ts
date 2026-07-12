@@ -749,6 +749,49 @@ ${renderClientMailScript()}
       }
     }
 
+    async function createMaterialTrackingLink() {
+      const mail = currentSelectedMail();
+      if (!mail || !['draft', 'rejected'].includes(mail.status)) {
+        setStatus('materialLinkStatus', '下書きまたは棄却後のメールを選択してください', 'warn');
+        return;
+      }
+      const originalUrl = fieldValue('materialUrl');
+      if (!originalUrl) {
+        setStatus('materialLinkStatus', '会社資料URLを入力してください', 'warn');
+        return;
+      }
+      try {
+        const parsedUrl = new URL(originalUrl);
+        if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('HTTPまたはHTTPSのURLを入力してください');
+      } catch (error) {
+        setStatus('materialLinkStatus', error.message, 'warn');
+        return;
+      }
+      const button = document.getElementById('materialLinkButton');
+      if (button) button.disabled = true;
+      setStatus('materialLinkStatus', '追跡リンクを作成中', 'warn');
+      try {
+        const result = await api('/api/t/links', {
+          method: 'POST',
+          body: JSON.stringify({ emailId: mail.id, originalUrl, label: 'company_material' })
+        });
+        const trackingUrl = new URL(result.trackingPath, window.location.origin).toString();
+        const body = document.getElementById('body');
+        if (body && !body.value.includes(trackingUrl)) {
+          body.value = body.value.trim() + '\n\n会社資料: ' + trackingUrl;
+          updateMailEditorDirtyState();
+        }
+        document.getElementById('materialUrl').value = '';
+        state.mailEngagement = null;
+        setStatus('materialLinkStatus', '追跡リンクを本文へ追加しました。本文を保存してください', 'ok');
+        void loadMailEngagement(mail);
+      } catch (error) {
+        setStatus('materialLinkStatus', '追跡リンクの作成に失敗しました: ' + error.message, 'error');
+      } finally {
+        updateMailButtons(currentSelectedMail());
+      }
+    }
+
     async function loadChecklist() {
       if (!state.selectedMailId) {
         state.checklist = [];
@@ -2057,6 +2100,8 @@ ${renderClientMailScript()}
       document.getElementById('queueButton').disabled = !mail || mail.status !== 'approved' || !state.checklistComplete;
       document.getElementById('markSentButton').disabled = !mail || !['approved', 'queued'].includes(mail.status);
       document.getElementById('replyButton').disabled = !mail || !['queued', 'sent'].includes(mail.status);
+      const materialLinkButton = document.getElementById('materialLinkButton');
+      if (materialLinkButton) materialLinkButton.disabled = !mail || !['draft', 'rejected'].includes(mail.status);
       updatePrimaryMailAction(mail);
       const guide = document.getElementById('mailActionGuide');
       if (guide) guide.textContent = mailActionGuideText(mail);

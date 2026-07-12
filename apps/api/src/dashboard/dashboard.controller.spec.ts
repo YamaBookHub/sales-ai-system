@@ -197,6 +197,10 @@ describe('DashboardController HTML contracts', () => {
     expect(mailHtml).toContain('function loadMailEngagement(mail)');
     expect(mailHtml).toContain("'/api/t/mails/' + encodeURIComponent(mail.id) + '/engagement'");
     expect(mailHtml).toContain('アポ角度: 非常に高い');
+    expect(mailHtml).toContain('data-ui="material-link-tools"');
+    expect(mailHtml).toContain('id="materialUrl"');
+    expect(mailHtml).toContain('function createMaterialTrackingLink()');
+    expect(mailHtml).toContain("'/api/t/links'");
     expect(mailHtml).toContain('id="templateKey"');
     expect(mailHtml).toContain('data-ui="template-manager"');
     expect(mailHtml).toContain('id="templateManagerList"');
@@ -205,6 +209,8 @@ describe('DashboardController HTML contracts', () => {
     expect(mailHtml).toContain("'/api/mails/templates/import'");
     expect(mailHtml).toContain('function saveTemplate()');
     expect(mailHtml).toContain('function importTemplates()');
+    expect(mailHtml).toContain('function templateChannelForLead(lead)');
+    expect(mailHtml).toContain('template.channel === channel');
     expect(mailHtml).toContain('id="mailRows"');
     expect(mailHtml).toContain('onkeydown="selectMailFromKeyboard(event)"');
     expect(mailHtml).toContain('id="subject"');
