@@ -1463,12 +1463,23 @@ ${renderClientMailScript()}
     function renderAnalysisCards(output) {
       return '<div class="info-columns">' +
         infoCard('商品の魅力', output.productStrengths) +
+        renderMaterialEngagementCard(output.materialEngagement) +
         infoCard('SNS訴求', output.snsIdeas) +
         infoCard('メール材料', output.mailAdvice) +
         infoCard('使う人', output.targetUsers) +
         infoCard('次に確認', output.nextChecks) +
         infoCard('不足情報', output.missingInfo) +
       '</div>';
+    }
+
+    function renderMaterialEngagementCard(engagement) {
+      if (!engagement) return '';
+      const angle = ({ none: '未確認', interested: '高め', hot: '非常に高い' })[engagement.appointmentAngle] || '未確認';
+      return infoCard('会社資料の閲覧', [
+        (engagement.materialViewed ? '閲覧あり' : '未閲覧') + ' / ' + Number(engagement.materialClickCount || 0) + '回',
+        'アポ角度: ' + angle,
+        engagement.lastMaterialClickAt ? '最終閲覧: ' + formatDate(engagement.lastMaterialClickAt) : '最終閲覧: 未閲覧'
+      ]);
     }
 
     function renderPlaceholderAnalysis(placeholders) {

@@ -1,3 +1,10 @@
+export type LocalMaterialEngagement = {
+  materialViewed: boolean;
+  materialClickCount: number;
+  lastMaterialClickAt: string | null;
+  appointmentAngle: 'none' | 'interested' | 'hot';
+};
+
 export function buildLocalLeadAnalysis(lead: {
   reason?: string | null;
   brandAnalysisMemo?: string | null;
@@ -9,6 +16,7 @@ export function buildLocalLeadAnalysis(lead: {
   instagramUrl?: string | null;
   tiktokUrl?: string | null;
   xUrl?: string | null;
+  materialEngagement?: LocalMaterialEngagement | null;
   company: { name: string };
   project?: {
     title?: string | null;
@@ -39,18 +47,19 @@ export function buildLocalLeadAnalysis(lead: {
       typeof project?.supporterCount === 'number' ? `支援者数: ${project.supporterCount.toLocaleString()}人` : '',
       lead.reason ? `リード理由: ${lead.reason}` : '',
       safeBrandAnalysisMemo ? `ブランド分析メモ: ${safeBrandAnalysisMemo}` : '',
-      safeSnsAnalysisMemo ? `SNS分析メモ: ${safeSnsAnalysisMemo}` : ''
+      safeSnsAnalysisMemo ? `SNS分析メモ: ${safeSnsAnalysisMemo}` : '',
+      materialEngagementFact(lead.materialEngagement)
     ].filter(Boolean);
 
     const output = {
       summary: buildLocalSummary(lead.company.name, project?.title, project?.category, project?.amount, project?.supporterCount),
       productStrengths: buildLocalStrengths(projectAnalysisSource, lead.reason),
       targetUsers: buildLocalTargetUsers(project?.category, projectAnalysisSource),
-      salesAngles: buildLocalSalesAngles(project?.amount, project?.supporterCount),
+      salesAngles: buildLocalSalesAngles(project?.amount, project?.supporterCount, lead.materialEngagement),
       snsIdeas: buildLocalSnsIdeas(project?.category, projectAnalysisSource),
       readiness: buildMailReadiness(lead, project),
       missingInfo: buildMissingInfo(lead, project),
-      nextChecks: buildNextChecks(lead, project),
+      nextChecks: buildNextChecks(lead, project, lead.materialEngagement),
       mailAdvice: buildMailAdvice(project?.category, analysisSource, lead.reason),
       mailPlaceholders: buildMailPlaceholders(
         lead.company.name,
@@ -61,9 +70,16 @@ export function buildLocalLeadAnalysis(lead: {
         safeBrandAnalysisMemo,
         safeSnsAnalysisMemo
       ),
+      materialEngagement: lead.materialEngagement || null,
       factsUsed,
-      assumptions: ['OpenAI APIを使わない無料分析のため、商品説明から読み取れる範囲で整理しています。'],
-      riskFlags: ['メール生成前に、会社名・商品名・商品特徴が相手と合っているか確認してください。']
+      assumptions: [
+        'OpenAI APIを使わない無料分析のため、商品説明から読み取れる範囲で整理しています。',
+        ...(lead.materialEngagement?.materialViewed ? ['会社資料の閲覧は関心の可能性を示しますが、アポイント確定を意味しません。'] : [])
+      ],
+      riskFlags: [
+        'メール生成前に、会社名・商品名・商品特徴が相手と合っているか確認してください。',
+        ...(lead.materialEngagement?.materialViewed ? ['資料閲覧だけでアポ確定と判断せず、返信や会話の有無も確認してください。'] : [])
+      ]
     };
 
   return {
@@ -76,7 +92,8 @@ export function buildLocalLeadAnalysis(lead: {
       supporterCount: project?.supporterCount,
       leadReason: lead.reason,
       brandAnalysisMemo: safeBrandAnalysisMemo,
-      snsAnalysisMemo: safeSnsAnalysisMemo
+      snsAnalysisMemo: safeSnsAnalysisMemo,
+      materialEngagement: lead.materialEngagement || null
     }
   };
 }
@@ -303,8 +320,13 @@ function buildLocalTargetUsers(category?: string | null, description?: string | 
   return ['商品の利用シーンに近い生活者'];
 }
 
-function buildLocalSalesAngles(amount?: number | null, supporters?: number | null) {
+function buildLocalSalesAngles(amount?: number | null, supporters?: number | null, materialEngagement?: LocalMaterialEngagement | null) {
   const angles = ['商品の魅力を短く整理し、使用シーンを具体化してメールに反映する。'];
+  if (materialEngagement?.appointmentAngle === 'hot') {
+    angles.unshift('会社資料を複数回閲覧しているため、早めのアポイント候補として優先する。ただしアポ確定ではない。');
+  } else if (materialEngagement?.appointmentAngle === 'interested') {
+    angles.unshift('会社資料の閲覧があり関心の可能性があるため、押しつけずに短い面談提案を検討する。');
+  }
   if (typeof amount === 'number' && amount > 0) angles.push('支援額が確認できるため、一定の関心がある案件として扱う。');
   if (typeof supporters === 'number' && supporters > 0) angles.push('支援者数が確認できるため、利用者に伝わっている点を探す。');
   return angles;
@@ -374,7 +396,8 @@ function buildNextChecks(
     tiktokUrl?: string | null;
     xUrl?: string | null;
   },
-  project?: { url?: string | null; description?: string | null; platform?: { name?: string | null; type?: string | null } | null } | null
+  project?: { url?: string | null; description?: string | null; platform?: { name?: string | null; type?: string | null } | null } | null,
+  materialEngagement?: LocalMaterialEngagement | null
 ) {
   const platformName = projectPlatformLabel(project);
   const checks = [
@@ -386,7 +409,15 @@ function buildNextChecks(
     checks.push('公式サイトやSNSの見せ方を確認し、メール内で触れるべきか判断する。');
   }
   if (project?.url) checks.push(`${platformName}ページを開き、終了日や公開状態が変わっていないか確認する。`);
+  if (materialEngagement?.appointmentAngle === 'hot') checks.push('会社資料を複数回閲覧しているため、早めに返信確認とアポイント候補日時の準備をする。');
+  if (materialEngagement?.appointmentAngle === 'interested') checks.push('会社資料の閲覧があるため、次回接触で資料の感想や関心領域を確認する。');
   return checks;
+}
+
+function materialEngagementFact(materialEngagement?: LocalMaterialEngagement | null) {
+  if (!materialEngagement) return '';
+  const angle = ({ none: '未確認', interested: '高め', hot: '非常に高い' } as Record<string, string>)[materialEngagement.appointmentAngle] || '未確認';
+  return `会社資料閲覧: ${materialEngagement.materialClickCount}回 / アポ角度: ${angle}`;
 }
 
 function buildMailAdvice(category?: string | null, description?: string | null, reason?: string | null) {

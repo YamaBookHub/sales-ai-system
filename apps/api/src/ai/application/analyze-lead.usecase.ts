@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { materialEngagementForClickCount } from '../../tracking/domain/material-engagement-policy';
 import { buildLocalLeadAnalysis } from '../domain/local-lead-analysis';
 
 @Injectable()
@@ -16,7 +17,8 @@ export class AnalyzeLeadUseCase {
       throw new NotFoundException('Lead not found');
     }
 
-    const analysis = buildLocalLeadAnalysis(lead);
+    const materialEngagement = await loadMaterialEngagement(this.prisma, leadId);
+    const analysis = buildLocalLeadAnalysis({ ...lead, materialEngagement });
 
     const aiGeneration = await this.prisma.aiGeneration.create({
       data: {
@@ -38,3 +40,21 @@ export class AnalyzeLeadUseCase {
   }
 }
 
+async function loadMaterialEngagement(prisma: PrismaService, leadId: string) {
+  const links = await prisma.trackedLink.findMany({
+    where: { email: { leadId }, label: 'company_material' },
+    include: { clicks: { orderBy: { clickedAt: 'desc' } } }
+  });
+  const clickDates = links.flatMap((link) => link.clicks.map((click) => click.clickedAt));
+  const lastMaterialClickAt = clickDates.reduce<Date | null>((latest, current) => {
+    return !latest || current > latest ? current : latest;
+  }, null);
+  const engagement = materialEngagementForClickCount(clickDates.length);
+
+  return {
+    materialViewed: clickDates.length > 0,
+    materialClickCount: clickDates.length,
+    lastMaterialClickAt: lastMaterialClickAt?.toISOString() || null,
+    appointmentAngle: engagement.label
+  };
+}

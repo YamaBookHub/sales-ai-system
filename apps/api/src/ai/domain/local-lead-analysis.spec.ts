@@ -44,4 +44,21 @@ describe('local-lead-analysis', () => {
     expect(result.output.factsUsed.join(' ')).not.toContain('米びつ');
     expect(result.output.mailPlaceholders.appeal).toContain('サーモン');
   });
+
+  it('uses material engagement as a sales angle without treating it as a confirmed appointment', () => {
+    const result = buildLocalLeadAnalysis({
+      ...lead,
+      materialEngagement: {
+        materialViewed: true,
+        materialClickCount: 3,
+        lastMaterialClickAt: '2026-07-12T04:00:00.000Z',
+        appointmentAngle: 'hot'
+      }
+    });
+
+    expect(result.input.materialEngagement?.materialClickCount).toBe(3);
+    expect(result.output.salesAngles[0]).toContain('複数回閲覧');
+    expect(result.output.factsUsed).toContain('会社資料閲覧: 3回 / アポ角度: 非常に高い');
+    expect(result.output.riskFlags.join(' ')).toContain('アポ確定');
+  });
 });
