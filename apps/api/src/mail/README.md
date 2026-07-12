@@ -24,6 +24,7 @@
 - 同じ lead に重複メールを作らない
 - 実送信は `queued` かつ checklist 完了のみ
 - providerの`validate`をclaim前に実行し、非対応チャネルでは送信中状態へ進めない
+- provider未設定時もclaim前に拒否し、送信中・失敗状態へ進めない
 - 実送信前に `queued` のメールだけを条件付きで `sending` にclaimし、二重送信を防ぐ
 - provider失敗時は `failed` にする
 - provider未設定時は `DisabledMailSender` が失敗させるため、誤送信しない

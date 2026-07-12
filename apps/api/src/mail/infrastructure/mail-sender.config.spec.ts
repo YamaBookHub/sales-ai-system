@@ -1,4 +1,5 @@
 import { MAIL_SENDER } from '../domain/mail-sender';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { DisabledMailSender } from './disabled-mail.sender';
 import { GmailMailSender } from './gmail-mail.sender';
 import { mailSenderProvider, readMailSenderConfig } from './mail-sender.config';
@@ -32,6 +33,17 @@ describe('mail-sender.config', () => {
       provide: MAIL_SENDER,
       useClass: DisabledMailSender
     });
+  });
+
+  it('preflights disabled provider before a mail is claimed for sending', () => {
+    const sender = new DisabledMailSender();
+
+    expect(() => sender.validate({
+      idempotencyKey: 'mail:mail_1:retry:0',
+      toEmail: 'to@example.com',
+      subject: '件名',
+      body: '本文'
+    })).toThrow(ServiceUnavailableException);
   });
 
   it('binds gmail provider when sending is enabled and credentials are complete', () => {

@@ -133,7 +133,7 @@ curl -X POST http://localhost:3000/api/mails/{draftMailId}/queue
 - Company / Project / Lead / Mail / AI / Tracking の主要APIを実装開始
 - CAMPFIRE URLから Company / CrowdfundingProject / SalesLead を作成するimport APIを追加
 - OpenAI APIによるAIメール下書き生成を追加
-- メール送信は未実装。承認済みメールだけキュー投入可能
+- 実メール送信はprovider設定時だけ有効。未設定時は安全に拒否し、承認済みメールだけキュー投入可能
 
 ## 主要ドキュメント
 
