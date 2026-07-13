@@ -49,11 +49,11 @@ export function renderCandidateSearchSection(pageMode: DashboardPageMode): strin
                   <option value="50">取得上限 50件</option>
                   <option value="100">取得上限 100件</option>
                 </select>
-                <select id="campfireSearchStatus">
+                <select id="campfireSearchStatus" aria-label="検索対象の募集状態" onchange="syncCampfireSearchEndingSoonFilter()">
                   <option value="active">募集中のみ</option>
                   <option value="endingSoon">終了間近順</option>
                 </select>
-                <select id="campfireEndingSoonDays">
+                <select id="campfireEndingSoonDays" aria-label="終了間近の対象日数">
                   <option value="7">7日以内</option>
                   <option value="14" selected>14日以内</option>
                   <option value="20">20日以内</option>
@@ -95,12 +95,12 @@ export function renderCandidateListSection(): string {
                   <option value="50">最大表示 50件</option>
                   <option value="100">最大表示 100件</option>
                 </select>
-                <select id="campfireDisplayStatus" onchange="renderCampfireCandidates()">
+                <select id="campfireDisplayStatus" aria-label="表示する募集状態" onchange="syncCampfireDisplayEndingSoonFilter(); renderCampfireCandidates()">
                   <option value="">公開状態 すべて</option>
                   <option value="active">募集中のみ</option>
                   <option value="endingSoon">終了間近</option>
                 </select>
-                <select id="campfireDisplayEndingSoonDays" onchange="renderCampfireCandidates()">
+                <select id="campfireDisplayEndingSoonDays" aria-label="表示する終了間近の対象日数" onchange="renderCampfireCandidates()">
                   <option value="7">7日以内</option>
                   <option value="14" selected>14日以内</option>
                   <option value="20">20日以内</option>

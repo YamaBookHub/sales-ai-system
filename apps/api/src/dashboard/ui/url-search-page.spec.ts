@@ -17,5 +17,8 @@ describe('URL search static HTML', () => {
     expect(mailWorkspaceHtml).toContain(renderCandidateListSection());
     expect(urlSearchHtml).toContain('<details class="search-drawer" open>');
     expect(mailWorkspaceHtml).toContain('<details class="search-drawer">');
+    expect(urlSearchHtml).toContain('onchange="syncCampfireSearchEndingSoonFilter()"');
+    expect(urlSearchHtml).toContain('onchange="syncCampfireDisplayEndingSoonFilter(); renderCampfireCandidates()"');
+    expect(urlSearchHtml).toContain('募集中のみでは終了日数の条件は使いません');
   });
 });

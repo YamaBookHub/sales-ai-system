@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import * as cheerio from 'cheerio';
 import { chromium, type BrowserContext, type Page } from 'playwright';
+import { normalizeEndingSoonDays } from '../projects/domain/project-import-policy';
 
 const CAMPFIRE_ORIGIN = 'https://camp-fire.jp';
 const DEFAULT_SEARCH_RESULT_LIMIT = 10;
@@ -45,6 +46,7 @@ export type CampfireSearchInput = {
   profileProjectMax?: number;
   limit?: number;
   status?: string;
+  endingSoonDays?: number;
   excludeUrls?: string[];
 };
 
@@ -372,17 +374,18 @@ function mergeSearchResults(
   );
 }
 
-function matchesSearchStatus(item: CampfireSearchResult, input: CampfireSearchInput) {
+export function matchesSearchStatus(item: CampfireSearchResult, input: CampfireSearchInput) {
   if (!input.status) return true;
   if (input.status === 'active') return item.isActive;
-  if (input.status === 'endingSoon') return item.isActive && item.daysLeft !== null && item.daysLeft <= 14;
+  if (input.status === 'endingSoon') return item.isActive && item.daysLeft !== null && item.daysLeft <= normalizeEndingSoonDays(input.endingSoonDays);
   return true;
 }
 
-function sortSearchResults(items: CampfireSearchResult[], input: CampfireSearchInput) {
+export function sortSearchResults(items: CampfireSearchResult[], input: CampfireSearchInput) {
   if (input.status !== 'endingSoon') return items;
+  const maxDays = normalizeEndingSoonDays(input.endingSoonDays);
   return [...items]
-    .filter((item) => item.isActive && typeof item.daysLeft === 'number' && item.daysLeft <= 14)
+    .filter((item) => item.isActive && typeof item.daysLeft === 'number' && item.daysLeft <= maxDays)
     .sort((a, b) => Number(a.daysLeft) - Number(b.daysLeft));
 }
 
@@ -435,6 +438,7 @@ function buildSearchCacheKey(input: CampfireSearchInput) {
     profileProjectMax: input.profileProjectMax ?? null,
     limit: normalizeSearchLimit(input.limit),
     status: input.status || '',
+    endingSoonDays: input.status === 'endingSoon' ? normalizeEndingSoonDays(input.endingSoonDays) : null,
     excludeUrls: Array.from(buildExcludedUrlSet(input.excludeUrls)).sort()
   });
 }

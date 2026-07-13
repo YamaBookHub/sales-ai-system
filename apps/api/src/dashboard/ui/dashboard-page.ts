@@ -144,6 +144,8 @@ ${renderNavigationBadgesScript()}
         searchStatus.style.display = ['campfire', 'makuake'].includes(platform) ? '' : 'none';
         if (!['campfire', 'makuake'].includes(platform)) searchStatus.value = 'active';
       }
+      syncCampfireSearchEndingSoonFilter();
+      syncCampfireDisplayEndingSoonFilter();
       toggleSourceField(profileDisplay, platform === 'campfire');
       void loadCampfireCategories();
       if (sourceChanged) {
@@ -167,6 +169,24 @@ ${renderNavigationBadgesScript()}
       element.disabled = !enabled;
       element.style.display = enabled ? '' : 'none';
       if (!enabled) element.value = '';
+    }
+
+    function syncCampfireSearchEndingSoonFilter() {
+      const status = document.getElementById('campfireSearchStatus');
+      const days = document.getElementById('campfireEndingSoonDays');
+      if (!days) return;
+      const enabled = status?.value === 'endingSoon';
+      days.disabled = !enabled;
+      days.title = enabled ? '終了間近順の対象日数' : '募集中のみでは終了日数の条件は使いません';
+    }
+
+    function syncCampfireDisplayEndingSoonFilter() {
+      const status = document.getElementById('campfireDisplayStatus');
+      const days = document.getElementById('campfireDisplayEndingSoonDays');
+      if (!days) return;
+      const enabled = status?.value === 'endingSoon';
+      days.disabled = !enabled;
+      days.title = enabled ? '終了間近の表示対象日数' : '募集中のみでは終了日数の条件は使いません';
     }
 
     function ensureSupportedSourcePlatform(statusId) {
@@ -447,6 +467,7 @@ ${renderNavigationBadgesScript()}
       document.getElementById('campfireCandidateCount').textContent = '検索中';
       renderCampfireCandidates();
       try {
+        const searchStatus = fieldValue('campfireSearchStatus') || 'active';
         const job = await api('/api/projects/search-jobs', {
           method: 'POST',
           body: JSON.stringify(compactPayload({
@@ -456,8 +477,8 @@ ${renderNavigationBadgesScript()}
             profileProjectMin: profileProjectRange.min,
             profileProjectMax: profileProjectRange.max,
             limit: desiredLimit,
-            status: ['campfire', 'makuake'].includes(source) ? (fieldValue('campfireSearchStatus') || 'active') : 'active',
-            endingSoonDays: numberFieldValue('campfireEndingSoonDays') || 14
+            status: ['campfire', 'makuake'].includes(source) ? searchStatus : 'active',
+            endingSoonDays: searchStatus === 'endingSoon' ? (numberFieldValue('campfireEndingSoonDays') || 14) : undefined
           }))
         });
         state.campfireSearchJobId = job.id;
@@ -559,6 +580,8 @@ ${renderNavigationBadgesScript()}
       document.getElementById('campfireDisplayAmountRange').value = '';
       document.getElementById('campfireDisplaySupporterRange').value = '';
       document.getElementById('campfireDisplayProfileProjectRange').value = '';
+      syncCampfireSearchEndingSoonFilter();
+      syncCampfireDisplayEndingSoonFilter();
       state.campfireCandidates = [];
       state.candidateImportStatus = {};
       stopCampfireSearchTimer();
