@@ -38,7 +38,7 @@ export function renderSharedStyles(page: SharedStylePage): string {
       font-size: var(--font-body);
     }
     header {
-      min-height: 56px;
+      min-height: 58px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -81,7 +81,7 @@ export function renderSharedStyles(page: SharedStylePage): string {
       line-height: 1;
       font-variant-numeric: tabular-nums;
     }
-    .nav-badge[hidden] { display: none; }
+    .nav-badge[hidden] { visibility: hidden; }
     button, input, select, textarea {
       font: inherit;
     }
@@ -106,7 +106,7 @@ export function renderSharedStyles(page: SharedStylePage): string {
       grid-template-columns: minmax(0, 1fr);
       gap: 10px;
       padding: 12px;
-      min-height: calc(100vh - 56px);
+          min-height: calc(100vh - 58px);
     }
     .workflow {
       display: none;
@@ -1094,7 +1094,7 @@ export function renderSharedStyles(page: SharedStylePage): string {
       line-height: 1;
       font-variant-numeric: tabular-nums;
     }
-    .nav-badge[hidden] { display: none; }
+    .nav-badge[hidden] { visibility: hidden; }
     button, input, select { font: inherit; }
     button {
       border: 1px solid var(--line);
@@ -1422,7 +1422,7 @@ export function renderSharedStyles(page: SharedStylePage): string {
     .top-nav button { border-color:transparent; background:transparent; }
     .top-nav button.primary { background:var(--accent); color:white; }
     .nav-badge { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; margin-left:4px; padding:0 5px; border-radius:9px; background:var(--warn); color:white; font-size:11px; line-height:1; font-variant-numeric:tabular-nums; }
-    .nav-badge[hidden] { display:none; }
+    .nav-badge[hidden] { visibility:hidden; }
     main { display:grid; gap:10px; padding:12px; max-width:1240px; margin:0 auto; }
     section { border:1px solid var(--line); border-radius:var(--radius-panel); background:var(--panel); overflow:hidden; }
     .section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border-bottom:1px solid var(--line); }
@@ -1463,7 +1463,10 @@ export function renderSharedStyles(page: SharedStylePage): string {
     h2 { font-size:16px; }
     .toolbar, .top-nav, .filter-row, .pagination, .summary { display:flex; align-items:center; gap:8px; }
     .toolbar { flex-wrap:wrap; justify-content:flex-end; }
-    .top-nav { padding:4px; border:1px solid var(--line); border-radius:var(--radius-nav); background:#f4f6f8; }
+    .top-nav { gap:4px; padding:4px; border:1px solid var(--line); border-radius:var(--radius-nav); background:#f4f6f8; }
+    .top-nav button { height:var(--control-height); padding:0 12px; }
+    .nav-badge { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; margin-left:4px; padding:0 5px; border-radius:9px; background:var(--warn); color:white; font-size:11px; line-height:1; font-variant-numeric:tabular-nums; }
+    .nav-badge[hidden] { visibility:hidden; }
     button, select { min-height:var(--control-height); padding:7px 10px; border:1px solid var(--line); border-radius:var(--radius-control); background:#fff; color:inherit; font:inherit; cursor:pointer; }
     button:hover { border-color:var(--accent); }
     button.primary { border-color:var(--accent); background:var(--accent); color:#fff; }

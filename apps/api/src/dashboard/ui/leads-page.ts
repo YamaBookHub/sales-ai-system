@@ -17,7 +17,6 @@ export function renderLeadsPage() {
         ]);
         state.leads = leads.items || [];
         state.mails = mails.items || [];
-        renderNavigationBadges();
         restoreSelectedLead();
         applyUrlFilters();
         populateSourceFilterOptions('sourceFilter');
@@ -34,30 +33,6 @@ export function renderLeadsPage() {
       const element = document.getElementById('pageStatus');
       element.textContent = message;
       element.className = stateType === 'ok' ? 'status ok' : 'status ui-state-' + stateType;
-    }
-
-    function renderNavigationBadges() {
-      setNavigationBadge('today', countTodayItems());
-      setNavigationBadge('leads', state.leads.length);
-      setNavigationBadge('mail', state.mails.filter((mail) => ['draft', 'in_review', 'approved', 'queued'].includes(mail.status)).length);
-    }
-
-    function setNavigationBadge(key, count) {
-      const element = document.querySelector('[data-nav-badge="' + key + '"]');
-      if (!element) return;
-      const value = Number(count) || 0;
-      element.textContent = value > 99 ? '99+' : String(value);
-      element.hidden = value === 0;
-      element.setAttribute('aria-label', value + '件');
-    }
-
-    function countTodayItems() {
-      const today = tokyoDateKey(new Date());
-      return state.leads.filter((lead) => {
-        const dueKey = tokyoDateKey(lead.nextTask?.dueAt || lead.nextActionAt || lead.nextFollowUpAt);
-        const mail = latestMail(lead.id);
-        return (dueKey && dueKey <= today) || lead.status === 'replied' || ['failed', 'draft', 'approved', 'queued'].includes(mail?.status);
-      }).length;
     }
 
     function applyUrlFilters() {

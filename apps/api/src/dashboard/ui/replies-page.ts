@@ -1,5 +1,7 @@
 import { renderSharedStyles } from './shared-styles';
 import { renderClientApiScript } from '../client/api-client';
+import { renderNavigationBadgesScript } from '../client/navigation-badges';
+import { renderTopNavigation } from './top-navigation';
 
 export function renderRepliesPage() {
   return `<!doctype html>
@@ -15,13 +17,7 @@ export function renderRepliesPage() {
     <h1>返信対応</h1>
     <div class="toolbar">
       <span id="pageStatus" class="status ui-state-loading" aria-live="polite">返信を読み込み中</span>
-      <div class="top-nav" data-ui="top-nav">
-        <button onclick="location.href='/today'">今日の営業</button>
-        <button class="primary" onclick="location.href='/replies'">返信</button>
-        <button onclick="location.href='/leads-view'">営業案件</button>
-        <button onclick="location.href='/mail-workspace'">作成・レビュー</button>
-        <button onclick="location.href='/'">候補を探す</button>
-      </div>
+      ${renderTopNavigation('replies')}
       <button onclick="loadReplies()">更新</button>
     </div>
   </header>
@@ -59,6 +55,7 @@ export function renderRepliesPage() {
   <footer>Sales AI System</footer>
   <script>
 ${renderClientApiScript()}
+${renderNavigationBadgesScript()}
     const state = { page: 1, limit: 20, total: 0, items: [] };
     const categoryLabels = { interested:'興味あり', need_info:'資料・詳細希望', meeting_request:'商談希望', not_interested:'見送り', unsubscribe:'配信停止', complaint:'クレーム', auto_reply:'自動返信', unknown:'要確認' };
 

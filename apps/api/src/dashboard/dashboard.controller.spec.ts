@@ -171,7 +171,8 @@ describe('DashboardController HTML contracts', () => {
     expect(mailHtml).toContain('<button onclick="location.href=\'/\'">候補を探す</button>');
     expect(mailHtml).toContain('<button class="primary" onclick="location.href=\'/mail-workspace\'">作成・レビュー <span class="nav-badge" data-nav-badge="mail" hidden></span></button>');
     expect(mailHtml).toContain('data-nav-badge="today"');
-    expect(mailHtml).toContain('function renderNavigationBadges()');
+    expect(mailHtml).toContain("'/api/navigation-summary'");
+    expect(mailHtml).toContain('data-nav-badge="replies"');
     expect(mailHtml).toContain('data-ui="mail-lead-queue"');
     expect(mailHtml).toContain('data-ui="mail-focus-workspace"');
     expect(mailHtml).toContain('data-ui="mail-lead-summary"');

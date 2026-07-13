@@ -1,6 +1,8 @@
 import { renderSharedStyles } from './shared-styles';
 import { renderClientViewRulesScript } from '../client/view-rules';
 import { renderClientApiScript } from '../client/api-client';
+import { renderNavigationBadgesScript } from '../client/navigation-badges';
+import { renderTopNavigation } from './top-navigation';
 
 export function renderLeadsPageDocument(clientScript: string): string {
   return `<!doctype html>
@@ -16,13 +18,7 @@ export function renderLeadsPageDocument(clientScript: string): string {
     <h1>営業案件詳細</h1>
     <div class="toolbar">
       <span id="pageStatus" class="status ui-state-loading" aria-live="polite">読み込み中</span>
-      <div class="top-nav" data-ui="top-nav">
-        <button onclick="location.href='/today'">今日の営業 <span class="nav-badge" data-nav-badge="today" hidden></span></button>
-        <button onclick="location.href='/replies'">返信</button>
-        <button class="primary" onclick="location.href='/leads-view'">営業案件 <span class="nav-badge" data-nav-badge="leads" hidden></span></button>
-        <button onclick="location.href='/mail-workspace'">作成・レビュー <span class="nav-badge" data-nav-badge="mail" hidden></span></button>
-        <button onclick="location.href='/'">候補を探す</button>
-      </div>
+      ${renderTopNavigation('leads')}
       <button class="primary" onclick="loadAll()">更新</button>
     </div>
   </header>
@@ -171,7 +167,7 @@ export function renderLeadsPageDocument(clientScript: string): string {
 
   </main>
   <footer>Sales AI System</footer>
-  <script>\n${renderClientViewRulesScript()}\n${renderClientApiScript()}\n${clientScript}\n  </script>
+  <script>\n${renderClientViewRulesScript()}\n${renderClientApiScript()}\n${renderNavigationBadgesScript()}\n${clientScript}\n  </script>
 </body>
 </html>`;
 }

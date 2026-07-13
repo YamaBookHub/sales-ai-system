@@ -27,6 +27,8 @@ describe('shared dashboard styles', () => {
 
     expect(styles).toContain('header { min-height:58px;');
     expect(styles).toContain('main { display:grid; gap:10px; max-width:1240px;');
+    expect(styles).toContain('.nav-badge { display:inline-flex;');
+    expect(styles).toContain('.nav-badge[hidden] { visibility:hidden; }');
     expect(styles).toContain('header .toolbar { width:100%; min-width:0;');
     expect(styles).toContain('table { min-width:900px; }');
   });

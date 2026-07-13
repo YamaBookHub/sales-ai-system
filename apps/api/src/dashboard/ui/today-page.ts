@@ -1,5 +1,7 @@
 import { renderSharedStyles } from './shared-styles';
 import { renderClientApiScript } from '../client/api-client';
+import { renderNavigationBadgesScript } from '../client/navigation-badges';
+import { renderTopNavigation } from './top-navigation';
 
 export function renderTodayPage() {
   return `<!doctype html>
@@ -15,13 +17,7 @@ export function renderTodayPage() {
     <h1>今日の営業</h1>
     <div class="toolbar">
       <span id="pageStatus" class="status ui-state-loading" aria-live="polite">読み込み中</span>
-      <div class="top-nav" data-ui="top-nav">
-        <button class="primary" onclick="location.href='/today'">今日の営業 <span class="nav-badge" data-nav-badge="today" hidden></span></button>
-        <button onclick="location.href='/replies'">返信</button>
-        <button onclick="location.href='/leads-view'">営業案件 <span class="nav-badge" data-nav-badge="leads" hidden></span></button>
-        <button onclick="location.href='/mail-workspace'">作成・レビュー <span class="nav-badge" data-nav-badge="mail" hidden></span></button>
-        <button onclick="location.href='/'">候補を探す</button>
-      </div>
+      ${renderTopNavigation('today')}
       <button onclick="loadToday()">更新</button>
     </div>
   </header>
@@ -40,6 +36,7 @@ export function renderTodayPage() {
   <footer>Sales AI System</footer>
   <script>
 ${renderClientApiScript()}
+${renderNavigationBadgesScript()}
     const state = { leads: [], mails: [], items: [] };
     const categories = [
       ['overdue', '期限超過', '次対応日を確認'],
@@ -72,7 +69,6 @@ ${renderClientApiScript()}
 
     function renderToday() {
       document.getElementById('todayDate').textContent = tokyoDateKey(new Date());
-      renderNavigationBadges();
       const counts = Object.fromEntries(categories.map(([key]) => [key, state.items.filter((item) => item.category === key).length]));
       document.getElementById('todayStats').innerHTML = categories.map(([key, label, hint]) => '<button class="today-stat" type="button" data-today-category="' + key + '" data-active="' + Boolean(counts[key]) + '" onclick="openCategory(&quot;' + key + '&quot;)"><strong>' + counts[key] + '</strong><span>' + label + ' / ' + hint + '</span></button>').join('');
       const rows = state.items
@@ -107,8 +103,6 @@ ${renderClientApiScript()}
     function tokyoDateKey(value) { const date = new Date(value); if (Number.isNaN(date.getTime())) return ''; const parts = new Intl.DateTimeFormat('en-US', { timeZone:'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(date); const values = Object.fromEntries(parts.map((part) => [part.type, part.value])); return values.year + '-' + values.month + '-' + values.day; }
     function formatDate(value) { if (!value) return '日付未定'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '日付未定' : date.toLocaleString('ja-JP', { timeZone:'Asia/Tokyo', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }); }
     function mailStatusLabel(value) { return ({ draft:'下書き', in_review:'確認待ち', approved:'承認済み', queued:'送信待ち', failed:'送信失敗', sent:'送信済み' })[value] || value; }
-    function renderNavigationBadges() { setNavigationBadge('today', state.items.length); setNavigationBadge('leads', state.leads.length); setNavigationBadge('mail', state.mails.filter((mail) => ['draft', 'in_review', 'approved', 'queued'].includes(mail.status)).length); }
-    function setNavigationBadge(key, count) { const element = document.querySelector('[data-nav-badge="' + key + '"]'); if (!element) return; const value = Number(count) || 0; element.textContent = value > 99 ? '99+' : String(value); element.hidden = value === 0; element.setAttribute('aria-label', value + '件'); }
     function setPageStatus(message, type) { const element = document.getElementById('pageStatus'); element.textContent = message; element.className = 'status ' + (type === 'loading' ? 'ui-state-loading' : type === 'error' ? 'error' : 'ok'); }
     function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[char])); }
     function escapeAttr(value) { return escapeHtml(value); }

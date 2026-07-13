@@ -8,6 +8,8 @@ import { renderClientApiScript } from '../client/api-client';
 import { renderClientProjectsScript } from '../client/render-projects';
 import { renderClientLeadsScript } from '../client/render-leads';
 import { renderClientMailScript } from '../client/render-mail';
+import { renderNavigationBadgesScript } from '../client/navigation-badges';
+import { renderTopNavigation } from './top-navigation';
 
 export function renderDashboardPage(pageMode: DashboardPageMode) {
     const shell = getDashboardPageShell(pageMode);
@@ -25,13 +27,7 @@ export function renderDashboardPage(pageMode: DashboardPageMode) {
     <h1>${shell.heading}</h1>
     <div class="toolbar">
       <span id="apiStatus" class="status ui-state-loading" aria-live="polite">API確認中</span>
-      <div class="top-nav" data-ui="top-nav">
-        <button onclick="location.href='/today'">今日の営業 <span class="nav-badge" data-nav-badge="today" hidden></span></button>
-        <button onclick="location.href='/replies'">返信</button>
-        <button onclick="location.href='/leads-view'">営業案件 <span class="nav-badge" data-nav-badge="leads" hidden></span></button>
-        <button${shell.mailWorkspaceButtonClass} onclick="location.href='/mail-workspace'">作成・レビュー <span class="nav-badge" data-nav-badge="mail" hidden></span></button>
-        <button${shell.urlSearchButtonClass} onclick="location.href='/'">候補を探す</button>
-      </div>
+      ${renderTopNavigation(pageMode === 'mail-workspace' ? 'mail-workspace' : 'url-search')}
       <button onclick="loadAll()">更新</button>
     </div>
   </header>
@@ -74,6 +70,7 @@ ${renderClientApiScript()}
 ${renderClientProjectsScript()}
 ${renderClientLeadsScript()}
 ${renderClientMailScript()}
+${renderNavigationBadgesScript()}
     const state = {
       leads: [],
       mails: [],
@@ -218,7 +215,6 @@ ${renderClientMailScript()}
         ]);
         state.leads = leads.items || [];
         state.mails = mails.items || [];
-        renderNavigationBadges();
         restoreSelectedLead();
         syncCandidateImportStatuses();
         populateSourceFilterOptions('mailLeadSourceFilter');
@@ -2258,36 +2254,6 @@ ${renderClientMailScript()}
     function formatDate(value) {
       if (!value) return '';
       return new Date(value).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-    }
-
-    function renderNavigationBadges() {
-      setNavigationBadge('today', countTodayItems());
-      setNavigationBadge('leads', state.leads.length);
-      setNavigationBadge('mail', state.mails.filter((mail) => ['draft', 'in_review', 'approved', 'queued'].includes(mail.status)).length);
-    }
-
-    function setNavigationBadge(key, count) {
-      const element = document.querySelector('[data-nav-badge="' + key + '"]');
-      if (!element) return;
-      const value = Number(count) || 0;
-      element.textContent = value > 99 ? '99+' : String(value);
-      element.hidden = value === 0;
-      element.setAttribute('aria-label', value + '件');
-    }
-
-    function countTodayItems() {
-      const today = tokyoDateKey(new Date());
-      return state.leads.filter((lead) => {
-        const dueKey = tokyoDateKey(lead.nextActionAt || lead.nextFollowUpAt);
-        const mail = latestNavigationMail(lead);
-        return (dueKey && dueKey <= today) || lead.status === 'replied' || ['failed', 'draft', 'approved', 'queued'].includes(mail?.status);
-      }).length;
-    }
-
-    function latestNavigationMail(lead) {
-      return state.mails
-        .filter((mail) => mail.leadId === lead.id || mail.lead?.id === lead.id || mail.companyId === lead.companyId || mail.company?.id === lead.companyId)
-        .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))[0];
     }
 
     function tokyoDateKey(value) {
