@@ -1114,7 +1114,7 @@ export function renderSharedStyles(page: SharedStylePage): string {
       background: white;
       min-width: 0;
     }
-    main { padding: 12px; display: grid; gap: 10px; }
+    main { padding: 12px; display: grid; gap: 10px; max-width: 1240px; margin: 0 auto; }
     section {
       border: 1px solid var(--line);
       background: var(--panel);
@@ -1388,6 +1388,8 @@ export function renderSharedStyles(page: SharedStylePage): string {
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
     footer {
+      max-width: 1240px;
+      margin: 0 auto;
       padding: 0 12px 14px;
       color: var(--muted);
       font-size: 12px;

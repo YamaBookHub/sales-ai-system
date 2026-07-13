@@ -19,9 +19,9 @@ export function renderLeadsPageDocument(clientScript: string): string {
       <div class="top-nav" data-ui="top-nav">
         <button onclick="location.href='/today'">今日の営業 <span class="nav-badge" data-nav-badge="today" hidden></span></button>
         <button onclick="location.href='/replies'">返信</button>
-        <button onclick="location.href='/'">候補を探す</button>
         <button class="primary" onclick="location.href='/leads-view'">営業案件 <span class="nav-badge" data-nav-badge="leads" hidden></span></button>
         <button onclick="location.href='/mail-workspace'">作成・レビュー <span class="nav-badge" data-nav-badge="mail" hidden></span></button>
+        <button onclick="location.href='/'">候補を探す</button>
       </div>
       <button class="primary" onclick="loadAll()">更新</button>
     </div>

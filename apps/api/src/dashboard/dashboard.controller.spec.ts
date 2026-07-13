@@ -34,6 +34,13 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('返信');
     expect(html).toContain('営業案件');
     expect(html).toContain('作成・レビュー');
+
+    const navStart = html.indexOf('<div class="top-nav" data-ui="top-nav">');
+    const nav = html.slice(navStart, html.indexOf('</div>', navStart));
+    const navPaths = ['/today', '/replies', '/leads-view', '/mail-workspace', '/'];
+    const positions = navPaths.map((path) => nav.indexOf(`location.href='${path}'`));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((left, right) => left - right));
   }
 
   it('keeps route paths stable', () => {
