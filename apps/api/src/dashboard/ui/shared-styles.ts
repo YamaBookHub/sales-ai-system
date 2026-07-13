@@ -1451,23 +1451,23 @@ export function renderSharedStyles(page: SharedStylePage): string {
   </style>`;
     case 'replies':
       return `<style>
-    :root { --bg:#f5f7f8; --panel:#fff; --line:#d8e0e4; --text:#172126; --muted:#66737a; --accent:#176b5a; --danger:#a33a32; --warn:#9b6916; --ok:#1d7b45; --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --radius-control:4px; --radius-panel:6px; --radius-nav:8px; --control-height:34px; --font-body:14px; --font-heading:24px; --shadow-panel:none; }
+    :root { color-scheme:light; --bg:#f6f7f9; --panel:#fff; --line:#dfe4ea; --text:#172026; --muted:#66737f; --accent:#136f63; --accent-strong:#0f554c; --danger:#a83232; --warn:#9f5a00; --ok:#1d7b45; --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --radius-control:6px; --radius-panel:4px; --radius-nav:8px; --control-height:34px; --font-body:14px; --font-heading:18px; --shadow-panel:none; }
     * { box-sizing:border-box; }
     :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-    body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-size:var(--font-body); }
-    header { display:flex; justify-content:space-between; align-items:center; gap:16px; max-width:1320px; margin:0 auto; padding:18px 14px 12px; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif; font-size:var(--font-body); }
+    header { min-height:58px; display:flex; justify-content:space-between; align-items:center; gap:16px; padding:0 24px; border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; z-index:10; }
     h1, h2, p { margin:0; }
     h1 { font-size:var(--font-heading); }
     h2 { font-size:16px; }
     .toolbar, .top-nav, .filter-row, .pagination, .summary { display:flex; align-items:center; gap:8px; }
     .toolbar { flex-wrap:wrap; justify-content:flex-end; }
-    .top-nav { padding:4px; border:1px solid var(--line); border-radius:var(--radius-nav); background:#eef2f3; }
+    .top-nav { padding:4px; border:1px solid var(--line); border-radius:var(--radius-nav); background:#f4f6f8; }
     button, select { min-height:var(--control-height); padding:7px 10px; border:1px solid var(--line); border-radius:var(--radius-control); background:#fff; color:inherit; font:inherit; cursor:pointer; }
     button:hover { border-color:var(--accent); }
     button.primary { border-color:var(--accent); background:var(--accent); color:#fff; }
     button:disabled { cursor:not-allowed; opacity:.5; }
-    main { max-width:1320px; margin:0 auto; padding:0 14px 24px; }
-    section { border:1px solid var(--line); border-radius:var(--radius-panel); background:var(--panel); }
+    main { display:grid; gap:10px; max-width:1240px; margin:0 auto; padding:12px 12px 24px; }
+    section { border:1px solid var(--line); border-radius:var(--radius-panel); background:var(--panel); overflow:hidden; }
     .section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border-bottom:1px solid var(--line); }
     .body { padding:14px 16px; }
     .filters { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; padding:14px 16px; border-bottom:1px solid var(--line); background:#fbfcfc; }
@@ -1497,9 +1497,9 @@ export function renderSharedStyles(page: SharedStylePage): string {
     .next-action { font-weight:600; line-height:1.5; }
     .pagination { justify-content:center; padding:14px 16px 2px; }
     .pagination span { min-width:120px; color:var(--muted); text-align:center; }
-    footer { max-width:1320px; margin:0 auto; padding:0 14px 16px; color:var(--muted); font-size:12px; }
-    @media (max-width:980px) { header { align-items:flex-start; flex-direction:column; } .toolbar { justify-content:flex-start; } .filters { grid-template-columns:repeat(2,minmax(0,1fr)); } table { min-width:900px; } .reply-list { overflow-x:auto; } }
-    @media (max-width:560px) { .filters { grid-template-columns:1fr; } .top-nav { max-width:100%; overflow:auto; } .top-nav button { white-space:nowrap; } .section-head { align-items:flex-start; flex-direction:column; } }
+    footer { max-width:1240px; margin:0 auto; padding:0 12px 14px; color:var(--muted); font-size:12px; }
+    @media (max-width:1050px) { .filters { grid-template-columns:repeat(2,minmax(0,1fr)); } table { min-width:900px; } .reply-list { overflow-x:auto; } }
+    @media (max-width:700px) { header { align-items:flex-start; flex-direction:column; padding:12px 14px; } header .toolbar { width:100%; min-width:0; justify-content:flex-start; } header .top-nav { width:100%; min-width:0; max-width:100%; overflow:auto; } .filters { grid-template-columns:1fr; } .top-nav button { white-space:nowrap; } .section-head { align-items:flex-start; flex-direction:column; } }
   </style>`;
     default:
       throw new Error('Unknown dashboard style page');

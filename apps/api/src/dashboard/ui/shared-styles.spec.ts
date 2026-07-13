@@ -21,4 +21,13 @@ describe('shared dashboard styles', () => {
     expect(html).toContain(styles);
     selectors.forEach((selector) => expect(styles).toContain(selector));
   });
+
+  it('keeps replies aligned with the dashboard shell at desktop and mobile widths', () => {
+    const styles = renderSharedStyles('replies');
+
+    expect(styles).toContain('header { min-height:58px;');
+    expect(styles).toContain('main { display:grid; gap:10px; max-width:1240px;');
+    expect(styles).toContain('header .toolbar { width:100%; min-width:0;');
+    expect(styles).toContain('table { min-width:900px; }');
+  });
 });
