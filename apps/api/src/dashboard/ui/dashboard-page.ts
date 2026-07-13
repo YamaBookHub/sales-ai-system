@@ -1001,14 +1001,17 @@ ${renderClientMailScript()}
 
     async function markMailSent() {
       if (!state.selectedMailId) return;
+      const selectedMail = selectedLeadMails().find((item) => item.id === state.selectedMailId) || state.mails.find((item) => item.id === state.selectedMailId);
+      const recoveringSending = selectedMail?.status === 'sending';
+      if (recoveringSending && !window.confirm('このメールは送信処理中です。外部providerで送信済みと確認できた場合だけ続行してください。')) return;
       const manual = isManualSendMethod(state.leads.find((lead) => lead.id === state.selectedLeadId));
-      setStatus('mailStatus', manual ? '手動送信済みに更新中' : '送信済みに更新中', 'warn');
+      setStatus('mailStatus', recoveringSending ? '送信結果を確認して更新中' : manual ? '手動送信済みに更新中' : '送信済みに更新中', 'warn');
       try {
         await api('/api/mails/' + state.selectedMailId + '/mark-sent', {
           method: 'POST',
           body: JSON.stringify({})
         });
-        setStatus('mailStatus', manual ? '手動送信済みにしました' : '送信済みにしました', 'ok');
+        setStatus('mailStatus', recoveringSending ? '送信済みに復旧しました' : manual ? '手動送信済みにしました' : '送信済みにしました', 'ok');
         await loadAll();
         selectMail(state.selectedMailId);
       } catch (error) {
@@ -2156,12 +2159,15 @@ ${renderClientMailScript()}
       document.getElementById('rejectButton').disabled = !mail || !['in_review', 'approved'].includes(mail.status);
       document.getElementById('approveButton').disabled = !mail || mail.status !== 'in_review' || !state.checklistComplete;
       document.getElementById('queueButton').disabled = !mail || mail.status !== 'approved' || !state.checklistComplete;
-      document.getElementById('markSentButton').disabled = !mail || !['approved', 'queued'].includes(mail.status);
+      document.getElementById('markSentButton').disabled = !mail || !['approved', 'queued', 'sending'].includes(mail.status);
       const markSentButton = document.getElementById('markSentButton');
       if (markSentButton) {
         const manual = isManualSendMethod(state.leads.find((lead) => lead.id === state.selectedLeadId));
-        markSentButton.textContent = manual ? '手動送信済みにする' : '送信済みにする';
-        markSentButton.title = manual ? '外部サイトで手動送信した後に押してください' : '送信済みとして記録します';
+        const recoveringSending = mail?.status === 'sending';
+        markSentButton.textContent = recoveringSending ? '送信結果を確認して送信済みにする' : manual ? '手動送信済みにする' : '送信済みにする';
+        markSentButton.title = recoveringSending
+          ? '外部providerで送信済みと確認した後に押してください。自動再送はしません'
+          : manual ? '外部サイトで手動送信した後に押してください' : '送信済みとして記録します';
       }
       document.getElementById('replyButton').disabled = !mail || !['queued', 'sent'].includes(mail.status);
       const materialLinkButton = document.getElementById('materialLinkButton');
@@ -2243,6 +2249,7 @@ ${renderClientMailScript()}
       if (mail.status === 'queued') return isManualSendMethod(state.leads.find((lead) => lead.id === state.selectedLeadId))
         ? '外部サイトで手動送信後、手動送信済みに更新'
         : '送信待ち。送信したら送信済みに更新';
+      if (mail.status === 'sending') return '外部providerの送信結果を確認して、送信済みに復旧';
       if (mail.status === 'sent') return '返信が来たら返信メモへ記録';
       if (mail.status === 'failed') return '失敗理由を確認して再試行';
       return '状態を確認';

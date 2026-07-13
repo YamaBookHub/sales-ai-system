@@ -11,6 +11,9 @@ export class MarkMailSentUseCase {
     const email = await this.mails.get(id);
     assertCanMarkSent(email.status);
     const sentAt = dto.sentAt ? new Date(dto.sentAt) : new Date();
-    return this.mails.transition(id, 'sent', 'sent', { sentAt });
+    const payload = email.status === 'sending'
+      ? { manual: true, recoveredFrom: 'sending' }
+      : { manual: true };
+    return this.mails.transition(id, 'sent', 'sent', { sentAt }, payload);
   }
 }

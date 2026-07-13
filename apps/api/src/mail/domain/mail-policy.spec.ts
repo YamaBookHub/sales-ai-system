@@ -33,10 +33,11 @@ describe('mail-policy', () => {
     expect(() => assertCanReject('approved')).not.toThrow();
   });
 
-  it('allows mark sent only after approval or queue', () => {
+  it('allows mark sent after approval, queue, or a manually verified sending state', () => {
     expect(() => assertCanMarkSent('draft')).toThrow(ConflictException);
     expect(() => assertCanMarkSent('approved')).not.toThrow();
     expect(() => assertCanMarkSent('queued')).not.toThrow();
+    expect(() => assertCanMarkSent('sending')).not.toThrow();
   });
 
   it('allows retry only from failed', () => {

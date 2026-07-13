@@ -25,6 +25,7 @@
 - 実送信は `queued` かつ checklist 完了のみ
 - providerの`validate`をclaim前に実行し、非対応チャネルでは送信中状態へ進めない
 - provider未設定時もclaim前に拒否し、送信中・失敗状態へ進めない
+- `sending` で停止したメールは自動再送せず、外部providerの結果を人間が確認してから `mark-sent` で復旧する
 - 実送信前に `queued` のメールだけを条件付きで `sending` にclaimし、二重送信を防ぐ
 - provider失敗時は `failed` にする
 - provider未設定時は `DisabledMailSender` が失敗させるため、誤送信しない

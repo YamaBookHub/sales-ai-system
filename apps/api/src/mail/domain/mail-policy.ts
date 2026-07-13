@@ -22,8 +22,8 @@ export function assertCanQueue(status: EmailStatus, checklistComplete: boolean) 
 }
 
 export function assertCanMarkSent(status: EmailStatus) {
-  if (!['approved', 'queued'].includes(status)) {
-    throw new ConflictException('承認済みまたは送信待ちのメールだけ送信済みにできます。');
+  if (!['approved', 'queued', 'sending'].includes(status)) {
+    throw new ConflictException('承認済み、送信待ち、または送信結果を確認済みのメールだけ送信済みにできます。');
   }
 }
 
