@@ -7,7 +7,9 @@
     "start": "nest start api",
     "start:dev": "nest start api --watch",
     "test": "jest",
-    "test:integration": "jest --config jest.integration.config.js --runInBand",
+    "test:integration": "node scripts/run-integration-tests.js",
+    "test:integration:jest": "jest --config jest.integration.config.js --runInBand",
+    "verify": "node scripts/verify.js",
     "prisma:validate": "prisma validate --schema prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma",
@@ -42,6 +44,7 @@
     "ts-loader": "^9.5.1",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "yaml": "^2.9.0"
   }
 }

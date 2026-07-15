@@ -2,7 +2,9 @@
 
 ## この文書の目的
 
-使用量の少ないモデルでも、現在の設計を壊さずに続きを実装できるよう、2026-07-11時点の現在地と残作業を固定する。
+使用量の少ないモデルでも、現在の設計を壊さずに続きを実装できるよう、現在地と安全制約を固定する。
+
+2026-07-13以降の残作業の順序とTask cardは `docs/27_LUNA_EXECUTION_GUIDE.md`、進捗は `docs/28_REMAINING_WORK_STATUS.md` を正とする。この文書に残るP1-P7は、これまでの設計分離と実装履歴の説明として扱う。
 
 ## 現在の結論
 
@@ -211,11 +213,11 @@ CQRS、イベントソーシング、マイクロサービス、汎用BaseReposi
 - 抽象的に「設計を改善して」と依頼せず、対象usecaseと守る条件を指定する。
 - 迷った場合は新しい層や共通化を作らず、既存パターンに合わせる。
 
-次に着手する作業は、`site_message` / `contact_form` の外部サイト実送信provider連携。
+次に着手する作業は、`docs/28_REMAINING_WORK_STATUS.md` の最上段にある、依存が完了したpendingタスク1件である。`site_message` / `contact_form` の外部送信はdeferredであり、明示的に優先順位が変更されるまで着手しない。
 
 ## UI/UX改善の進め方
 
-営業画面のUI/UX改善は `docs/20_UIUX_AI_IMPLEMENTATION_GUIDE.md` を正とする。
+営業画面のUI/UX改善履歴は `docs/20_UIUX_AI_IMPLEMENTATION_GUIDE.md` を参照する。既存48タスクは完了済みであり、新しい回帰または明示的なUI改善タスクがない限り、同文書から次作業を選ばない。
 
 - 低いモデルは1回に1つのタスクIDだけ実装する。
 - Phase Aから順に進める。
@@ -225,4 +227,4 @@ CQRS、イベントソーシング、マイクロサービス、汎用BaseReposi
 - 各Phaseの節目で高性能モデルが安全性と整合性を監査する。
 - 最終形には今日の営業、2ペインのメール作業、誤生成警告、返信対応、アクセシビリティ、巨大controllerの段階分割まで含む。
 
-UI/UX改善の依頼では、まず同指示書から未完了の最小タスクを1つ選ぶ。
+新しい残作業は `docs/27_LUNA_EXECUTION_GUIDE.md` と `docs/28_REMAINING_WORK_STATUS.md` から選ぶ。

@@ -33,6 +33,8 @@
 | 24 | 24_SALES_LIST_DATA_MAPPING.md | 営業案件一覧・今日の営業で再利用するdata対応表 | 作成済み |
 | 25 | 25_REPLY_INBOX_API_DESIGN.md | 返信一覧APIの現状監査・DTO・filter・pagination設計 | 作成済み |
 | 26 | 26_NEXT_ACTION_DESIGN.md | 次回対応のTask利用、状態遷移、API、DB差分設計 | 作成済み |
+| 27 | 27_LUNA_EXECUTION_GUIDE.md | GPT-5.6 Lunaが残作業を1件ずつ実行する指示書・Task card | 作成済み |
+| 28 | 28_REMAINING_WORK_STATUS.md | 残作業の依存関係・優先度・model・進捗・証跡 | 作成済み |
 
 ## 付属仕様
 - `../prisma/schema.prisma`
@@ -40,7 +42,7 @@
 - `../COMPLETENESS_REPORT.md`
 
 ## 次アクション
-1. Phase 1のローカル営業画面を完成させる
-2. 送信前チェックリストをDB化する
-3. 連絡先管理とSNS/ブランド分析を追加する
-4. 候補探索、RAG、送信後管理へ進む
+1. `28_REMAINING_WORK_STATUS.md` の最上段にある実行可能なpendingタスクを1件選ぶ
+2. `27_LUNA_EXECUTION_GUIDE.md` の同じTask IDの範囲・合格条件に従う
+3. P0の正本同期、メール品質、取得精度、検索ジョブを先に完了する
+4. 実送信、返信自動同期、RAG、商談以降はdeferredのまま勝手に着手しない

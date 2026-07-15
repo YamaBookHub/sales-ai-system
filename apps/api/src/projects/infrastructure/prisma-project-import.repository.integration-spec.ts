@@ -2,10 +2,9 @@ import { PrismaClient } from '@prisma/client';
 import { NormalizedImportedProject } from '../domain/project-source-provider';
 import { PrismaProjectImportRepository } from './prisma-project-import.repository';
 
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const describeWithDb = testDatabaseUrl ? describe : describe.skip;
+const testDatabaseUrl = requireTestDatabaseUrl();
 
-describeWithDb('PrismaProjectImportRepository integration', () => {
+describe('PrismaProjectImportRepository integration', () => {
   let prisma: PrismaClient;
   let repository: PrismaProjectImportRepository;
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -107,3 +106,15 @@ describeWithDb('PrismaProjectImportRepository integration', () => {
     }));
   });
 });
+
+function requireTestDatabaseUrl() {
+  const value = process.env.TEST_DATABASE_URL;
+  if (!value) {
+    throw new Error('TEST_DATABASE_URL is required. Run this suite with npm run test:integration.');
+  }
+  const database = new URL(value).pathname.replace(/^\//, '');
+  if (!/(^|[_-])test($|[_-])/i.test(database)) {
+    throw new Error(`Refusing integration test against non-test database: ${database || '(empty)'}`);
+  }
+  return value;
+}

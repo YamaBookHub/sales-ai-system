@@ -24,6 +24,8 @@
 
 ## Status
 
+2026-07-15監査: `UX-A01` から `UX-I08` は現行HEADに含まれている。表内の `uncommitted` は完了当時の履歴であり、未コミット作業が残っている意味ではない。現行baselineは `6a04a5a`、59 suites / 166 tests、build成功。今後の残作業は `docs/28_REMAINING_WORK_STATUS.md` で管理する。
+
 | Task | Status | Depends on | Evidence | Note |
 |---|---|---|---|---|
 | UX-A01 | complete | - | 2026-07-12 / cbc7eac / npm test -- --runInBand OK / npm run build OK | dashboard HTML契約テスト |

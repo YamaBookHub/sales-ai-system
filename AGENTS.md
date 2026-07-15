@@ -7,8 +7,11 @@ AIが小さい変更範囲を安全に特定できることを、形式的なCle
 
 1. `docs/19_LOW_MODEL_HANDOFF.md`
 2. `docs/22_AI_MODEL_ROUTING.md`
-3. 変更対象moduleの `README.md`
-4. `docs/18_AI_MAINTAINABLE_ARCHITECTURE.md`
+3. `COMPLETENESS_REPORT.md`
+4. `docs/27_LUNA_EXECUTION_GUIDE.md`
+5. `docs/28_REMAINING_WORK_STATUS.md`
+6. 変更対象moduleの `README.md`
+7. `docs/18_AI_MAINTAINABLE_ARCHITECTURE.md`
 
 ## モデル選択
 
@@ -59,4 +62,4 @@ AIが小さい変更範囲を安全に特定できることを、形式的なCle
 5. `npm test -- --runInBand` を実行する。
 6. APIやDB仕様を変えた場合だけ関連docsも更新する。
 
-大規模な一括リファクタリングは行わない。次の作業は `docs/19_LOW_MODEL_HANDOFF.md` の優先順位から1件ずつ進める。
+大規模な一括リファクタリングは行わない。次の作業は `docs/28_REMAINING_WORK_STATUS.md` から、依存が完了している最上段の1件だけを選ぶ。実装条件は `docs/27_LUNA_EXECUTION_GUIDE.md` の同じTask IDを正とする。
