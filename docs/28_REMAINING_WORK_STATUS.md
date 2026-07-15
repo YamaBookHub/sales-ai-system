@@ -27,7 +27,7 @@ Baseline:
 | 2 | LR-002 | P0 | complete | Luna T1 | LR-001 | 2026-07-15 / 11 enums・18 models・環境変数同期、Prisma validate・build成功 | DB・安全仕様同期 |
 | 3 | LR-003 | P0 | complete | Luna T2 | LR-001, LR-002 | 2026-07-15 / `npm run verify` 成功・CI追加 | baseline verify |
 | 4 | LR-004 | P0 | complete | Luna T2 | LR-003 | 2026-07-15 / 専用DB migration・1 suite/1 test成功・誤DB拒否確認 | 実DB integration |
-| 5 | LM-001 | P0 | pending | Terra T3 | LR-004 | - | legacy TODO下書き廃止 |
+| 5 | LM-001 | P0 | complete | Terra T3 | LR-004 | 2026-07-15 / 60 suites・172 tests・build成功 | legacy TODO下書き廃止 |
 | 6 | LM-002 | P0 | pending | Luna T2 | LM-001 | - | mail golden dataset |
 | 7 | LM-003 | P0 | pending | Terra T3 + Sol audit | LM-002 | - | 案件間混入防止 |
 | 8 | LS-001 | P0 | pending | Terra T3 | LR-004 | - | parser境界設計 |
@@ -78,3 +78,5 @@ Baseline:
 | 2026-07-15 | LR-003 | main | complete | `npm run verify` で58 paths・65 operations、Prisma、59 suites・166 tests、build成功。GitHub Actions追加 |
 | 2026-07-15 | LR-004 | main + Luna explorer | start | integration spec、test DB、migration適用手順の調査開始 |
 | 2026-07-15 | LR-004 | main + Luna explorer | complete | `sales_ai_system_test`へ6 migrations適用、1 suite・1 test成功。非test DBは実行前に拒否 |
+| 2026-07-15 | LM-001 | Terra worker + main audit | start | `/api/mails/draft` のTODO placeholder廃止と既存local generator接続を開始 |
+| 2026-07-15 | LM-001 | Terra worker + main audit | complete | manual本文を維持し、未入力・空文字は既存案件固有generatorへ接続。60 suites・172 tests、build成功 |

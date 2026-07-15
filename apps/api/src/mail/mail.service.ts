@@ -10,6 +10,7 @@ import { RequestMailReReviewUseCase } from './application/request-mail-rereview.
 import { RequestMailReviewUseCase } from './application/request-mail-review.usecase';
 import { RetryMailUseCase } from './application/retry-mail.usecase';
 import { SendQueuedMailUseCase } from './application/send-queued-mail.usecase';
+import { GenerateMailDraftUseCase } from '../ai/application/generate-mail-draft.usecase';
 import { DEFAULT_CHECKLIST_ITEMS } from './mail-checklist.defaults';
 import {
   CreateMailDraftDto,
@@ -34,7 +35,8 @@ export class MailService {
     private readonly queueMail: QueueMailUseCase,
     private readonly markMailSent: MarkMailSentUseCase,
     private readonly retryMail: RetryMailUseCase,
-    private readonly sendQueuedMail: SendQueuedMailUseCase
+    private readonly sendQueuedMail: SendQueuedMailUseCase,
+    private readonly generateMailDraft: GenerateMailDraftUseCase
   ) {}
 
   async list(page = 1, limit = 20, status?: EmailStatus) {
@@ -90,6 +92,15 @@ export class MailService {
   }
 
   async createDraft(dto: CreateMailDraftDto) {
+    const manualInstruction = dto.manualInstruction;
+    if (!manualInstruction || !manualInstruction.trim()) {
+      const result = await this.generateMailDraft.execute(dto.leadId, {
+        templateKey: dto.templateKey
+      });
+
+      return result.email;
+    }
+
     const lead = await this.prisma.salesLead.findUnique({
       where: { id: dto.leadId },
       include: { company: true, project: { include: { platform: true } } }
@@ -116,7 +127,7 @@ export class MailService {
           companyId: lead.companyId,
           templateKey: dto.templateKey,
           subject: `${projectPlatformLabel(lead.project)}でのプロジェクトを拝見しご連絡いたしました`,
-          body: dto.manualInstruction ?? 'TODO: AI-generated draft body will be inserted here.',
+          body: manualInstruction,
           status: 'draft',
           events: { create: { type: 'created' } }
         }

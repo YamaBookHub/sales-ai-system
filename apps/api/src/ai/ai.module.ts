@@ -21,6 +21,6 @@ import { OpenAiClientService } from './openai-client.service';
     ClassifyReplyUseCase,
     ListLeadGenerationsUseCase
   ],
-  exports: [AiService]
+  exports: [AiService, GenerateMailDraftUseCase]
 })
 export class AiModule {}

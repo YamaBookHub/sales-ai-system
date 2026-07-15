@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AiModule } from '../ai/ai.module';
 import { ApproveMailUseCase } from './application/approve-mail.usecase';
 import { CheckMailDraftConsistencyUseCase } from './application/check-mail-draft-consistency.usecase';
 import { MarkMailSentUseCase } from './application/mark-mail-sent.usecase';
@@ -17,6 +18,7 @@ import { MailService } from './mail.service';
 import { ReplyInboxController } from './reply-inbox.controller';
 
 @Module({
+  imports: [AiModule],
   controllers: [MailController, ReplyInboxController],
   providers: [
     MailService,
