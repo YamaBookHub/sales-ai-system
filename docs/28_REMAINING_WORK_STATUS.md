@@ -35,7 +35,7 @@ Baseline:
 | 10 | LS-003 | P0 | pending | Luna T2 | LS-001 | - | CAMPFIRE fixture |
 | 11 | LS-004 | P0 | pending | Terra T3 | LS-002, LS-003 | - | 検索終了理由 |
 | 12 | LS-005 | P0 | pending | Terra T3 + Sol audit | LS-004 | - | 即時停止 |
-| 13 | LS-007 | P0 | pending | Terra T3 | LR-004 | - | 並列取り込み排他 |
+| 13 | LS-007 | P0 | complete | Terra T3 | LR-004 | 2026-07-16 / advisory lock・実DB並列4 tests成功 | 並列取り込み排他 |
 | 14 | LS-006 | P1 | pending | Terra T3 | LS-005 | - | 逐次候補追加 |
 | 15 | LL-001 | P1 | pending | Terra T3 | LR-001, LR-004 | - | server pagination/filter |
 | 16 | LL-002 | P1 | pending | Luna T2 | LL-001 | - | 全件CSV/TSV |
@@ -85,3 +85,4 @@ Baseline:
 | 2026-07-15 | LM-003 | Terra worker + Sol audit | start | golden testを弱めず、案件種別に応じた分析・本文と魅力文正規化を修正開始 |
 | 2026-07-16 | LM-003 | Terra worker + Sol audit | complete | 商品・食品・イベント・店舗案件を分離し、別案件メモ混入と文法崩れを防止。64 suites・198 tests、integration、build成功 |
 | 2026-07-16 | LS-001 | Terra worker + main audit | complete | browser acquisition・provider parser・normalizerを分離する契約、fallback、sanitized fixture、段階移行単位を文書化 |
+| 2026-07-16 | LS-007 | Terra worker + main audit | complete | 正規化会社名・URLのtransaction advisory lockを追加。同一URL、同一会社別URL、一部失敗を専用DBで検証し4 tests成功 |

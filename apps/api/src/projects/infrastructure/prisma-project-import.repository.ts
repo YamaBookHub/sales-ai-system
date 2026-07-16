@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProjectActor } from '../domain/project-actor';
-import { normalizeSearchUrl } from '../domain/project-import-policy';
+import {
+  normalizeImportedCompanyName,
+  normalizeSearchUrl,
+  projectImportLockKeys
+} from '../domain/project-import-policy';
 import { NormalizedImportedProject } from '../domain/project-source-provider';
 
 export type ProjectImportPersistenceOptions = {
@@ -43,8 +47,13 @@ export class PrismaProjectImportRepository {
   }
 
   async persistImportedProject(imported: NormalizedImportedProject, options: ProjectImportPersistenceOptions = {}) {
+    const projectUrl = normalizeSearchUrl(imported.project.url);
+    const normalizedCompanyName = normalizeImportedCompanyName(imported.company.name);
+
     return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `project-import:${imported.project.url}`);
+      for (const lockKey of projectImportLockKeys(projectUrl, normalizedCompanyName)) {
+        await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', lockKey);
+      }
       const platform = await tx.crowdfundingPlatform.upsert({
         where: {
           type_baseUrl: {
@@ -61,7 +70,7 @@ export class PrismaProjectImportRepository {
       });
       const existingCompany = await tx.company.findFirst({
         where: {
-          normalizedName: normalizeCompanyName(imported.company.name),
+          normalizedName: normalizedCompanyName,
           deletedAt: null
         }
       });
@@ -82,7 +91,7 @@ export class PrismaProjectImportRepository {
           : await tx.company.create({
               data: {
                 name: imported.company.name,
-                normalizedName: normalizeCompanyName(imported.company.name),
+                normalizedName: normalizedCompanyName,
                 websiteUrl: imported.company.websiteUrl || undefined,
                 inquiryUrl: imported.company.inquiryUrl || undefined,
                 location: imported.company.location || undefined,
@@ -93,7 +102,7 @@ export class PrismaProjectImportRepository {
               }
             });
       const project = await tx.crowdfundingProject.upsert({
-        where: { url: imported.project.url },
+        where: { url: projectUrl },
         update: {
           platformId: platform.id,
           companyId: company.id,
@@ -112,7 +121,7 @@ export class PrismaProjectImportRepository {
           platformId: platform.id,
           companyId: company.id,
           title: imported.project.title,
-          url: imported.project.url,
+          url: projectUrl,
           status: imported.project.status,
           amount: imported.project.amount,
           supporterCount: imported.project.supporterCount,
@@ -176,7 +185,7 @@ export class PrismaProjectImportRepository {
           after: {
             source: imported.source,
             platform: imported.platform.name,
-            projectUrl: imported.project.url,
+            projectUrl,
             projectId: project.id,
             companyId: company.id
           }
@@ -204,10 +213,6 @@ export class PrismaProjectImportRepository {
       }
     });
   }
-}
-
-function normalizeCompanyName(value: string) {
-  return value.trim().toLowerCase();
 }
 
 function compact<T extends Record<string, unknown>>(value: T) {

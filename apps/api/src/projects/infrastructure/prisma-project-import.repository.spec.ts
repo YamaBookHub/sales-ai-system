@@ -128,6 +128,9 @@ describe('PrismaProjectImportRepository', () => {
     const result = await repository.persistImportedProject(imported, { bulk: true, userId: 'user-1' });
 
     expect(result.lead.id).toBe('lead-1');
+    expect(tx.$executeRawUnsafe).toHaveBeenCalledTimes(2);
+    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(1, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'project-import:company:テスト食品株式会社');
+    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(2, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'project-import:project:https://camp-fire.jp/projects/test/view');
     expect(tx.company.update).toHaveBeenCalledWith({
       where: { id: 'company-1' },
       data: expect.objectContaining({

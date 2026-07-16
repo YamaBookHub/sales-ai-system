@@ -49,6 +49,17 @@ export function normalizeSearchUrl(value: string) {
   }
 }
 
+export function normalizeImportedCompanyName(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export function projectImportLockKeys(projectUrl: string, companyName: string) {
+  return [
+    `project-import:company:${normalizeImportedCompanyName(companyName)}`,
+    `project-import:project:${normalizeSearchUrl(projectUrl)}`
+  ].sort();
+}
+
 export function uniqueNormalizedUrlInputs(urls: string[] | undefined, normalizeUrl: (value: string) => string) {
   return Array.from(
     new Map(

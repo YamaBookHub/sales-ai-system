@@ -4,9 +4,11 @@ import {
   countImportableSearchItems,
   mergeSearchItems,
   normalizeEndingSoonDays,
+  normalizeImportedCompanyName,
   normalizeResultLimit,
   normalizeSearchUrl,
   progressiveSearchLimits,
+  projectImportLockKeys,
   sortEndingSoon,
   uniqueNormalizedUrlInputs
 } from './project-import-policy';
@@ -39,6 +41,14 @@ describe('project-import-policy', () => {
 
     expect(merged).toHaveLength(2);
     expect(countImportableSearchItems(merged, new Set([normalizeSearchUrl('https://example.com/project')]))).toBe(1);
+  });
+
+  it('builds stable lock keys from normalized project URLs and company names', () => {
+    expect(normalizeImportedCompanyName('  ACME Inc.  ')).toBe('acme inc.');
+    expect(projectImportLockKeys('https://example.com/project/?utm=campaign#top', '  ACME Inc.  ')).toEqual([
+      'project-import:company:acme inc.',
+      'project-import:project:https://example.com/project'
+    ]);
   });
 
   it('deduplicates bulk import URLs after provider normalization', () => {
