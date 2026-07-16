@@ -36,21 +36,29 @@ Baseline:
 | 11 | LS-004 | P0 | pending | Terra T3 | LS-002, LS-003 | - | 検索終了理由 |
 | 12 | LS-005 | P0 | pending | Terra T3 + Sol audit | LS-004 | - | 即時停止 |
 | 13 | LS-007 | P0 | complete | Terra T3 | LR-004 | 2026-07-16 / advisory lock・実DB並列4 tests成功 | 並列取り込み排他 |
-| 14 | LS-006 | P1 | pending | Terra T3 | LS-005 | - | 逐次候補追加 |
-| 15 | LL-001 | P1 | pending | Terra T3 | LR-001, LR-004 | - | server pagination/filter |
-| 16 | LL-002 | P1 | pending | Luna T2 | LL-001 | - | 全件CSV/TSV |
-| 17 | LL-003 | P1 | pending | Terra T3 | LL-001 | - | 詳細編集契約 |
-| 18 | LM-004 | P1 | pending | Sol T4 -> Terra | LM-003, LL-003 | - | 構造化分析値 |
-| 19 | LM-005 | P1 | pending | Terra T3 | LM-003 | - | OpenAI予算guard |
-| 20 | LL-004 | P1 | pending | Terra T3 + Sol audit | LL-003 | - | Contact CRUD |
-| 21 | LA-001 | P1 | deferred | Sol T4 | LL-004 | - | 本番送信を再優先化するまで後回し |
-| 22 | LA-002 | P1 | pending | Sol T4 | LR-002 | - | 認証設計 |
-| 23 | LA-003 | P1 | pending | Terra T3 + Sol audit | LA-002 | - | 認証実装 |
-| 24 | LA-004 | P1 | pending | Sol T4 | LA-003 | - | RBAC・監査 |
-| 25 | LA-005 | P1 | pending | Sol T4 -> Terra | LA-003, LS-006 | - | job所有者・永続化 |
-| 26 | LO-001 | P2 | pending | Terra T3 | LA-003 | - | 構造化ログ |
-| 27 | LO-002 | P2 | pending | Terra T3 | LR-003, LA-004 | - | CI・本番artifact |
-| 28 | LO-003 | P2 | pending | Terra T3 | LM-005, LO-001 | - | 監視・費用表示 |
+| 14 | LL-003 | P0 | pending | Terra T3 | LR-004 | - | 詳細編集契約 |
+| 15 | LL-004 | P0 | pending | Terra T3 + Sol audit | LL-003 | - | Contact CRUD |
+| 16 | SO-001 | P0 | complete | Luna T2 | LM-001 | 2026-07-16 / mark-sent API・sent event・UI実装済み | 手動送信記録 |
+| 17 | SO-002 | P0 | pending | Terra T3 | SO-001, LL-004 | - | 返信・次回対応 |
+| 18 | SO-003 | P0 | pending | Sol T4 -> Terra | LL-004, SO-001 | - | 配信拒否・重複接触guard |
+| 19 | SO-004 | P0 | pending | Sol T4 | SO-002, SO-003 | - | 商談状態・履歴設計 |
+| 20 | SO-005 | P0 | pending | Terra T3 + Sol audit | SO-004 | - | 商談状態・履歴実装 |
+| 21 | LS-006 | P1 | pending | Terra T3 | LS-005 | - | 逐次候補追加 |
+| 22 | LL-001 | P1 | pending | Terra T3 | LR-001, LR-004 | - | server pagination/filter |
+| 23 | LL-002 | P1 | pending | Luna T2 | LL-001 | - | 全件CSV/TSV |
+| 24 | LM-004 | P1 | pending | Sol T4 -> Terra | LM-003, LL-003 | - | 構造化分析値 |
+| 25 | LM-005 | P1 | pending | Terra T3 | LM-003 | - | AI予算guard |
+| 26 | SM-001 | P1 | pending | Terra T3 | SO-005, LL-001 | - | 営業成績 |
+| 27 | LA-001 | P1 | deferred | Sol T4 | LL-004 | - | 本番送信を再優先化するまで後回し |
+| 28 | LA-002 | 公開前 | pending | Sol T4 | LR-002 | - | 認証設計 |
+| 29 | LA-003 | 公開前 | pending | Terra T3 + Sol audit | LA-002 | - | 認証実装 |
+| 30 | LA-004 | 公開前 | pending | Sol T4 | LA-003 | - | RBAC・監査・データ分離 |
+| 31 | LA-005 | 公開前 | pending | Sol T4 -> Terra | LA-003, LS-006 | - | job所有者・永続化 |
+| 32 | LO-001 | 公開前 | pending | Terra T3 | LA-003 | - | 構造化ログ |
+| 33 | LO-002 | 公開前 | pending | Terra T3 | LR-003, LA-004 | - | CI・本番artifact |
+| 34 | LA-006 | 公開前 | pending | Sol T4 -> Terra | LA-003, LO-002 | - | バックアップ・復元確認 |
+| 35 | LO-003 | P1 | pending | Terra T3 | LM-005, LO-001 | - | 監視・費用表示 |
+| 36 | LP-001 | 販売後 | deferred | Sol T4 | LA-004, SM-001 | - | 課金・契約 |
 
 ## Deferred backlog
 
@@ -62,7 +70,6 @@ Baseline:
 | LB-004 HP/SNS/連絡先自動探索 | deferred | 認証・監査後 |
 | LB-005 site message/contact form送信 | deferred | 外部送信は後回し |
 | LB-006 Queue/Worker/DLQ | deferred | 本番送信を再優先化した時 |
-| LB-007 商談以降CRM | deferred | ローカルMVP運用評価後 |
 | LB-008 Calendar/通知/ポモドーロ | deferred | Google OAuth・user identity後 |
 
 ## Execution log
@@ -86,3 +93,4 @@ Baseline:
 | 2026-07-16 | LM-003 | Terra worker + Sol audit | complete | 商品・食品・イベント・店舗案件を分離し、別案件メモ混入と文法崩れを防止。64 suites・198 tests、integration、build成功 |
 | 2026-07-16 | LS-001 | Terra worker + main audit | complete | browser acquisition・provider parser・normalizerを分離する契約、fallback、sanitized fixture、段階移行単位を文書化 |
 | 2026-07-16 | LS-007 | Terra worker + main audit | complete | 正規化会社名・URLのtransaction advisory lockを追加。同一URL、同一会社別URL、一部失敗を専用DBで検証し4 tests成功 |
+| 2026-07-16 | ROADMAP-OPS | Luna explorers + main audit | complete | 取得、連絡先、手動送信、返信、商談、配信拒否、営業成績、大量データ、認証、バックアップ、課金をP0/P1/公開前/販売後へ再編 |

@@ -157,8 +157,10 @@ Recommended next action:
 6. 取り込み後の案件詳細と分析値を人が修正できる。
 7. メールへ別案件の特徴が混ざらないことをgolden testで固定する。
 8. 対象選択、履歴、編集、checklist、レビュー、棄却、再レビュー、承認、queueが通る。
-9. 営業案件が200件を超えてもserver paginationと全件出力が正しい。
-10. 通常test、build、Prisma validate、実DBintegrationが成功する。
+9. 連絡先、手動送信記録、返信分類、次回対応、配信拒否、商談状態を一つの案件履歴として追跡できる。
+10. blocked company、unsubscribed contact、同一宛先への重複接触を操作前に拒否する。
+11. 営業案件が200件を超えてもserver paginationと全件出力が正しい。
+12. 通常test、build、Prisma validate、実DBintegrationが成功する。
 
 ### 複数人運用完成
 
@@ -379,21 +381,80 @@ Recommended next action:
 
 ### LL-003 詳細編集契約
 
-- Priority: P1
+- Priority: P0
 - Model: Terra / T3 / high
-- Depends on: LL-001
+- Depends on: LR-004
 - 目的: 選択案件の会社・案件・営業・分析・連絡先項目を、手入力または選択肢で更新できる契約を完成する。
 - 最初の作業: 現在編集可/読取専用/自動再計算をdata mapping表へ記録する。
 - 合格: 保存後再読込で一致し、自動再分析で人間編集値を勝手に上書きしない。
 
 ### LL-004 Contact CRUD
 
-- Priority: P1
+- Priority: P0
 - Model: Terra / T3 / high
 - Depends on: LL-003
 - 目的: 会社の複数連絡先、primary、配信停止、問い合わせURLを管理する。
 - 合格: create/update/archive、primary一意、unsubscribe維持、lead選択画面への反映をtest。
 - 監査: 個人情報・配信停止のためSol review。
+
+### SO-001 手動送信記録
+
+- Priority: P0
+- Status: complete
+- Model: Luna / T2 / medium
+- Depends on: LM-001
+- 目的: 外部で手動送信したメールについて、送信日、手段、宛先、使用文面を履歴として残す。
+- 現状: `mark-sent` API、`sentAt`、`EmailEvent(sent)`、手動送信済みUIが実装済み。
+- 合格: 手動送信記録後も件名・本文・宛先・送信手段を再表示でき、Leadがcontactedへ遷移する。
+- 注意: 操作ユーザーはLA-004でAuditLogへ追加する。自動送信は有効にしない。
+
+### SO-002 返信・次回対応の完成
+
+- Priority: P0
+- Model: Terra / T3 / high
+- Depends on: SO-001, LL-004
+- 目的: 手動登録した返信を分類し、次回対応日とTaskへ確実に反映する。
+- 必須: interested、need_info、meeting_request、not_interested、unsubscribe、auto_reply、complaint、unknown、今日、期限超過。
+- 合格: 返信登録からLead状態、次回対応、Task、返信一覧が同じtransaction結果を示す。unsubscribeはContactへ永続反映する。
+- 注意: Gmail自動同期は含めない。
+
+### SO-003 配信拒否・重複接触guard
+
+- Priority: P0
+- Model: Sol design -> Terra implementation / T4
+- Depends on: LL-004, SO-001
+- 目的: blocked company、unsubscribed contact、同一宛先への重複接触を共通policyで拒否する。
+- 必須: 正規化email、問い合わせURL、company/contact状態、既存送信履歴を一つの判断へ集約する。
+- 合格: 文面作成・レビュー・手動送信記録の前に拒否理由を返し、拒否操作でmail/lead状態を進めない。
+- 監査: 配信停止と個人情報を扱うためSol。
+
+### SO-004 商談状態・履歴設計
+
+- Priority: P0
+- Model: Sol / T4 / high
+- Depends on: SO-002, SO-003
+- 目的: 未接触、送信済み、返信、商談、提案、受注、失注の正本と履歴を設計する。
+- このタスクではmigrationを作らない。
+- 必須: LeadStatus拡張かOpportunity導入か、担当者、金額、確度、予定日、失注理由、状態履歴、既存Lead移行を決定する。
+- 合格: DB差分、API、状態遷移、権限、集計単位、移行・rollback手順が文書化される。
+
+### SO-005 商談状態・履歴実装
+
+- Priority: P0
+- Model: Terra / T3 / high
+- Depends on: SO-004
+- 目的: 承認済み設計に従い、商談状態、履歴、担当、受注・失注情報をAPIと画面へ実装する。
+- 合格: 正常遷移と禁止遷移、履歴、失注理由、再読込、並列更新競合を実DBintegrationで検証する。
+- 監査: schema、migration、業務状態遷移のためSol。
+
+### SM-001 営業成績
+
+- Priority: P1
+- Model: Terra / T3 / high
+- Depends on: SO-005, LL-001
+- 目的: 期間別の送信数、返信率、商談率、受注率、失注理由をDB正本で集計する。
+- 必須: 指標定義、期間、担当者、取得元、0件、分母、timezoneを固定する。
+- 合格: 既知datasetの集計APIと画面が一致し、ページ表示中の件数を母数にしない。
 
 ### LA-001 送信直前安全guard
 
@@ -439,6 +500,15 @@ Recommended next action:
 - 目的: jobをプロセスメモリから共有storeへ移し、owner以外の閲覧/停止を防ぐ。
 - 合格: restart後状態、複数instance、owner隔離、TTL、cancelをintegration test。
 
+### LA-006 バックアップ・復元確認
+
+- Priority: 公開前
+- Model: Sol design -> Terra implementation / T4
+- Depends on: LA-003, LO-002
+- 目的: PostgreSQLと必要な設定のバックアップ、保持、復元、削除手順を固定する。
+- 必須: 暗号化、保存先、保持期間、RPO/RTO、復元先誤り防止、定期復元演習。
+- 合格: staging相当DBへの復元手順を実行し、件数・主要relation・migration状態を検証できる。
+
 ### LO-001 構造化ログとrequest ID
 
 - Priority: P2
@@ -464,6 +534,15 @@ Recommended next action:
 - 目的: AI費用、失敗、検索時間、取り込み失敗、返信、mail状態を運用画面へ表示する。
 - 合格: 期間filter、0件、DB失敗、個人情報maskをtest。
 
+### LP-001 課金・契約
+
+- Priority: 販売後
+- Model: Sol / T4 / high
+- Depends on: LA-004, SM-001
+- 目的: プラン、利用上限、請求、解約、契約終了時のデータ出力・削除を設計・実装する。
+- 開始条件: P0、P1、公開前タスクが完了し、販売プランと決済事業者が決定している。
+- 合格: 契約状態と利用制限、請求イベント、解約、保持期限、削除監査を実DBintegrationで検証する。
+
 ## 8. 後回しにするbacklog
 
 次は上記P0/P1完了後に、1件ずつ新しいTask cardへ分解する。
@@ -476,7 +555,6 @@ Recommended next action:
 | LB-004 | 会社HP/SNS/連絡先の自動探索 | T4 | 認証・個人情報・監査完了 |
 | LB-005 | site message / contact form送信 | T4 | 送信安全guard・監査・個別利用規約確認 |
 | LB-006 | Queue/Worker/DLQ | T4 | 本番送信を再優先化した時 |
-| LB-007 | 面談・提案・見積・契約管理 | T3 | ローカルMVP運用評価後 |
 | LB-008 | Calendar/通知/ポモドーロ | T3 | Google OAuthとuser identity完了 |
 
 ## 9. Lunaへ渡す依頼文

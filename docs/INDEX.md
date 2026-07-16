@@ -36,6 +36,7 @@
 | 27 | 27_LUNA_EXECUTION_GUIDE.md | GPT-5.6 Lunaが残作業を1件ずつ実行する指示書・Task card | 作成済み |
 | 28 | 28_REMAINING_WORK_STATUS.md | 残作業の依存関係・優先度・model・進捗・証跡 | 作成済み |
 | 29 | 29_PARSER_BOUNDARY_DESIGN.md | 取得・HTML parser・正規化の境界、fixture方針 | 作成済み |
+| 30 | 30_SALES_OPERATIONS_PRIORITY_ROADMAP.md | 取得から受注・失注までの業務優先順位と完成条件 | 作成済み |
 
 ## 付属仕様
 - `../prisma/schema.prisma`
@@ -45,5 +46,5 @@
 ## 次アクション
 1. `28_REMAINING_WORK_STATUS.md` の最上段にある実行可能なpendingタスクを1件選ぶ
 2. `27_LUNA_EXECUTION_GUIDE.md` の同じTask IDの範囲・合格条件に従う
-3. P0の正本同期、メール品質、取得精度、検索ジョブを先に完了する
-4. 実送信、返信自動同期、RAG、商談以降はdeferredのまま勝手に着手しない
+3. `30_SALES_OPERATIONS_PRIORITY_ROADMAP.md` のP0を優先する
+4. 自動送信、返信自動同期、RAGはdeferredのまま勝手に着手しない
