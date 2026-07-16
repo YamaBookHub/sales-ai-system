@@ -2,6 +2,13 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import * as cheerio from 'cheerio';
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import { normalizeEndingSoonDays } from '../projects/domain/project-import-policy';
+import { RawProjectPageSnapshot } from '../projects/infrastructure/parsers/parser.types';
+import { parseCampfireDetail } from '../projects/infrastructure/parsers/campfire/campfire-detail.parser';
+import { parseCampfireListing } from '../projects/infrastructure/parsers/campfire/campfire-listing.parser';
+import { mapCampfireListingItem } from '../projects/infrastructure/parsers/campfire/campfire-listing.mapper';
+import { parseCampfireProfile } from '../projects/infrastructure/parsers/campfire/campfire-profile.parser';
+import { mapCampfireProfileProjectCount, matchesCampfireProfileProjectRange } from '../projects/infrastructure/parsers/campfire/campfire-profile.mapper';
+import { CampfireDetail } from '../projects/infrastructure/parsers/campfire/campfire.types';
 
 const CAMPFIRE_ORIGIN = 'https://camp-fire.jp';
 const DEFAULT_SEARCH_RESULT_LIMIT = 10;
@@ -140,9 +147,10 @@ export class CampfireScraperService {
       const page = await context.newPage();
       await openPage(page, url);
       const html = await page.content();
-      const project = extractProject(html, url);
-      assertProjectIsFundraising(project);
-      project.profileProjectCount = (await fetchProfileProjectCount(page, html, project.profileProjectCount)) ?? project.profileProjectCount;
+      const parsed = parseCampfireDetail(buildSnapshot('detail', url, html));
+      const project = toScrapedCampfireProject(parsed.value);
+      assertProjectIsFundraising(project, parsed.value.publicStatus);
+      project.profileProjectCount = (await fetchProfileProjectCount(page, project.profileUrl, project.profileProjectCount)) ?? project.profileProjectCount;
 
       if (!project.projectTitle) {
         throw new BadRequestException('CAMPFIREプロジェクト名を取得できませんでした。');
@@ -215,43 +223,8 @@ function normalizePresetCategory(value?: string) {
 }
 
 function extractSearchResults(html: string): CampfireSearchResult[] {
-  const $ = cheerio.load(html);
-  const links = $('a[href*="/projects/"][href*="/view"]')
-    .toArray()
-    .map((element) => {
-      const url = absolutize($(element).attr('href') || '', CAMPFIRE_ORIGIN);
-      const card = $(element).closest('article, li, div');
-      const cardText = clean(card.text() || $(element).text());
-      const title = clean($(element).find('h2,h3').first().text() || $(element).text()).slice(0, 140);
-      const amount = parseInteger(extractCampfireAmount(cardText));
-      const supporterCount = parseInteger(extractCampfireSupporters(cardText));
-      const daysLeftText = findFirst(cardText, [/残り\s*([0-9]+)\s*日/g, /あと\s*([0-9]+)\s*日/g]);
-      const daysLeft = daysLeftText ? parseInteger(daysLeftText) : null;
-      const isActive = isFundraisingProject(cardText, daysLeft);
-      const profileProjectCount = extractProfileProjectCount(cardText);
-
-      return {
-        title: title || extractTitleFromUrl(url),
-        url,
-        amount,
-        supporterCount,
-        category: '',
-        daysLeft,
-        isActive,
-        profileProjectCount,
-        summary: cardText.slice(0, 180)
-      };
-    })
-    .filter((item) => item.url && item.title);
-
-  return uniqueBy(links, (item) => normalizeUrlForUnique(item.url));
-}
-
-function isFundraisingProject(cardText: string, daysLeft: number | null) {
-  if (/(もうすぐ公開|近日公開|公開予定|COMING\s*SOON|終了したもの|終了しました|募集終了|受付終了|SUCCESS|失敗)/i.test(cardText)) {
-    return false;
-  }
-  return daysLeft !== null;
+  const parsed = parseCampfireListing(buildSnapshot('listing', buildCampfireSearchUrl(), html));
+  return parsed.value.map(mapCampfireListingItem);
 }
 
 async function collectSearchResults(page: Page, limit: number, excludedUrls = new Set<string>(), input: CampfireSearchInput = {}) {
@@ -375,7 +348,7 @@ function mergeSearchResults(
 }
 
 export function matchesSearchStatus(item: CampfireSearchResult, input: CampfireSearchInput) {
-  if (!input.status) return true;
+  if (!input.status) return item.isActive;
   if (input.status === 'active') return item.isActive;
   if (input.status === 'endingSoon') return item.isActive && item.daysLeft !== null && item.daysLeft <= normalizeEndingSoonDays(input.endingSoonDays);
   return true;
@@ -393,8 +366,15 @@ async function enrichWithProjectPageProfileCount(context: BrowserContext, item: 
   const page = await context.newPage();
   try {
     await openPageFast(page, item.url);
-    const text = (await page.locator('body').innerText({ timeout: 1200 })).replace(/\s+/g, ' ').trim();
-    return { ...item, profileProjectCount: extractProfileProjectCount(text) };
+    const detailHtml = await page.content();
+    const detail = parseCampfireDetail(buildSnapshot('detail', item.url, detailHtml));
+    if (!detail.value.profileUrl) return item;
+
+    await openPageFast(page, detail.value.profileUrl);
+    const profileHtml = await page.content();
+    const profileText = (await page.locator('body').innerText({ timeout: 1200 })).replace(/\s+/g, ' ').trim();
+    const profile = parseCampfireProfile(buildSnapshot('profile', detail.value.profileUrl, profileHtml, profileText));
+    return { ...item, profileProjectCount: mapCampfireProfileProjectCount(profile.value.projectCount) };
   } catch {
     return item;
   } finally {
@@ -482,27 +462,25 @@ function hasProfileProjectFilter(input: CampfireSearchInput) {
 
 function matchesProfileProjectRange(item: CampfireSearchResult, input: CampfireSearchInput) {
   if (!hasProfileProjectFilter(input)) return true;
-  if (item.profileProjectCount === null) return false;
-  if (typeof input.profileProjectMin === 'number' && item.profileProjectCount < input.profileProjectMin) return false;
-  if (typeof input.profileProjectMax === 'number' && item.profileProjectCount > input.profileProjectMax) return false;
-  return true;
+  return matchesCampfireProfileProjectRange(item.profileProjectCount, input.profileProjectMin, input.profileProjectMax);
 }
 
 async function fetchProfileProjectCount(
   page: Page,
-  projectHtml: string,
+  profileUrl: string,
   fallbackCount: number | null = null,
   strictProfileLookup = false
 ) {
   if (fallbackCount !== null) return fallbackCount;
 
-  const profileUrl = extractProfileUrl(projectHtml);
   if (!profileUrl) return strictProfileLookup ? null : fallbackCount;
 
   try {
     await openPageFast(page, profileUrl);
+    const profileHtml = await page.content();
     const profileText = (await page.locator('body').innerText({ timeout: 2500 })).replace(/\s+/g, ' ').trim();
-    return extractProfileProjectCount(profileText) ?? fallbackCount;
+    const profile = parseCampfireProfile(buildSnapshot('profile', profileUrl, profileHtml, profileText));
+    return mapCampfireProfileProjectCount(profile.value.projectCount) ?? fallbackCount;
   } catch {
     return strictProfileLookup ? null : fallbackCount;
   }
@@ -510,10 +488,6 @@ async function fetchProfileProjectCount(
 
 function normalizeText(value: string | undefined) {
   return (value || '').toLowerCase().replace(/\s+/g, '');
-}
-
-function extractTitleFromUrl(value: string) {
-  return value.match(/projects\/([0-9]+)/)?.[1] ? `CAMPFIRE project ${value.match(/projects\/([0-9]+)/)?.[1]}` : value;
 }
 
 async function openPage(page: Page, url: string) {
@@ -551,240 +525,39 @@ function validateCampfireUrl(url: string) {
   return parsed.toString();
 }
 
-function extractProject(html: string, projectUrl: string): ScrapedCampfireProject {
-  const $ = cheerio.load(html);
-  const bodyText = $('body').text().replace(/\s+/g, ' ').trim();
-  const description = clean(
-    $('meta[property="og:description"]').attr('content') ||
-      $('[class*="description"], [class*="Description"]').first().text() ||
-      $('main').text().slice(0, 1800)
-  );
-  const profileName = clean($('a[href*="/profile/"]').first().text());
-  const urls = extractExternalUrls($, projectUrl);
-  const classifiedUrls = classifyUrls(urls);
-  const profileUrl = extractProfileUrl(html);
-  const profileProjectCount = extractProfileProjectCount(bodyText);
+function buildSnapshot(kind: RawProjectPageSnapshot['kind'], url: string, html: string, visibleText?: string): RawProjectPageSnapshot {
+  return { source: 'campfire', kind, url, html, visibleText };
+}
 
+function toScrapedCampfireProject(detail: CampfireDetail): ScrapedCampfireProject {
   return {
-    projectUrl,
-    projectId: projectUrl.match(/projects\/(\d+)/)?.[1] ?? '',
-    projectTitle: clean(
-      $('meta[property="og:title"]').attr('content') ||
-        $('h1').first().text() ||
-        $('title').text().replace(/\s*\|\s*CAMPFIRE.*$/i, '')
-    ),
-    executorName:
-      sanitizeName(profileName) || sanitizeName(pickNearLabel(bodyText, ['実行者', '起案者', 'プロジェクトオーナー'])),
-    brandName: sanitizeName(pickNearLabel(bodyText, ['ブランド名', 'ショップ名'])),
-    supportAmount: extractCampfireAmount(bodyText),
-    supporters: extractCampfireSupporters(bodyText),
-    achievementRate: findFirst(bodyText, [/([0-9,]+)\s*%/g, /達成率\s*([0-9,]+%)/g]),
-    daysLeft: findFirst(bodyText, [/残り\s*([0-9]+日)/g, /あと\s*([0-9]+日)/g]),
-    mainDescription: description,
-    category: pickNearLabel(bodyText, ['カテゴリー', 'カテゴリ']) || '',
-    features: extractFeatureCandidates($, description),
-    profileUrl,
-    profileProjectCount,
-    websiteUrl: classifiedUrls.websiteUrl,
-    inquiryUrl: classifiedUrls.inquiryUrl,
-    instagramUrl: classifiedUrls.instagramUrl,
-    tiktokUrl: classifiedUrls.tiktokUrl,
-    xUrl: classifiedUrls.xUrl,
-    externalUrls: urls
+    projectUrl: detail.projectUrl,
+    projectId: detail.projectId,
+    projectTitle: detail.projectTitle,
+    executorName: detail.executorName,
+    brandName: detail.brandName,
+    supportAmount: detail.supportAmount,
+    supporters: detail.supporters,
+    achievementRate: detail.achievementRate,
+    daysLeft: detail.daysLeft || '',
+    mainDescription: detail.mainDescription,
+    category: detail.category,
+    features: detail.features,
+    profileUrl: detail.profileUrl,
+    profileProjectCount: null,
+    websiteUrl: detail.websiteUrl,
+    inquiryUrl: detail.inquiryUrl,
+    instagramUrl: detail.instagramUrl,
+    tiktokUrl: detail.tiktokUrl,
+    xUrl: detail.xUrl,
+    externalUrls: detail.externalUrls
   };
 }
 
-function assertProjectIsFundraising(project: ScrapedCampfireProject) {
-  if (project.daysLeft) return;
+function assertProjectIsFundraising(project: ScrapedCampfireProject, publicStatus = '') {
+  const isActive = !/(もうすぐ公開|近日公開|公開予定|COMING\s*SOON|終了したもの|終了しました|募集終了|受付終了|終了|SUCCESS|失敗)/i.test(publicStatus) && Boolean(project.daysLeft);
+  if (isActive) return;
   throw new BadRequestException('このCAMPFIREプロジェクトは募集中ではないため取り込みません。終了済み・公開前の案件は営業対象から除外します。');
-}
-
-function extractProfileUrl(html: string) {
-  const $ = cheerio.load(html);
-  return absolutize(
-    $('a[href*="/profile/"][href*="/projects"]').first().attr('href') ||
-      $('a[href*="/profile/"]').first().attr('href') ||
-      '',
-    CAMPFIRE_ORIGIN
-  );
-}
-
-function extractProfileProjectCount(text: string) {
-  if (/初めてのプロジェクトです/.test(text)) {
-    return 0;
-  }
-
-  const patterns = [
-    /他に\s*([0-9,]+)\s*件のプロジェクトを掲載しています/g,
-    /([0-9,]+)\s*件のプロジェクト/g,
-    /プロジェクト\s*([0-9,]+)\s*件/g,
-    /([0-9,]+)\s*projects?/gi
-  ];
-
-  const countText = findFirst(text, patterns);
-  return countText ? parseInteger(countText) : null;
-}
-
-function extractCampfireAmount(text: string) {
-  return findFirst(text, [
-    /支援総額\s*[:：]?\s*([0-9,]+円?)/g,
-    /現在\s*([0-9,]+円?)/g,
-    /([0-9,]+円)\s*(?:集まっています|集まっております|達成|突破)/g,
-    /([0-9,]+)\s*円\s*(?:集まっています|集まっております|達成|突破)/g
-  ]);
-}
-
-function extractCampfireSupporters(text: string) {
-  return findFirst(text, [
-    /支援者(?:数)?\s*[:：]?\s*([0-9,]+人?)/g,
-    /([0-9,]+人)\s*(?:の)?支援者/g,
-    /([0-9,]+)\s*人\s*(?:の)?支援者/g
-  ]);
-}
-
-function extractExternalUrls($: cheerio.CheerioAPI, projectUrl: string) {
-  const projectHost = new URL(projectUrl).hostname;
-  const urls = $('a[href]')
-    .toArray()
-    .map((element) => absolutize($(element).attr('href') || '', CAMPFIRE_ORIGIN))
-    .filter((url) => {
-      if (!url) return false;
-      const parsed = new URL(url);
-      if (parsed.hostname === projectHost || parsed.hostname.endsWith('.camp-fire.jp')) return false;
-      if (['mailto:', 'tel:'].includes(parsed.protocol)) return false;
-      if (isShareOrTrackingUrl(parsed)) return false;
-      return ['http:', 'https:'].includes(parsed.protocol);
-    });
-
-  return uniqueBy(urls, (value) => normalizeUrlForUnique(value)).slice(0, 20);
-}
-
-function classifyUrls(urls: string[]) {
-  const cleanUrls = urls.filter((url) => {
-    try {
-      return !isShareOrTrackingUrl(new URL(url));
-    } catch {
-      return false;
-    }
-  });
-  const instagramUrl = cleanUrls.find((url) => /(^|\.)instagram\.com$/i.test(new URL(url).hostname)) || '';
-  const tiktokUrl = cleanUrls.find((url) => /(^|\.)tiktok\.com$/i.test(new URL(url).hostname)) || '';
-  const xUrl =
-    cleanUrls.find((url) => {
-      const parsed = new URL(url);
-      const host = parsed.hostname.toLowerCase();
-      return (host === 'x.com' || host === 'twitter.com' || host.endsWith('.twitter.com')) && !parsed.pathname.toLowerCase().startsWith('/intent/');
-    }) || '';
-  const inquiryUrl =
-    cleanUrls.find((url) => {
-      const normalized = url.toLowerCase();
-      return /contact|inquiry|toiawase|support|help|form|otoiawase/.test(normalized);
-    }) || '';
-  const websiteUrl =
-    cleanUrls.find((url) => {
-      const host = new URL(url).hostname.toLowerCase();
-      return ![
-        'instagram.com',
-        'www.instagram.com',
-        'tiktok.com',
-        'www.tiktok.com',
-        'x.com',
-        'twitter.com',
-        'www.twitter.com',
-        'facebook.com',
-        'www.facebook.com',
-        'youtube.com',
-        'www.youtube.com',
-        'youtu.be'
-      ].includes(host);
-    }) || '';
-
-  return { websiteUrl, inquiryUrl, instagramUrl, tiktokUrl, xUrl };
-}
-
-function isShareOrTrackingUrl(url: URL) {
-  const host = url.hostname.toLowerCase();
-  const path = url.pathname.toLowerCase();
-
-  if (host === 'x.com' || host === 'twitter.com' || host.endsWith('.twitter.com')) {
-    return path.startsWith('/intent/') || path.startsWith('/share');
-  }
-
-  if (host === 'facebook.com' || host === 'www.facebook.com' || host.endsWith('.facebook.com')) {
-    return path.includes('/sharer') || path.includes('/share');
-  }
-
-  if (host === 'social-plugins.line.me' || host.endsWith('.line.me')) {
-    return path.includes('/share') || path.includes('/lineit');
-  }
-
-  if (host === 'app.adjust.com' || host.endsWith('.adjust.com')) return true;
-  if (host === 'b.hatena.ne.jp' || host === 'pinterest.com' || host === 'www.pinterest.com') return true;
-
-  return false;
-}
-
-function extractFeatureCandidates($: cheerio.CheerioAPI, description: string) {
-  const headings = $('h2,h3,strong')
-    .toArray()
-    .map((element) => clean($(element).text()))
-    .filter((value) => value.length >= 8 && value.length <= 80);
-  const descriptionSentences = description
-    .split(/[。！？!?]/)
-    .map((value) => clean(value))
-    .filter((value) => value.length >= 12 && value.length <= 90);
-
-  return uniqueBy([...headings, ...descriptionSentences], (value) => value).slice(0, 8);
-}
-
-function pickNearLabel(text: string, labels: string[]) {
-  for (const label of labels) {
-    const match = text.match(new RegExp(label + '\\s*[:：]?\\s*([^\\s]{2,40})'));
-    if (match?.[1]) {
-      return clean(match[1]);
-    }
-  }
-
-  return '';
-}
-
-function findFirst(text: string, patterns: RegExp[]) {
-  for (const pattern of patterns) {
-    const safePattern = new RegExp(pattern.source, pattern.flags.replace('g', ''));
-    const match = safePattern.exec(text);
-
-    if (match?.[1]) {
-      return clean(match[1]);
-    }
-  }
-
-  return '';
-}
-
-function sanitizeName(value: string) {
-  const text = clean(value);
-
-  if (!text || text.length > 40) {
-    return '';
-  }
-
-  if (/[。、「」]|メーカー|製造国|販売権|有する|http|CAMPFIRE/.test(text)) {
-    return '';
-  }
-
-  return text;
-}
-
-function absolutize(href: string, origin: string) {
-  if (!href) {
-    return '';
-  }
-
-  try {
-    return new URL(href, origin).toString();
-  } catch {
-    return '';
-  }
 }
 
 function normalizeUrlForUnique(value: string) {

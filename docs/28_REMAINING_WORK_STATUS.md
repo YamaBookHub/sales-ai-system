@@ -31,8 +31,8 @@ Baseline:
 | 6 | LM-002 | P0 | complete | Luna T2 | LM-001 | 2026-07-15 / 6案件のgolden dataset追加・現行不具合2件を検出 | mail golden dataset |
 | 7 | LM-003 | P0 | complete | Terra T3 + Sol audit | LM-002 | 2026-07-16 / 6案件golden・64 suites・198 tests・integration・build成功 | 案件間混入防止 |
 | 8 | LS-001 | P0 | complete | Terra T3 | LR-004 | 2026-07-16 / listing・detail・profile境界とfixture方針を文書化 | parser境界設計 |
-| 9 | LS-002 | P0 | pending | Luna T2 | LS-001 | - | Makuake fixture |
-| 10 | LS-003 | P0 | pending | Luna T2 | LS-001 | - | CAMPFIRE fixture |
+| 9 | LS-002 | P0 | complete | Luna T2 | LS-001 | 2026-07-16 / listing・detail・profile fixture 6 tests、全69 suites・220 tests成功 | Makuake fixture |
+| 10 | LS-003 | P0 | complete | Luna T2 | LS-001 | 2026-07-16 / generic project linkを含むfixture 7 tests、既存scraper 2 tests成功 | CAMPFIRE fixture |
 | 11 | LS-004 | P0 | pending | Terra T3 | LS-002, LS-003 | - | 検索終了理由 |
 | 12 | LS-005 | P0 | pending | Terra T3 + Sol audit | LS-004 | - | 即時停止 |
 | 13 | LS-007 | P0 | complete | Terra T3 | LR-004 | 2026-07-16 / advisory lock・実DB並列4 tests成功 | 並列取り込み排他 |
@@ -94,3 +94,5 @@ Baseline:
 | 2026-07-16 | LS-001 | Terra worker + main audit | complete | browser acquisition・provider parser・normalizerを分離する契約、fallback、sanitized fixture、段階移行単位を文書化 |
 | 2026-07-16 | LS-007 | Terra worker + main audit | complete | 正規化会社名・URLのtransaction advisory lockを追加。同一URL、同一会社別URL、一部失敗を専用DBで検証し4 tests成功 |
 | 2026-07-16 | ROADMAP-OPS | Luna explorers + main audit | complete | 取得、連絡先、手動送信、返信、商談、配信拒否、営業成績、大量データ、認証、バックアップ、課金をP0/P1/公開前/販売後へ再編 |
+| 2026-07-16 | LS-002 | Luna worker + main audit | complete | Makuake listing・detail・profileをsanitized fixture化。金額と日数の結合、50日→150日、販売中・日数なしを固定 |
+| 2026-07-16 | LS-003 | Luna worker + main audit | complete | CAMPFIRE listing・detail・profileをsanitized fixture化。汎用project link fallbackとカテゴリ境界を追加 |
