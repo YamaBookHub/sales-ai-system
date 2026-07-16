@@ -13,10 +13,10 @@ Baseline:
 
 - Snapshot date: 2026-07-15
 - HEAD: `6a04a5a`
-- Unit/contract tests: 59 suites / 166 tests passed
+- Unit/contract tests: 64 suites / 198 tests passed
 - Build: passed
 - Prisma validate: passed
-- Integration: 1 suite skipped because `TEST_DATABASE_URL` was not set
+- Integration: dedicated `sales_ai_system_test` DBで1 suite / 1 test passed
 - Browser: not run in this audit
 
 ## Active roadmap
@@ -28,8 +28,8 @@ Baseline:
 | 3 | LR-003 | P0 | complete | Luna T2 | LR-001, LR-002 | 2026-07-15 / `npm run verify` 成功・CI追加 | baseline verify |
 | 4 | LR-004 | P0 | complete | Luna T2 | LR-003 | 2026-07-15 / 専用DB migration・1 suite/1 test成功・誤DB拒否確認 | 実DB integration |
 | 5 | LM-001 | P0 | complete | Terra T3 | LR-004 | 2026-07-15 / 60 suites・172 tests・build成功 | legacy TODO下書き廃止 |
-| 6 | LM-002 | P0 | pending | Luna T2 | LM-001 | - | mail golden dataset |
-| 7 | LM-003 | P0 | pending | Terra T3 + Sol audit | LM-002 | - | 案件間混入防止 |
+| 6 | LM-002 | P0 | complete | Luna T2 | LM-001 | 2026-07-15 / 6案件のgolden dataset追加・現行不具合2件を検出 | mail golden dataset |
+| 7 | LM-003 | P0 | complete | Terra T3 + Sol audit | LM-002 | 2026-07-16 / 6案件golden・64 suites・198 tests・integration・build成功 | 案件間混入防止 |
 | 8 | LS-001 | P0 | pending | Terra T3 | LR-004 | - | parser境界設計 |
 | 9 | LS-002 | P0 | pending | Luna T2 | LS-001 | - | Makuake fixture |
 | 10 | LS-003 | P0 | pending | Luna T2 | LS-001 | - | CAMPFIRE fixture |
@@ -80,3 +80,7 @@ Baseline:
 | 2026-07-15 | LR-004 | main + Luna explorer | complete | `sales_ai_system_test`へ6 migrations適用、1 suite・1 test成功。非test DBは実行前に拒否 |
 | 2026-07-15 | LM-001 | Terra worker + main audit | start | `/api/mails/draft` のTODO placeholder廃止と既存local generator接続を開始 |
 | 2026-07-15 | LM-001 | Terra worker + main audit | complete | manual本文を維持し、未入力・空文字は既存案件固有generatorへ接続。60 suites・172 tests、build成功 |
+| 2026-07-15 | LM-002 | Luna worker + main audit | start | 米びつ・食品・イベント・生活用品の案件間混入を検出するgolden dataset作成開始 |
+| 2026-07-15 | LM-002 | Luna worker + main audit | complete | 6案件のgolden datasetを追加。イベント案件への商品表現混入と手動魅力文の文法崩れを検出 |
+| 2026-07-15 | LM-003 | Terra worker + Sol audit | start | golden testを弱めず、案件種別に応じた分析・本文と魅力文正規化を修正開始 |
+| 2026-07-16 | LM-003 | Terra worker + Sol audit | complete | 商品・食品・イベント・店舗案件を分離し、別案件メモ混入と文法崩れを防止。64 suites・198 tests、integration、build成功 |

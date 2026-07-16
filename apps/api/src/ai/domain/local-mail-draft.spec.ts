@@ -50,4 +50,19 @@ describe('local-mail-draft', () => {
     expect(draft.body).not.toContain('実際に使う場面');
     expect(draft.body).not.toContain('担当商品');
   });
+
+  it('normalizes a manual appeal before inserting it into the sentence', () => {
+    const draft = buildLocalMailDraft({
+      templateKey: 'normal',
+      companyName: '有田陶器製作所',
+      projectPlatformName: 'CAMPFIRE',
+      projectTitle: '食卓を彩る有田焼の醤油差し',
+      projectCategory: '生活雑貨',
+      projectDescription: '残量が見えやすい有田焼の醤油差しです。',
+      brandAnalysisMemo: '魅力: 有田焼の醤油差しで残量が見やすい点が魅力です。'
+    });
+
+    expect(draft.body).toContain('有田焼の醤油差しで残量が見やすい点が特に印象に残っています。');
+    expect(draft.body).not.toMatch(/魅力(?:です)?が(?:とても|特に)|ですが(?:とても|特に)/);
+  });
 });

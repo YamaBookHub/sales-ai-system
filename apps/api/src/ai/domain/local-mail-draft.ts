@@ -39,6 +39,7 @@ export function buildLocalMailInput(
   dto: GenerateMailDto,
   template?: MailTemplateForDraft
 ): LocalMailDraftInput {
+  const projectSource = [lead.project?.title, lead.project?.category, lead.project?.description].filter(Boolean).join(' ');
   return {
     templateKey: dto.templateKey,
     tone: dto.tone,
@@ -50,9 +51,9 @@ export function buildLocalMailInput(
     projectDescription: compatibleAnalysisMemo(lead.project?.description, [lead.project?.title, lead.project?.category].filter(Boolean).join(' ')),
     projectAmount: lead.project?.amount,
     supporterCount: lead.project?.supporterCount,
-    leadReason: lead.reason,
-    brandAnalysisMemo: lead.brandAnalysisMemo,
-    snsAnalysisMemo: lead.snsAnalysisMemo,
+    leadReason: compatibleAnalysisMemo(lead.reason, projectSource),
+    brandAnalysisMemo: compatibleAnalysisMemo(lead.brandAnalysisMemo, projectSource),
+    snsAnalysisMemo: compatibleAnalysisMemo(lead.snsAnalysisMemo, projectSource),
     sendMethod: lead.sendMethod,
     template
   };
@@ -60,14 +61,18 @@ export function buildLocalMailInput(
 
 export function buildLocalMailDraft(input: LocalMailDraftInput) {
   const platformName = input.projectPlatformName || 'クラウドファンディングサイト';
+  const projectSource = [input.projectTitle, input.projectCategory, input.projectDescription].filter(Boolean).join(' ');
+  const safeLeadReason = compatibleAnalysisMemo(input.leadReason, projectSource);
+  const safeBrandAnalysisMemo = compatibleAnalysisMemo(input.brandAnalysisMemo, projectSource);
+  const safeSnsAnalysisMemo = compatibleAnalysisMemo(input.snsAnalysisMemo, projectSource);
   const placeholders = buildMailPlaceholders(
     input.companyName,
     input.projectTitle,
     input.projectCategory,
     input.projectDescription,
-    input.leadReason,
-    input.brandAnalysisMemo,
-    input.snsAnalysisMemo
+    safeLeadReason,
+    safeBrandAnalysisMemo,
+    safeSnsAnalysisMemo
   );
   const targetSentence = placeholders.subjectType === '取り組み'
     ? `${placeholders.targetUser}にとって、参加・応援する理由が伝わりやすい取り組みだと感じました。`
@@ -120,12 +125,12 @@ export function buildLocalMailDraft(input: LocalMailDraftInput) {
       `プロジェクト名: ${placeholders.productName}`,
       `魅力: ${placeholders.appeal}`,
       `想定読者: ${placeholders.targetUser}`,
-      input.brandAnalysisMemo ? `ブランド分析メモ: ${input.brandAnalysisMemo}` : '',
-      input.snsAnalysisMemo ? `SNS分析メモ: ${input.snsAnalysisMemo}` : ''
+      safeBrandAnalysisMemo ? `ブランド分析メモ: ${safeBrandAnalysisMemo}` : '',
+      safeSnsAnalysisMemo ? `SNS分析メモ: ${safeSnsAnalysisMemo}` : ''
     ].filter(Boolean),
     assumptions: ['OpenAI APIを使わず、無料分析で作成した置換項目から本文を作成しています。'],
     riskFlags: [
-      '送信前に、会社名・商品名・商品の魅力が相手の案件と合っているか確認してください。',
+      '送信前に、会社名・案件名・訴求内容が相手の案件と合っているか確認してください。',
       ...templateRisks
     ],
     usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, costUsd: 0 },
@@ -164,16 +169,20 @@ function buildMailPlaceholders(
   brandAnalysisMemo?: string | null,
   snsAnalysisMemo?: string | null
 ) {
-  const manualAnalysis = sanitizeAnalysisSource(`${brandAnalysisMemo || ''} ${snsAnalysisMemo || ''}`);
   const titleCategorySource = sanitizeAnalysisSource(`${title || ''} ${category || ''}`);
   const safeDescription = compatibleAnalysisMemo(description, titleCategorySource);
   const projectSource = sanitizeAnalysisSource(`${titleCategorySource} ${safeDescription || ''}`);
+  const safeReason = compatibleAnalysisMemo(reason, projectSource);
+  const manualAnalysis = sanitizeAnalysisSource([
+    compatibleAnalysisMemo(brandAnalysisMemo, projectSource),
+    compatibleAnalysisMemo(snsAnalysisMemo, projectSource)
+  ].filter(Boolean).join(' '));
   const isStoreProject = /飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業|地域/.test(projectSource);
   const isEventProject = /ライブ|コンサート|音楽|バンド|ファン|周年|結成|記念|イベント|公演|ツアー|フェス|アーティスト/.test(projectSource);
   const isFoodProject = /サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/.test(projectSource);
   const isRiceStorageProject = /米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(projectSource);
   const isAirBedProject = /エアベッド|ベッド|寝られる|寝心地|空気|マットレス|キャンプ|車中泊|アウトドア/.test(projectSource);
-  const strength = buildLocalStrengths(safeDescription, [reason, manualAnalysis].filter(Boolean).join(' '))[0] || '';
+  const strength = buildLocalStrengths(safeDescription, [safeReason, manualAnalysis].filter(Boolean).join(' '))[0] || '';
   const manualAppeal = pickManualAppeal(manualAnalysis, projectSource);
   const manualTarget = pickManualTarget(manualAnalysis, projectSource);
   const specificAppeal = buildSpecificAppeal(projectSource);
@@ -236,14 +245,14 @@ function pickManualAppeal(text: string, projectSource = '') {
   if (!text) return '';
   const sentence = text
     .split(/[。！？!?]/)
-    .map((value) => cleanAnalysisPhrase(value))
-    .find((value) =>
-      value.length >= 8 &&
-      value.length <= 90 &&
-      /魅力|強み|特徴|印象|見せ|伝え|背景|用途|シーン|体験|応援|安心|便利|継続/.test(value) &&
-      isPhraseCompatibleWithProject(value, projectSource)
+    .map((value) => ({ raw: value, cleaned: cleanAnalysisPhrase(value) }))
+    .find(({ raw, cleaned }) =>
+      cleaned.length >= 8 &&
+      cleaned.length <= 90 &&
+      /魅力|強み|特徴|印象|見せ|伝え|背景|用途|シーン|体験|応援|安心|便利|継続/.test(raw) &&
+      isPhraseCompatibleWithProject(cleaned, projectSource)
     );
-  return sentence ? toMailSafeAppeal(sentence) : '';
+  return sentence ? toMailSafeAppeal(sentence.cleaned) : '';
 }
 
 function pickManualTarget(text: string, projectSource = '') {
@@ -254,7 +263,7 @@ function pickManualTarget(text: string, projectSource = '') {
 
 function cleanAnalysisPhrase(value: string) {
   return sanitizeAnalysisSource(value)
-    .replace(/^(商品の魅力|特徴|強み|ターゲット|使う人|対象|利用者|支援者)\s*[:：]\s*/, '')
+    .replace(/^(?:商品の)?(?:魅力|特徴|強み|ターゲット|使う人|対象|利用者|支援者)\s*[:：]\s*/, '')
     .trim();
 }
 
@@ -263,6 +272,9 @@ function toMailSafeAppeal(strength: string, title?: string | null) {
     .replace(/可能性があります。?$/, '点')
     .replace(/メール生成前に確認してください。?$/, '')
     .replace(/商品説明から読み取れる特徴を/g, '')
+    .replace(/((?:という)?点)?が?魅力(?:です|だ|と感じます)?[。！]?$/, '$1')
+    .replace(/((?:という)?点)?が?強み(?:です|だ|と感じます)?[。！]?$/, '$1')
+    .replace(/(?:です|ます|でした|となっています)[。！]?$/, '')
     .trim();
   if (cleaned && !isBadMailPhrase(cleaned)) return cleaned;
   if (title) return `プロジェクトの目的や背景が分かりやすく伝えられている点`;

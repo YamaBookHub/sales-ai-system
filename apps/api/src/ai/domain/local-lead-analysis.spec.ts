@@ -45,6 +45,21 @@ describe('local-lead-analysis', () => {
     expect(result.output.mailPlaceholders.appeal).toContain('サーモン');
   });
 
+  it('drops incompatible lead reasons and SNS memos from the analysis input', () => {
+    const result = buildLocalLeadAnalysis({
+      ...lead,
+      reason: '米びつのキッチン収納を訴求できそうな案件です。',
+      brandAnalysisMemo: 'ライブの参加体験をファンへ伝えるのが魅力です。',
+      snsAnalysisMemo: 'エアベッドを車中泊で使う場面を見せる。'
+    });
+    const outputText = JSON.stringify(result.output);
+
+    expect(result.input.leadReason).toBe('');
+    expect(result.input.brandAnalysisMemo).toBe('');
+    expect(result.input.snsAnalysisMemo).toBe('');
+    expect(outputText).not.toMatch(/米びつ|キッチン収納|ライブ|エアベッド|車中泊/);
+  });
+
   it('uses material engagement as a sales angle without treating it as a confirmed appointment', () => {
     const result = buildLocalLeadAnalysis({
       ...lead,

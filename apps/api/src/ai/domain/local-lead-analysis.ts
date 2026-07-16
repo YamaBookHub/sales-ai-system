@@ -5,6 +5,8 @@ export type LocalMaterialEngagement = {
   appointmentAngle: 'none' | 'interested' | 'hot';
 };
 
+type LocalProjectKind = 'event' | 'store' | 'product';
+
 export function buildLocalLeadAnalysis(lead: {
   reason?: string | null;
   brandAnalysisMemo?: string | null;
@@ -30,11 +32,16 @@ export function buildLocalLeadAnalysis(lead: {
 }) {
     const project = lead.project;
     const safeProjectDescription = compatibleAnalysisMemo(project?.description, [project?.title, project?.category].filter(Boolean).join(' '));
-    const projectAnalysisSource = [project?.title, safeProjectDescription, project?.category, lead.reason]
+    const projectSource = [project?.title, safeProjectDescription, project?.category]
       .filter(Boolean)
       .join(' ');
-    const safeBrandAnalysisMemo = compatibleAnalysisMemo(lead.brandAnalysisMemo, projectAnalysisSource);
-    const safeSnsAnalysisMemo = compatibleAnalysisMemo(lead.snsAnalysisMemo, projectAnalysisSource);
+    const projectKind = detectProjectKind(projectSource);
+    const safeLeadReason = compatibleAnalysisMemo(lead.reason, projectSource);
+    const safeBrandAnalysisMemo = compatibleAnalysisMemo(lead.brandAnalysisMemo, projectSource);
+    const safeSnsAnalysisMemo = compatibleAnalysisMemo(lead.snsAnalysisMemo, projectSource);
+    const projectAnalysisSource = [projectSource, safeLeadReason]
+      .filter(Boolean)
+      .join(' ');
     const analysisSource = [projectAnalysisSource, safeBrandAnalysisMemo, safeSnsAnalysisMemo]
       .filter(Boolean)
       .join(' ');
@@ -45,39 +52,47 @@ export function buildLocalLeadAnalysis(lead: {
       project?.category ? `カテゴリ: ${project.category}` : '',
       typeof project?.amount === 'number' ? `支援額: ${project.amount.toLocaleString()}円` : '',
       typeof project?.supporterCount === 'number' ? `支援者数: ${project.supporterCount.toLocaleString()}人` : '',
-      lead.reason ? `リード理由: ${lead.reason}` : '',
+      safeLeadReason ? `リード理由: ${safeLeadReason}` : '',
       safeBrandAnalysisMemo ? `ブランド分析メモ: ${safeBrandAnalysisMemo}` : '',
       safeSnsAnalysisMemo ? `SNS分析メモ: ${safeSnsAnalysisMemo}` : '',
       materialEngagementFact(lead.materialEngagement)
     ].filter(Boolean);
 
     const output = {
-      summary: buildLocalSummary(lead.company.name, project?.title, project?.category, project?.amount, project?.supporterCount),
-      productStrengths: buildLocalStrengths(projectAnalysisSource, lead.reason),
-      targetUsers: buildLocalTargetUsers(project?.category, projectAnalysisSource),
-      salesAngles: buildLocalSalesAngles(project?.amount, project?.supporterCount, lead.materialEngagement),
-      snsIdeas: buildLocalSnsIdeas(project?.category, projectAnalysisSource),
-      readiness: buildMailReadiness(lead, project),
-      missingInfo: buildMissingInfo(lead, project),
-      nextChecks: buildNextChecks(lead, project, lead.materialEngagement),
-      mailAdvice: buildMailAdvice(project?.category, analysisSource, lead.reason),
+      summary: buildLocalSummary(lead.company.name, project?.title, project?.category, project?.amount, project?.supporterCount, projectKind),
+      productStrengths: buildLocalStrengths(projectAnalysisSource, safeLeadReason, projectKind),
+      targetUsers: buildLocalTargetUsers(project?.category, projectAnalysisSource, projectKind),
+      salesAngles: buildLocalSalesAngles(project?.amount, project?.supporterCount, lead.materialEngagement, projectKind),
+      snsIdeas: buildLocalSnsIdeas(project?.category, projectAnalysisSource, projectKind),
+      readiness: buildMailReadiness(lead, project, projectKind),
+      missingInfo: buildMissingInfo(lead, project, projectKind),
+      nextChecks: buildNextChecks(lead, project, lead.materialEngagement, projectKind),
+      mailAdvice: buildMailAdvice(project?.category, analysisSource, safeLeadReason, projectKind),
       mailPlaceholders: buildMailPlaceholders(
         lead.company.name,
         project?.title,
         project?.category,
       safeProjectDescription,
-        lead.reason,
+        safeLeadReason,
         safeBrandAnalysisMemo,
         safeSnsAnalysisMemo
       ),
       materialEngagement: lead.materialEngagement || null,
       factsUsed,
       assumptions: [
-        'OpenAI APIを使わない無料分析のため、商品説明から読み取れる範囲で整理しています。',
+        projectKind === 'event'
+          ? 'OpenAI APIを使わない無料分析のため、企画ページから読み取れる範囲で整理しています。'
+          : projectKind === 'store'
+            ? 'OpenAI APIを使わない無料分析のため、取り組みの説明から読み取れる範囲で整理しています。'
+            : 'OpenAI APIを使わない無料分析のため、商品説明から読み取れる範囲で整理しています。',
         ...(lead.materialEngagement?.materialViewed ? ['会社資料の閲覧は関心の可能性を示しますが、アポイント確定を意味しません。'] : [])
       ],
       riskFlags: [
-        'メール生成前に、会社名・商品名・商品特徴が相手と合っているか確認してください。',
+        projectKind === 'event'
+          ? 'メール生成前に、団体名・企画名・参加や応援の内容が相手と合っているか確認してください。'
+          : projectKind === 'store'
+            ? 'メール生成前に、店舗名・取り組みの背景・応援につながる内容が相手と合っているか確認してください。'
+            : 'メール生成前に、会社名・商品名・商品特徴が相手と合っているか確認してください。',
         ...(lead.materialEngagement?.materialViewed ? ['資料閲覧だけでアポ確定と判断せず、返信や会話の有無も確認してください。'] : [])
       ]
     };
@@ -90,7 +105,7 @@ export function buildLocalLeadAnalysis(lead: {
       projectCategory: project?.category,
       projectAmount: project?.amount,
       supporterCount: project?.supporterCount,
-      leadReason: lead.reason,
+      leadReason: safeLeadReason,
       brandAnalysisMemo: safeBrandAnalysisMemo,
       snsAnalysisMemo: safeSnsAnalysisMemo,
       materialEngagement: lead.materialEngagement || null
@@ -118,13 +133,25 @@ function projectPlatformLabel(project?: { platform?: { name?: string | null; typ
   return 'クラウドファンディングサイト';
 }
 
-function buildLocalSummary(companyName?: string, title?: string | null, category?: string | null, amount?: number | null, supporters?: number | null) {
+function buildLocalSummary(
+  companyName?: string,
+  title?: string | null,
+  category?: string | null,
+  amount?: number | null,
+  supporters?: number | null,
+  projectKind: LocalProjectKind = 'product'
+) {
   const projectText = title ? `「${title}」` : 'クラウドファンディング掲載プロジェクト';
   const categoryText = category ? `${category}領域の` : '';
   const amountText = typeof amount === 'number' && amount > 0 ? `支援額は約${amount.toLocaleString()}円` : '';
   const supporterText = typeof supporters === 'number' && supporters > 0 ? `支援者は${supporters.toLocaleString()}人` : '';
   const metrics = [amountText, supporterText].filter(Boolean).join('、');
-  return `${companyName || '対象企業'}の${categoryText}${projectText}を確認しました。${metrics ? `${metrics}で、` : ''}商品特徴と利用シーンを整理したうえで、メール生成前に訴求の方向性を確認します。`;
+  const focus = projectKind === 'event'
+    ? '企画の内容と参加・応援につながる背景'
+    : projectKind === 'store'
+      ? '取り組みの背景と応援につながる理由'
+      : '商品特徴と利用シーン';
+  return `${companyName || '対象企業'}の${categoryText}${projectText}を確認しました。${metrics ? `${metrics}で、` : ''}${focus}を整理したうえで、メール生成前に訴求の方向性を確認します。`;
 }
 
 function buildMailPlaceholders(
@@ -136,17 +163,20 @@ function buildMailPlaceholders(
   brandAnalysisMemo?: string | null,
   snsAnalysisMemo?: string | null
 ) {
-  const manualAnalysis = sanitizeAnalysisSource(`${brandAnalysisMemo || ''} ${snsAnalysisMemo || ''}`);
   const titleCategorySource = sanitizeAnalysisSource(`${title || ''} ${category || ''}`);
   const safeDescription = compatibleAnalysisMemo(description, titleCategorySource);
   const projectSource = sanitizeAnalysisSource(`${titleCategorySource} ${safeDescription || ''}`);
-  const source = sanitizeAnalysisSource(`${projectSource} ${reason || ''} ${manualAnalysis}`);
+  const safeReason = compatibleAnalysisMemo(reason, projectSource);
+  const manualAnalysis = sanitizeAnalysisSource([
+    compatibleAnalysisMemo(brandAnalysisMemo, projectSource),
+    compatibleAnalysisMemo(snsAnalysisMemo, projectSource)
+  ].filter(Boolean).join(' '));
   const isStoreProject = /飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業|地域/.test(projectSource);
   const isEventProject = /ライブ|コンサート|音楽|バンド|ファン|周年|結成|記念|イベント|公演|ツアー|フェス|アーティスト/.test(projectSource);
   const isFoodProject = /サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/.test(projectSource);
   const isRiceStorageProject = /米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(projectSource);
   const isAirBedProject = /エアベッド|ベッド|寝られる|寝心地|空気|マットレス|キャンプ|車中泊|アウトドア/.test(projectSource);
-  const strength = buildLocalStrengths(safeDescription, [reason, manualAnalysis].filter(Boolean).join(' '))[0] || '';
+  const strength = buildLocalStrengths(safeDescription, [safeReason, manualAnalysis].filter(Boolean).join(' '))[0] || '';
   const manualAppeal = pickManualAppeal(manualAnalysis, projectSource);
   const manualTarget = pickManualTarget(manualAnalysis, projectSource);
   const specificAppeal = buildSpecificAppeal(projectSource);
@@ -210,14 +240,14 @@ function pickManualAppeal(text: string, projectSource = '') {
   if (!text) return '';
   const sentence = text
     .split(/[。！？!?]/)
-    .map((value) => cleanAnalysisPhrase(value))
-    .find((value) =>
-      value.length >= 8 &&
-      value.length <= 90 &&
-      /魅力|強み|特徴|印象|見せ|伝え|背景|用途|シーン|体験|応援|安心|便利|継続/.test(value) &&
-      isPhraseCompatibleWithProject(value, projectSource)
+    .map((value) => ({ raw: value, cleaned: cleanAnalysisPhrase(value) }))
+    .find(({ raw, cleaned }) =>
+      cleaned.length >= 8 &&
+      cleaned.length <= 90 &&
+      /魅力|強み|特徴|印象|見せ|伝え|背景|用途|シーン|体験|応援|安心|便利|継続/.test(raw) &&
+      isPhraseCompatibleWithProject(cleaned, projectSource)
     );
-  return sentence ? toMailSafeAppeal(sentence) : '';
+  return sentence ? toMailSafeAppeal(sentence.cleaned) : '';
 }
 
 function pickManualTarget(text: string, projectSource = '') {
@@ -228,7 +258,7 @@ function pickManualTarget(text: string, projectSource = '') {
 
 function cleanAnalysisPhrase(value: string) {
   return sanitizeAnalysisSource(value)
-    .replace(/^(商品の魅力|特徴|強み|ターゲット|使う人|対象|利用者|支援者)\s*[:：]\s*/, '')
+    .replace(/^(?:商品の)?(?:魅力|特徴|強み|ターゲット|使う人|対象|利用者|支援者)\s*[:：]\s*/, '')
     .trim();
 }
 
@@ -237,6 +267,9 @@ function toMailSafeAppeal(strength: string, title?: string | null) {
     .replace(/可能性があります。?$/, '点')
     .replace(/メール生成前に確認してください。?$/, '')
     .replace(/商品説明から読み取れる特徴を/g, '')
+    .replace(/((?:という)?点)?が?魅力(?:です|だ|と感じます)?[。！]?$/, '$1')
+    .replace(/((?:という)?点)?が?強み(?:です|だ|と感じます)?[。！]?$/, '$1')
+    .replace(/(?:です|ます|でした|となっています)[。！]?$/, '')
     .trim();
   if (cleaned && !isBadMailPhrase(cleaned)) return cleaned;
   if (title) return `プロジェクトの目的や背景が分かりやすく伝えられている点`;
@@ -294,8 +327,14 @@ function sanitizeAnalysisSource(value: string) {
     .trim();
 }
 
-function buildLocalStrengths(description?: string | null, reason?: string | null) {
+function buildLocalStrengths(description?: string | null, reason?: string | null, projectKind: LocalProjectKind = 'product') {
   const source = [description, reason].filter(Boolean).join(' ');
+  if (projectKind === 'event') {
+    return ['節目となる企画をファンと共有し、参加や応援の機会を作れる点を伝えやすい可能性があります。'];
+  }
+  if (projectKind === 'store') {
+    return ['店舗の継続や改装の背景を、応援したくなる取り組みとして伝えやすい可能性があります。'];
+  }
   const strengths = [
     source.match(/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/) ? '店舗の継続や改装の背景を、応援したくなる取り組みとして伝えやすい可能性があります。' : '',
     source.match(/サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/) ? '素材の魅力や職人技、味わいを想像しやすい点を伝えやすい可能性があります。' : '',
@@ -308,8 +347,10 @@ function buildLocalStrengths(description?: string | null, reason?: string | null
   return strengths.length ? strengths : ['プロジェクトの背景や目的が伝わりやすい点を確認できます。'];
 }
 
-function buildLocalTargetUsers(category?: string | null, description?: string | null) {
+function buildLocalTargetUsers(category?: string | null, description?: string | null, projectKind: LocalProjectKind = 'product') {
   const source = `${category || ''} ${description || ''}`;
+  if (projectKind === 'event') return ['これまで活動を応援してきたファンの方', 'ライブや企画への参加体験に関心のある方'];
+  if (projectKind === 'store') return ['地域に根ざした店舗を応援したい方', '飲食店の継続や再開を応援したい方'];
   if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/.test(source)) return ['地域に根ざした店舗を応援したい方', '飲食店の継続や再開を応援したい方'];
   if (/サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/.test(source)) return ['食の品質や特別な味わいを楽しみたい方', 'ギフトや食卓の一品を探している方'];
   if (/米びつ|米櫃|真空保存|鮮度|キッチン|分割保存|保存容器|収納|お米/.test(source)) return ['お米の保存状態やキッチン収納を重視する方', '日々の食材管理をしやすくしたい方'];
@@ -320,8 +361,17 @@ function buildLocalTargetUsers(category?: string | null, description?: string | 
   return ['商品の利用シーンに近い生活者'];
 }
 
-function buildLocalSalesAngles(amount?: number | null, supporters?: number | null, materialEngagement?: LocalMaterialEngagement | null) {
-  const angles = ['商品の魅力を短く整理し、使用シーンを具体化してメールに反映する。'];
+function buildLocalSalesAngles(
+  amount?: number | null,
+  supporters?: number | null,
+  materialEngagement?: LocalMaterialEngagement | null,
+  projectKind: LocalProjectKind = 'product'
+) {
+  const angles = [projectKind === 'event'
+    ? '企画の節目と、ファンが参加・応援する理由を短く整理してメールに反映する。'
+    : projectKind === 'store'
+      ? '店舗の継続や改装の背景と、地域が応援する理由を短く整理してメールに反映する。'
+      : '商品の魅力を短く整理し、使用シーンを具体化してメールに反映する。'];
   if (materialEngagement?.appointmentAngle === 'hot') {
     angles.unshift('会社資料を複数回閲覧しているため、早めのアポイント候補として優先する。ただしアポ確定ではない。');
   } else if (materialEngagement?.appointmentAngle === 'interested') {
@@ -332,8 +382,10 @@ function buildLocalSalesAngles(amount?: number | null, supporters?: number | nul
   return angles;
 }
 
-function buildLocalSnsIdeas(category?: string | null, description?: string | null) {
+function buildLocalSnsIdeas(category?: string | null, description?: string | null, projectKind: LocalProjectKind = 'product') {
   const source = `${category || ''} ${description || ''}`;
+  if (projectKind === 'event') return ['企画の準備や節目の背景、ファンと共有する当日の体験を短く見せる。'];
+  if (projectKind === 'store') return ['店舗の歴史、改装の背景、料理や店内の雰囲気を短く見せる。'];
   if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/.test(source)) return ['店舗の歴史、改装の背景、料理や店内の雰囲気を短く見せる。'];
   if (/防災|安全|守/.test(source)) return ['使用前後の安心感や、保管シーンを短く見せる。'];
   if (/アウトドア|キャンプ|旅行/.test(source)) return ['屋外や移動中の利用シーンを短く見せる。'];
@@ -348,9 +400,10 @@ function buildMailReadiness(
     reason?: string | null;
     company: { name?: string | null };
   },
-  project?: { title?: string | null; description?: string | null; amount?: number | null; supporterCount?: number | null } | null
+  project?: { title?: string | null; description?: string | null; amount?: number | null; supporterCount?: number | null } | null,
+  projectKind: LocalProjectKind = 'product'
 ) {
-  const missing = buildMissingInfo(lead, project);
+  const missing = buildMissingInfo(lead, project, projectKind);
   const missingCount = missing[0] === '大きな不足はありません。' ? 0 : missing.length;
   const hasContact = Boolean(lead.contactEmail || lead.contactFormUrl || lead.siteMessageUrl);
   let score = 100 - missingCount * 12;
@@ -375,12 +428,15 @@ function buildMissingInfo(
     siteMessageUrl?: string | null;
     company: { name?: string | null };
   },
-  project?: { title?: string | null; description?: string | null } | null
+  project?: { title?: string | null; description?: string | null } | null,
+  projectKind: LocalProjectKind = 'product'
 ) {
+  const titleLabel = projectKind === 'event' ? '企画名' : projectKind === 'store' ? '取り組み名' : '商品名';
+  const descriptionLabel = projectKind === 'event' ? '企画内容' : projectKind === 'store' ? '取り組みの説明' : '商品説明';
   const missing = [
     lead.company.name ? '' : '企業名',
-    project?.title ? '' : '商品名',
-    project?.description ? '' : '商品説明',
+    project?.title ? '' : titleLabel,
+    project?.description ? '' : descriptionLabel,
     lead.contactEmail || lead.contactFormUrl || lead.siteMessageUrl ? '' : '連絡先'
   ].filter(Boolean);
   return missing.length ? missing : ['大きな不足はありません。'];
@@ -397,12 +453,15 @@ function buildNextChecks(
     xUrl?: string | null;
   },
   project?: { url?: string | null; description?: string | null; platform?: { name?: string | null; type?: string | null } | null } | null,
-  materialEngagement?: LocalMaterialEngagement | null
+  materialEngagement?: LocalMaterialEngagement | null,
+  projectKind: LocalProjectKind = 'product'
 ) {
   const platformName = projectPlatformLabel(project);
+  const projectName = projectKind === 'event' ? '企画名' : projectKind === 'store' ? '取り組み名' : '商品名';
+  const projectDetail = projectKind === 'event' ? '企画内容' : projectKind === 'store' ? '取り組みの背景' : '商品特徴';
   const checks = [
-    `会社名と商品名が${platformName}ページと一致しているか確認する。`,
-    project?.description ? '商品特徴がメール本文に入れて問題ない表現か確認する。' : `商品特徴を${platformName}ページから手動で補足する。`,
+    `会社名と${projectName}が${platformName}ページと一致しているか確認する。`,
+    project?.description ? `${projectDetail}がメール本文に入れて問題ない表現か確認する。` : `${projectDetail}を${platformName}ページから手動で補足する。`,
     lead.contactEmail || lead.contactFormUrl || lead.siteMessageUrl ? '送信先がメール・フォーム・サイト内メッセージのどれか確認する。' : '送信先メール、問い合わせフォーム、サイト内メッセージの有無を確認する。'
   ];
   if (lead.brandWebsiteUrl || lead.instagramUrl || lead.tiktokUrl || lead.xUrl) {
@@ -420,8 +479,19 @@ function materialEngagementFact(materialEngagement?: LocalMaterialEngagement | n
   return `会社資料閲覧: ${materialEngagement.materialClickCount}回 / アポ角度: ${angle}`;
 }
 
-function buildMailAdvice(category?: string | null, description?: string | null, reason?: string | null) {
+function buildMailAdvice(
+  category?: string | null,
+  description?: string | null,
+  reason?: string | null,
+  projectKind: LocalProjectKind = 'product'
+) {
   const source = `${category || ''} ${description || ''} ${reason || ''}`;
+  if (projectKind === 'event') {
+    return ['企画の節目や参加・応援する理由に共感した文章にする。', 'ファンが共有する体験を中心にし、一般的な説明へ寄せない。'];
+  }
+  if (projectKind === 'store') {
+    return ['店舗の継続や改装背景に共感した文章にする。', '来店者や地域の支援者に伝わる見せ方の相談として書く。'];
+  }
   if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業/.test(source)) {
     return ['商品として断定せず、店舗の継続や改装背景に共感した文章にする。', '来店者や地域の支援者に伝わる見せ方の相談として書く。'];
   }
@@ -432,4 +502,10 @@ function buildMailAdvice(category?: string | null, description?: string | null, 
     return ['使用シーンが想像しやすい点を中心に書く。', '持ち運びや便利さを断定しすぎず、実際の利用場面に寄せる。'];
   }
   return ['商品特徴を1つに絞り、営業感を弱めて書く。', '課題を断定せず、「お力になれそうな機会があれば」という柔らかい表現にする。'];
+}
+
+function detectProjectKind(source: string): LocalProjectKind {
+  if (/ライブ|コンサート|音楽|バンド|ファン|周年|結成|記念|イベント|公演|ツアー|フェス|アーティスト/.test(source)) return 'event';
+  if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|創業|地域/.test(source)) return 'store';
+  return 'product';
 }
