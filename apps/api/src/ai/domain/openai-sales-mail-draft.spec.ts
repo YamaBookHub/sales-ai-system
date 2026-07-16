@@ -35,7 +35,33 @@ describe('openai-sales-mail-draft', () => {
     expect(draft.body).toContain('テスト食品株式会社 ご担当者様');
     expect(draft.body).toContain('職人仕込みのスモークサーモン');
     expect(draft.body).toContain('素材');
+    expect(draft.body).toContain('突然のご連絡失礼いたします。');
+    expect(draft.body).toContain('今回のプロジェクトに合わせた支援内容を簡単にお送りしますが、いかがでしょうか。');
+    expect(draft.body).not.toContain('お力になれそうな機会');
     expect(draft.body).not.toContain('自由な本文');
     expect(draft.factsUsed[0]).toBe('取得元: CAMPFIRE');
+  });
+
+  it('uses participation language instead of product language for an event project', () => {
+    const draft = normalizeOpenAiSalesMailDraft(
+      {
+        subject: 'AIが作った件名',
+        body: '10周年ライブをファンと一緒に実現する点が印象に残りました。',
+        factsUsed: [],
+        assumptions: [],
+        riskFlags: []
+      },
+      {
+        templateKey: 'normal',
+        companyName: 'テスト実行委員会',
+        projectPlatformName: 'CAMPFIRE',
+        projectTitle: '10周年記念ライブ',
+        projectDescription: 'ファンと一緒に10周年の記念ライブを実現するプロジェクトです。'
+      }
+    );
+
+    expect(draft.body).toContain('参加・応援する理由が伝わりやすい取り組み');
+    expect(draft.body).not.toContain('実際に使う場面');
+    expect(draft.body).not.toContain('担当商品');
   });
 });

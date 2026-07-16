@@ -73,21 +73,25 @@ export function normalizeOpenAiSalesMailDraft(draft: ParsedDraft, input: SalesMa
 
 function composeStableMailBody(input: SalesMailDraftInput, aiBody: string) {
   const companyName = cleanPhrase(input.companyName) || 'ご担当者';
+  const recipient = companyName === 'ご担当者' ? 'ご担当者様' : `${companyName} ご担当者様`;
   const productName = cleanProjectTitle(input.projectTitle) || '貴社プロジェクト';
   const platformName = cleanPhrase(input.projectPlatformName) || 'クラウドファンディングサイト';
   const appeal = extractAppeal(input, aiBody);
   const targetUser = extractTargetUser(input);
   const subjectType = projectSubjectType(input);
+  const targetSentence = subjectType === '取り組み'
+    ? `${targetUser}にとって、参加・応援する理由が伝わりやすい取り組みだと感じました。`
+    : `${targetUser}にとって、実際に使う場面をイメージしやすい商品だと感じました。`;
 
   return [
-    `${companyName} ご担当者様`,
-    'お世話になっております。\n株式会社第弐ヴォヌールの山本と申します。',
-    `${platformName}にて、貴社の「${productName}」を拝見しました。`,
-    `${withPointSuffix(appeal)}がとても印象的で、${targetUser}にとって、${subjectType}の魅力をイメージしやすい内容だと感じました。`,
-    '弊社では、クラウドファンディング支援およびSNSマーケティング支援を行っております。',
-    '実績としては、SNS運用で1か月総再生400万回超、クラウドファンディング領域では、担当商品で3,500万円規模の売上実績がございます。',
-    `${subjectType === '取り組み' ? 'プロジェクト' : '商品'}の魅力を伝える見せ方や、売上につながる導線づくりの面でもお手伝いしております。`,
-    'もし何かお力になれそうな機会がございましたら、お気軽にご連絡いただけますと幸いです。'
+    recipient,
+    '突然のご連絡失礼いたします。\n株式会社第弐ヴォヌールの山本と申します。',
+    `${platformName}で「${productName}」を拝見しました。`,
+    `${withPointSuffix(appeal)}が特に印象に残っています。\n${targetSentence}`,
+    '弊社では、クラウドファンディング支援とSNSマーケティング支援を行っています。',
+    'SNS運用では1か月総再生400万回超、クラウドファンディングでは担当案件で3,500万円規模の売上実績があります。',
+    'プロジェクトの魅力を伝える見せ方から、支援につながる導線づくりまでお手伝いしています。',
+    'もしご関心があれば、今回のプロジェクトに合わせた支援内容を簡単にお送りしますが、いかがでしょうか。'
   ].join('\n\n');
 }
 
@@ -114,7 +118,9 @@ function extractAppeal(input: SalesMailDraftInput, aiBody: string) {
     .filter((value) => !isBadAppeal(value))
     .filter((value) => isMemoCompatibleWithProject(value, projectSource))
     .filter(Boolean);
-  const selected = candidates[0] || '商品の特徴や利用シーンが分かりやすい';
+  const selected = candidates[0] || (projectSubjectType(input) === '取り組み'
+    ? '取り組みの背景が分かりやすい'
+    : '商品の特徴や利用シーンが分かりやすい');
   return toAppealPhrase(trimJapaneseSentence(selected, 72))
     .replace(/という点$/, '')
     .replace(/点が魅力です$/, '点')
@@ -139,6 +145,9 @@ function extractTargetUser(input: SalesMailDraftInput) {
   if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|浜松町|創業/.test(source)) {
     return '店舗の継続や地域に根ざしたお店を応援したい方';
   }
+  if (/ライブ|コンサート|音楽|バンド|ファン|周年|結成|記念|イベント|公演|ツアー|フェス|アーティスト/.test(source)) {
+    return 'これまで活動を応援してきたファンの方や、ライブ体験に関心のある方';
+  }
   if (/サーモン|スモークサーモン|ハム|肉|魚|海鮮|食品|グルメ|料理|食卓|味|香り|燻製|伏流水/.test(source)) {
     return '食の品質や特別な味わいを楽しみたい方';
   }
@@ -160,7 +169,7 @@ function extractTargetUser(input: SalesMailDraftInput) {
 
 function projectSubjectType(input: SalesMailDraftInput) {
   const source = compatibleProjectSource(input);
-  if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|地域|支援/.test(source)) {
+  if (/飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|地域|支援|ライブ|コンサート|音楽|バンド|ファン|周年|結成|記念|イベント|公演|ツアー|フェス|アーティスト/.test(source)) {
     return '取り組み';
   }
   return '商品';

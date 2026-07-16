@@ -69,27 +69,27 @@ export function buildLocalMailDraft(input: LocalMailDraftInput) {
     input.brandAnalysisMemo,
     input.snsAnalysisMemo
   );
-  const subjectNoun = placeholders.subjectType === '取り組み' ? 'プロジェクト' : '商品';
+  const targetSentence = placeholders.subjectType === '取り組み'
+    ? `${placeholders.targetUser}にとって、参加・応援する理由が伝わりやすい取り組みだと感じました。`
+    : `${placeholders.targetUser}にとって、実際に使う場面をイメージしやすい商品だと感じました。`;
   const defaultBody = [
     `${placeholders.companyRecipient}`,
     '',
-    'お世話になっております。',
+    '突然のご連絡失礼いたします。',
     '株式会社第弐ヴォヌールの山本と申します。',
     '',
-    `${platformName}にて、貴社の「${placeholders.productName}」を拝見しました。`,
+    `${platformName}で「${placeholders.productName}」を拝見しました。`,
     '',
-    `${placeholders.appeal}がとても印象的で、`,
-    `${placeholders.targetUser}にとって、実際の${placeholders.subjectType}の魅力をイメージしやすい内容だと感じました。`,
+    `${placeholders.appeal}が特に印象に残っています。`,
+    targetSentence,
     '',
-    '弊社では、クラウドファンディング支援およびSNSマーケティング支援を行っております。',
+    '弊社では、クラウドファンディング支援とSNSマーケティング支援を行っています。',
     '',
-    '実績としては、SNS運用で1か月総再生400万回超、',
-    'クラウドファンディング領域では、担当商品で3,500万円規模の売上実績がございます。',
+    'SNS運用では1か月総再生400万回超、クラウドファンディングでは担当案件で3,500万円規模の売上実績があります。',
     '',
-    `${subjectNoun}の魅力を伝える見せ方や、売上につながる導線づくりの面でもお手伝いしております。`,
+    'プロジェクトの魅力を伝える見せ方から、支援につながる導線づくりまでお手伝いしています。',
     '',
-    'もし何かお力になれそうな機会がございましたら、',
-    'お気軽にご連絡いただけますと幸いです。'
+    'もしご関心があれば、今回のプロジェクトに合わせた支援内容を簡単にお送りしますが、いかがでしょうか。'
   ].join('\n');
 
   const renderedTemplate = input.template

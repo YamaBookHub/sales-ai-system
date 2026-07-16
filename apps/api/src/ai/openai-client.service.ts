@@ -24,6 +24,8 @@ type ChatCompletionResponse = {
   };
 };
 
+export const DEFAULT_OPENAI_MODEL = 'gpt-5.6-luna';
+
 @Injectable()
 export class OpenAiClientService {
   async createSalesMailDraft(input: SalesMailDraftInput): Promise<SalesMailDraftOutput> {
@@ -32,7 +34,8 @@ export class OpenAiClientService {
       throw new ServiceUnavailableException('OpenAI APIキーが未設定です。.env の OPENAI_API_KEY を確認してください。');
     }
 
-    const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+    const configuredModel = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+    const model = resolveOpenAiModelId(configuredModel);
     const maxTokens = numberFromEnv('OPENAI_MAX_OUTPUT_TOKENS', 1200);
     const maxDescriptionLength = numberFromEnv('OPENAI_MAX_DESCRIPTION_CHARS', 1200);
     const startedAt = Date.now();
@@ -45,13 +48,12 @@ export class OpenAiClientService {
       },
       body: JSON.stringify({
         model,
-        temperature: 0.2,
-        max_tokens: maxTokens,
+        ...chatCompletionOptions(model, maxTokens, 0.2),
         response_format: { type: 'json_object' },
         messages: [
           {
             role: 'system',
-            content: buildSalesMailDraftSystemPrompt()
+            content: buildSalesMailDraftSystemPrompt(configuredModel)
           },
           {
             role: 'user',
@@ -95,7 +97,7 @@ export class OpenAiClientService {
       throw new ServiceUnavailableException('OpenAI APIキーが未設定です。.env の OPENAI_API_KEY を確認してください。');
     }
 
-    const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+    const model = resolveOpenAiModelId(process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL);
     const startedAt = Date.now();
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -105,8 +107,7 @@ export class OpenAiClientService {
       },
       body: JSON.stringify({
         model,
-        temperature: 0,
-        max_tokens: numberFromEnv('OPENAI_SEMANTIC_CHECK_MAX_OUTPUT_TOKENS', 400),
+        ...chatCompletionOptions(model, numberFromEnv('OPENAI_SEMANTIC_CHECK_MAX_OUTPUT_TOKENS', 400), 0),
         response_format: {
           type: 'json_schema',
           json_schema: {
@@ -139,6 +140,21 @@ export class OpenAiClientService {
       latencyMs: Date.now() - startedAt
     };
   }
+}
+
+export function chatCompletionOptions(model: string, maxTokens: number, legacyTemperature: number) {
+  if (model.trim().toLowerCase().startsWith('gpt-5.6')) {
+    return {
+      max_completion_tokens: maxTokens,
+      reasoning_effort: model.trim().toLowerCase().includes('luna') ? 'low' : 'medium'
+    };
+  }
+
+  return { temperature: legacyTemperature, max_tokens: maxTokens };
+}
+
+export function resolveOpenAiModelId(configuredModel: string) {
+  return configuredModel.trim().toLowerCase() === 'gpt-5.6-sol' ? 'gpt-5.6' : configuredModel.trim();
 }
 
 function parseChatCompletionResponse(rawText: string): ChatCompletionResponse {
