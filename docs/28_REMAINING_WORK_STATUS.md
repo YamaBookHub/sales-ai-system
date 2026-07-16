@@ -30,7 +30,7 @@ Baseline:
 | 5 | LM-001 | P0 | complete | Terra T3 | LR-004 | 2026-07-15 / 60 suites・172 tests・build成功 | legacy TODO下書き廃止 |
 | 6 | LM-002 | P0 | complete | Luna T2 | LM-001 | 2026-07-15 / 6案件のgolden dataset追加・現行不具合2件を検出 | mail golden dataset |
 | 7 | LM-003 | P0 | complete | Terra T3 + Sol audit | LM-002 | 2026-07-16 / 6案件golden・64 suites・198 tests・integration・build成功 | 案件間混入防止 |
-| 8 | LS-001 | P0 | pending | Terra T3 | LR-004 | - | parser境界設計 |
+| 8 | LS-001 | P0 | complete | Terra T3 | LR-004 | 2026-07-16 / listing・detail・profile境界とfixture方針を文書化 | parser境界設計 |
 | 9 | LS-002 | P0 | pending | Luna T2 | LS-001 | - | Makuake fixture |
 | 10 | LS-003 | P0 | pending | Luna T2 | LS-001 | - | CAMPFIRE fixture |
 | 11 | LS-004 | P0 | pending | Terra T3 | LS-002, LS-003 | - | 検索終了理由 |
@@ -84,3 +84,4 @@ Baseline:
 | 2026-07-15 | LM-002 | Luna worker + main audit | complete | 6案件のgolden datasetを追加。イベント案件への商品表現混入と手動魅力文の文法崩れを検出 |
 | 2026-07-15 | LM-003 | Terra worker + Sol audit | start | golden testを弱めず、案件種別に応じた分析・本文と魅力文正規化を修正開始 |
 | 2026-07-16 | LM-003 | Terra worker + Sol audit | complete | 商品・食品・イベント・店舗案件を分離し、別案件メモ混入と文法崩れを防止。64 suites・198 tests、integration、build成功 |
+| 2026-07-16 | LS-001 | Terra worker + main audit | complete | browser acquisition・provider parser・normalizerを分離する契約、fallback、sanitized fixture、段階移行単位を文書化 |

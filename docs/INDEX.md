@@ -35,6 +35,7 @@
 | 26 | 26_NEXT_ACTION_DESIGN.md | 次回対応のTask利用、状態遷移、API、DB差分設計 | 作成済み |
 | 27 | 27_LUNA_EXECUTION_GUIDE.md | GPT-5.6 Lunaが残作業を1件ずつ実行する指示書・Task card | 作成済み |
 | 28 | 28_REMAINING_WORK_STATUS.md | 残作業の依存関係・優先度・model・進捗・証跡 | 作成済み |
+| 29 | 29_PARSER_BOUNDARY_DESIGN.md | 取得・HTML parser・正規化の境界、fixture方針 | 作成済み |
 
 ## 付属仕様
 - `../prisma/schema.prisma`
