@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { normalizeEndingSoonDays, normalizeResultLimit, sortEndingSoon } from '../domain/project-import-policy';
-import { ProjectSourceProvider } from '../domain/project-source-provider';
+import { ProjectSearchOptions, ProjectSourceProvider } from '../domain/project-source-provider';
 import { CampfireProjectSourceProvider } from '../infrastructure/campfire-project-source.provider';
 import { MakuakeProjectSourceProvider } from '../infrastructure/makuake-project-source.provider';
 import { ProjectSource, SearchCampfireProjectsDto, SearchProjectsDto } from '../projects.dto';
@@ -24,7 +24,9 @@ export class SearchProjectsUseCase {
 
   startJob(dto: SearchProjectsDto) {
     const provider = this.providerFor(dto.source);
-    return this.projectSearchJobManager.start(provider, dto, (searchProvider, searchDto) => this.searchWithProvider(searchProvider, searchDto));
+    return this.projectSearchJobManager.start(provider, dto, (searchProvider, searchDto, options) =>
+      this.searchWithProvider(searchProvider, searchDto, options)
+    );
   }
 
   getJob(id: string) {
@@ -35,8 +37,8 @@ export class SearchProjectsUseCase {
     return this.projectSearchJobManager.cancel(id);
   }
 
-  private async searchWithProvider(provider: ProjectSourceProvider, dto: SearchCampfireProjectsDto) {
-    const result = await provider.search({ ...dto, excludeUrls: dto.excludeUrls || [] });
+  private async searchWithProvider(provider: ProjectSourceProvider, dto: SearchCampfireProjectsDto, options?: ProjectSearchOptions) {
+    const result = await provider.search({ ...dto, excludeUrls: dto.excludeUrls || [] }, options);
     if (dto.status === 'endingSoon') {
       return {
         items: sortEndingSoon(result.items, normalizeEndingSoonDays(dto.endingSoonDays)).slice(0, normalizeResultLimit(dto.limit)),

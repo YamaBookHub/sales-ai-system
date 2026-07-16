@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CampfireScraperService, ScrapedCampfireProject } from '../../scraper/campfire-scraper.service';
-import { NormalizedImportedProject, ProjectSourceProvider } from '../domain/project-source-provider';
+import { NormalizedImportedProject, ProjectSearchOptions, ProjectSourceProvider } from '../domain/project-source-provider';
 import { SearchCampfireProjectsDto } from '../projects.dto';
 
 @Injectable()
@@ -15,8 +15,8 @@ export class CampfireProjectSourceProvider implements ProjectSourceProvider {
     return this.scraper.categories();
   }
 
-  search(input: SearchCampfireProjectsDto) {
-    return this.scraper.search(input);
+  search(input: SearchCampfireProjectsDto, options?: ProjectSearchOptions) {
+    return this.scraper.search(input, options);
   }
 
   async import(url: string): Promise<NormalizedImportedProject> {

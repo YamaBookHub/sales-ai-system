@@ -85,20 +85,77 @@ describe('ProjectSearchJobManager', () => {
     expect(job.message).toContain('provider timeout');
   });
 
-  it('keeps cancelled terminal state when an in-flight provider later rejects', async () => {
+  it('aborts the in-flight provider and keeps cancelled as the terminal state', async () => {
     const manager = createManager();
-    let rejectSearch!: (error: Error) => void;
-    const pending = new Promise<never>((_, reject) => {
-      rejectSearch = reject;
+    let receivedSignal: AbortSignal | undefined;
+    const search = jest.fn((_provider, _dto, options) => new Promise<never>((_, reject) => {
+      receivedSignal = options?.signal;
+      options?.signal?.addEventListener('abort', () => reject(new Error('page closed')), { once: true });
+    }));
+    const started = manager.start(provider, { limit: 10 }, search);
+    for (let attempt = 0; attempt < 10 && !receivedSignal; attempt += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    const cancelledAt = Date.now();
+    const cancelled = manager.cancel(started.id);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(Date.now() - cancelledAt).toBeLessThan(2000);
+    expect(receivedSignal?.aborted).toBe(true);
+    expect(cancelled).toMatchObject({ status: 'cancelled', completionReason: 'cancelled' });
+    expect(manager.get(started.id)).toMatchObject({ status: 'cancelled', completionReason: 'cancelled' });
+  });
+
+  it('passes one abort signal to every progressive provider call', async () => {
+    const manager = createManager();
+    const signals: AbortSignal[] = [];
+    const search = jest.fn((_provider, _dto, options) => {
+      signals.push(options.signal);
+      return Promise.resolve({
+        items: [],
+        diagnostics: {
+          sourceCandidateCount: 0,
+          conditionMatchedCount: 0,
+          excludedCount: 0,
+          scanComplete: true
+        }
+      });
+    });
+    const started = manager.start(provider, { limit: 10 }, search);
+
+    await waitForTerminal(manager, started.id);
+
+    expect(signals).toHaveLength(5);
+    expect(new Set(signals).size).toBe(1);
+  });
+
+  it('does not apply a provider result that resolves after cancellation', async () => {
+    const manager = createManager();
+    let resolveSearch!: (value: any) => void;
+    const pending = new Promise((resolve) => {
+      resolveSearch = resolve;
     });
     const started = manager.start(provider, { limit: 10 }, jest.fn().mockReturnValue(pending));
     await new Promise((resolve) => setImmediate(resolve));
-
     const cancelled = manager.cancel(started.id);
-    rejectSearch(new Error('page closed'));
+
+    resolveSearch({
+      items: [{ url: 'https://camp-fire.jp/projects/late' }],
+      diagnostics: {
+        sourceCandidateCount: 1,
+        conditionMatchedCount: 1,
+        excludedCount: 0,
+        scanComplete: true
+      }
+    });
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(cancelled).toMatchObject({ status: 'cancelled', completionReason: 'cancelled' });
-    expect(manager.get(started.id)).toMatchObject({ status: 'cancelled', completionReason: 'cancelled' });
+    expect(manager.get(started.id)).toMatchObject({
+      status: 'cancelled',
+      completionReason: 'cancelled',
+      message: cancelled.message,
+      itemCount: 0
+    });
   });
 });

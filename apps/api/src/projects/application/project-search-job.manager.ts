@@ -6,7 +6,7 @@ import {
   normalizeResultLimit,
   progressiveSearchLimits
 } from '../domain/project-import-policy';
-import { ProjectSearchDiagnostics, ProjectSourceProvider } from '../domain/project-source-provider';
+import { ProjectSearchDiagnostics, ProjectSearchOptions, ProjectSourceProvider } from '../domain/project-source-provider';
 import {
   decideProjectSearchCompletion,
   ProjectSearchCompletionReason,
@@ -29,11 +29,13 @@ type SearchJob = {
   startedAt: string;
   updatedAt: string;
   cancelled: boolean;
+  abortController: AbortController;
 };
 
 type SearchWithProvider = (
   provider: ProjectSourceProvider,
-  dto: SearchCampfireProjectsDto
+  dto: SearchCampfireProjectsDto,
+  options?: ProjectSearchOptions
 ) => Promise<Awaited<ReturnType<ProjectSourceProvider['search']>>>;
 
 @Injectable()
@@ -56,7 +58,8 @@ export class ProjectSearchJobManager {
       message: '検索を開始しました',
       startedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      cancelled: false
+      cancelled: false,
+      abortController: new AbortController()
     };
     this.searchJobs.set(job.id, job);
     void this.runSearchJob(job, provider, dto, searchWithProvider);
@@ -87,6 +90,7 @@ export class ProjectSearchJobManager {
         importableCount: job.importableCount
       });
       job.updatedAt = new Date().toISOString();
+      job.abortController.abort();
     }
     return this.publicSearchJob(job);
   }
@@ -105,7 +109,12 @@ export class ProjectSearchJobManager {
         job.searchedLimit = limit;
         job.message = `候補を取得中です（最大${limit}件まで確認中）`;
         job.updatedAt = new Date().toISOString();
-        const result = await searchWithProvider(provider, { ...dto, limit, excludeUrls });
+        const result = await searchWithProvider(
+          provider,
+          { ...dto, limit, excludeUrls },
+          { signal: job.abortController.signal }
+        );
+        if (job.status !== 'running' || job.abortController.signal.aborted) return;
         job.diagnostics = result.diagnostics;
         job.items = mergeSearchItems(job.items, result.items);
         job.importableCount = countImportableSearchItems(job.items, existingUrls);

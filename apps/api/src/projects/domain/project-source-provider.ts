@@ -28,6 +28,10 @@ export type ProjectSourceSearchResult = {
   diagnostics?: ProjectSearchDiagnostics;
 };
 
+export type ProjectSearchOptions = {
+  signal?: AbortSignal;
+};
+
 export type NormalizedImportedProject = {
   source: ProjectSource;
   platform: {
@@ -77,7 +81,7 @@ export type ProjectSourceProvider = {
   readonly name: string;
   readonly baseUrl: string;
   categories(): Promise<{ items: ProjectSourceCategory[] }>;
-  search(input: SearchCampfireProjectsDto): Promise<ProjectSourceSearchResult>;
+  search(input: SearchCampfireProjectsDto, options?: ProjectSearchOptions): Promise<ProjectSourceSearchResult>;
   import(url: string): Promise<NormalizedImportedProject>;
   normalizeUrl(url: string): string;
 };

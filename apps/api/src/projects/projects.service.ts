@@ -15,7 +15,7 @@ import {
   sortEndingSoon,
   uniqueNormalizedUrlInputs
 } from './domain/project-import-policy';
-import { ProjectSourceProvider } from './domain/project-source-provider';
+import { ProjectSearchOptions, ProjectSourceProvider } from './domain/project-source-provider';
 import { CampfireProjectSourceProvider } from './infrastructure/campfire-project-source.provider';
 import { MakuakeProjectSourceProvider } from './infrastructure/makuake-project-source.provider';
 import { PrismaProjectImportRepository } from './infrastructure/prisma-project-import.repository';
@@ -67,11 +67,12 @@ export class ProjectsService {
     return this.searchWithProvider(this.providerFor('campfire'), dto);
   }
 
-  async searchWithProvider(provider: ProjectSourceProvider, dto: SearchCampfireProjectsDto) {
-    const result = await provider.search({ ...dto, excludeUrls: dto.excludeUrls || [] });
+  async searchWithProvider(provider: ProjectSourceProvider, dto: SearchCampfireProjectsDto, options?: ProjectSearchOptions) {
+    const result = await provider.search({ ...dto, excludeUrls: dto.excludeUrls || [] }, options);
     if (dto.status === 'endingSoon') {
       return {
-        items: sortEndingSoon(result.items, normalizeEndingSoonDays(dto.endingSoonDays)).slice(0, normalizeResultLimit(dto.limit))
+        items: sortEndingSoon(result.items, normalizeEndingSoonDays(dto.endingSoonDays)).slice(0, normalizeResultLimit(dto.limit)),
+        diagnostics: result.diagnostics
       };
     }
     return result;
@@ -79,7 +80,9 @@ export class ProjectsService {
 
   startSearchJob(dto: SearchProjectsDto) {
     const provider = this.providerFor(dto.source);
-    return this.projectSearchJobManager.start(provider, dto, (searchProvider, searchDto) => this.searchWithProvider(searchProvider, searchDto));
+    return this.projectSearchJobManager.start(provider, dto, (searchProvider, searchDto, options) =>
+      this.searchWithProvider(searchProvider, searchDto, options)
+    );
   }
 
   getSearchJob(id: string) {
@@ -202,4 +205,3 @@ function sourceLabel(source: ProjectSource) {
     green_funding: 'GREEN FUNDING'
   })[source];
 }
-

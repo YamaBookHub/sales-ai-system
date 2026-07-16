@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { chromium, type BrowserContext, type Page } from 'playwright';
+import { bindAbortToResource, OperationAbortedError } from '../../common/abortable-resource';
 import { runWithConcurrency } from '../../common/concurrency';
-import { NormalizedImportedProject, ProjectSourceProvider } from '../domain/project-source-provider';
+import { NormalizedImportedProject, ProjectSearchOptions, ProjectSourceProvider } from '../domain/project-source-provider';
 import { SearchCampfireProjectsDto } from '../projects.dto';
 import { parseMakuakeDetail } from './parsers/makuake/makuake-detail.parser';
 import { isActiveMakuakeListing, parseMakuakeListing } from './parsers/makuake/makuake-listing.parser';
@@ -21,28 +22,39 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
     return { items: [] };
   }
 
-  async search(input: SearchCampfireProjectsDto) {
+  async search(input: SearchCampfireProjectsDto, options: ProjectSearchOptions = {}) {
+    if (options.signal?.aborted) throw new OperationAbortedError();
     const browser = await chromium.launch({ headless: true });
+    let context: BrowserContext | null = null;
+    const lifecycle = bindAbortToResource(options.signal, async () => {
+      await context?.close().catch(() => undefined);
+      await browser.close().catch(() => undefined);
+    });
     try {
-      const context = await browser.newContext({ userAgent: MAKUAKE_USER_AGENT });
+      lifecycle.throwIfAborted();
+      const activeContext = await browser.newContext({ userAgent: MAKUAKE_USER_AGENT });
+      context = activeContext;
       const pageResults = await runWithConcurrency(buildMakuakeSearchUrls(input), 3, async (url) => {
-        const page = await context.newPage();
+        lifecycle.throwIfAborted();
+        const page = await activeContext.newPage();
         try {
           await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
           await page.waitForTimeout(900);
-          return await collectSearchResultsFromPage(page);
+          return await collectSearchResultsFromPage(page, lifecycle.throwIfAborted);
         } catch {
+          lifecycle.throwIfAborted();
           return { items: [], scanComplete: false };
         } finally {
           await page.close().catch(() => undefined);
         }
       });
+      lifecycle.throwIfAborted();
       const rawItems = pageResults.flatMap((result) => result.items);
       const candidatePoolSize = searchCandidatePoolSize(input);
       const sourceCandidates = uniqueBy(rawItems, (item) => normalizeUrlForUnique(item.url));
       const keywordMatches = sourceCandidates.filter((item) => matchesKeyword(item, input.keyword));
       const candidates = sortSearchResults(keywordMatches, input).slice(0, candidatePoolSize);
-      const enrichedItems = await enrichSearchResults(context, candidates);
+      const enrichedItems = await enrichSearchResults(activeContext, candidates, lifecycle.throwIfAborted);
       const excluded = new Set((input.excludeUrls || []).map((url) => normalizeUrlForUnique(url)));
       const conditionMatches = sortSearchResults(enrichedItems, input).filter((item) => matchesNumericFilters(item, input));
       const excludedCount = conditionMatches.filter((item) => excluded.has(normalizeUrlForUnique(item.url))).length;
@@ -58,8 +70,12 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
           scanComplete: pageResults.every((result) => result.scanComplete) && candidates.length < candidatePoolSize
         }
       };
+    } catch (error) {
+      if (options.signal?.aborted) throw new OperationAbortedError();
+      throw error;
     } finally {
-      await browser.close();
+      lifecycle.dispose();
+      await lifecycle.close();
     }
   }
 
@@ -183,11 +199,12 @@ function buildMakuakeSearchUrls(input: SearchCampfireProjectsDto) {
   return uniqueBy(urls, (url) => url);
 }
 
-async function collectSearchResultsFromPage(page: Page) {
+async function collectSearchResultsFromPage(page: Page, throwIfAborted: () => void = () => undefined) {
   const items: MakuakeSearchResult[] = [];
   let unchangedCount = 0;
   for (let index = 0; index < 4; index += 1) {
     try {
+      throwIfAborted();
       const beforeCount = items.length;
       items.push(...extractSearchResults(await page.content()));
       const uniqueItems = uniqueBy(items, (item) => normalizeUrlForUnique(item.url));
@@ -203,8 +220,9 @@ async function collectSearchResultsFromPage(page: Page) {
   return { items: uniqueBy(items, (item) => normalizeUrlForUnique(item.url)), scanComplete: true };
 }
 
-async function enrichSearchResults(context: BrowserContext, items: MakuakeSearchResult[]) {
+async function enrichSearchResults(context: BrowserContext, items: MakuakeSearchResult[], throwIfAborted: () => void = () => undefined) {
   return runWithConcurrency(items, 4, async (item) => {
+    throwIfAborted();
     if (item.amount > 0 && item.supporterCount > 0 && item.category && item.location) return item;
     const page = await context.newPage();
     try {
@@ -228,6 +246,7 @@ async function enrichSearchResults(context: BrowserContext, items: MakuakeSearch
         location: item.location || parsed.location
       };
     } catch {
+      throwIfAborted();
       return item;
     } finally {
       await page.close().catch(() => undefined);

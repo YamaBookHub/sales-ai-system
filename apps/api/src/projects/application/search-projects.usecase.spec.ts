@@ -38,7 +38,10 @@ describe('SearchProjectsUseCase', () => {
 
     const result = await useCase.search({ source: 'makuake', keyword: '食品' });
 
-    expect(makuakeProvider.search).toHaveBeenCalledWith({ source: 'makuake', keyword: '食品', excludeUrls: [] });
+    expect(makuakeProvider.search).toHaveBeenCalledWith(
+      { source: 'makuake', keyword: '食品', excludeUrls: [] },
+      undefined
+    );
     expect(result).toEqual({ items: [{ url: 'https://www.makuake.com/project/1' }] });
   });
 
@@ -60,7 +63,7 @@ describe('SearchProjectsUseCase', () => {
     });
   });
 
-  it('starts search job with selected provider and usecase search callback', () => {
+  it('starts search job and forwards its abort signal to the provider', async () => {
     const { jobManager, campfireProvider, makuakeProvider } = createDeps();
     const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any);
 
@@ -68,5 +71,12 @@ describe('SearchProjectsUseCase', () => {
 
     expect(job).toEqual({ id: 'job_1', status: 'running' });
     expect(jobManager.start).toHaveBeenCalledWith(campfireProvider, { source: 'campfire', limit: 50 }, expect.any(Function));
+    const callback = jobManager.start.mock.calls[0][2];
+    const controller = new AbortController();
+    await callback(campfireProvider, { limit: 50 }, { signal: controller.signal });
+    expect(campfireProvider.search).toHaveBeenLastCalledWith(
+      { limit: 50, excludeUrls: [] },
+      { signal: controller.signal }
+    );
   });
 });

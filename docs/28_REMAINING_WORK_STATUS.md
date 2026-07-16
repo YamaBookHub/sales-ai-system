@@ -34,7 +34,7 @@ Baseline:
 | 9 | LS-002 | P0 | complete | Luna T2 | LS-001 | 2026-07-16 / listing・detail・profile fixture 6 tests、全69 suites・220 tests成功 | Makuake fixture |
 | 10 | LS-003 | P0 | complete | Luna T2 | LS-001 | 2026-07-16 / generic project linkを含むfixture 7 tests、既存scraper 2 tests成功 | CAMPFIRE fixture |
 | 11 | LS-004 | P0 | complete | Terra T3 | LS-002, LS-003 | 2026-07-16 / 6終了理由・両provider診断・71 suites・233 tests・build成功 | 検索終了理由 |
-| 12 | LS-005 | P0 | pending | Terra T3 + Sol audit | LS-004 | - | 即時停止 |
+| 12 | LS-005 | P0 | complete | Terra T3 + Sol audit | LS-004 | 2026-07-16 / AbortSignal伝播・context-first close・74 suites・240 tests・build成功 | 即時停止 |
 | 13 | LS-007 | P0 | complete | Terra T3 | LR-004 | 2026-07-16 / advisory lock・実DB並列4 tests成功 | 並列取り込み排他 |
 | 14 | LL-003 | P0 | pending | Terra T3 | LR-004 | - | 詳細編集契約 |
 | 15 | LL-004 | P0 | pending | Terra T3 + Sol audit | LL-003 | - | Contact CRUD |
@@ -97,3 +97,4 @@ Baseline:
 | 2026-07-16 | LS-002 | Luna worker + main audit | complete | Makuake listing・detail・profileをsanitized fixture化。金額と日数の結合、50日→150日、販売中・日数なしを固定 |
 | 2026-07-16 | LS-003 | Luna worker + main audit | complete | CAMPFIRE listing・detail・profileをsanitized fixture化。汎用project link fallbackとカテゴリ境界を追加 |
 | 2026-07-16 | LS-004 | Terra T3 + read-only audit agent | complete | 検索診断契約、6終了理由、停止後失敗上書き防止、API/UI表示を実装。71 suites・233 tests・OpenAPI・Prisma・build成功 |
+| 2026-07-16 | LS-005 | Terra T3 + Sol audit agent | complete | job固有AbortSignalを両providerへ伝播し、context→browserをclose-once化。cancel競合、2秒以内停止をmock Playwrightで固定。74 suites・240 tests・build成功 |
