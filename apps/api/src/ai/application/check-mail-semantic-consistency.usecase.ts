@@ -1,13 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AiClientService } from '../ai-client.service';
 import type { SelectableAiModel } from '../ai.dto';
-import { OpenAiClientService } from '../openai-client.service';
 
 @Injectable()
 export class CheckMailSemanticConsistencyUseCase {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly openAi: OpenAiClientService
+    private readonly aiClient: AiClientService
   ) {}
 
   async execute(mailId: string, model?: SelectableAiModel) {
@@ -31,7 +31,7 @@ export class CheckMailSemanticConsistencyUseCase {
 
     const output = asRecord(email.aiGenerations[0]?.outputJson);
     const companyName = email.company?.name || email.lead?.company?.name || '';
-    const result = await this.openAi.checkSemanticConsistency(
+    const result = await this.aiClient.checkSemanticConsistency(
       {
         companyName,
         projectTitle: email.lead?.project?.title,

@@ -21,6 +21,13 @@
 
 | 変数 | 必須条件 | 説明 |
 |---|---|---|
+| `AI_DEFAULT_MODEL` | 任意 | 外部AIモデル未指定時の既定値。省略時は互換用 `OPENAI_MODEL`、その次に `gemini-3.1-flash-lite` |
+| `GEMINI_API_KEY` | Geminiの整形/整合性確認を使う場合に必須 | Google AI Studioで発行するGemini API key。未設定時はGemini機能がエラーになる |
+| `GEMINI_MAX_DESCRIPTION_CHARS` | 任意 | Geminiへ渡す説明の上限。省略時 `1200` |
+| `GEMINI_MAX_OUTPUT_TOKENS` | 任意 | Geminiによる整形の出力上限。省略時 `1600` |
+| `GEMINI_SEMANTIC_CHECK_MAX_OUTPUT_TOKENS` | 任意 | Geminiによる整合性確認の出力上限。省略時 `600` |
+| `GEMINI_FLASH_LITE_INPUT_COST_PER_1M` / `GEMINI_FLASH_LITE_OUTPUT_COST_PER_1M` | 任意 | Flash-Liteの概算コスト記録用単価。既定値は `$0.25` / `$1.50` |
+| `GEMINI_FLASH_INPUT_COST_PER_1M` / `GEMINI_FLASH_OUTPUT_COST_PER_1M` | 任意 | Flashの概算コスト記録用単価。既定値は `$1.50` / `$9.00` |
 | `OPENAI_API_KEY` | OpenAIの下書き生成/整合性確認を使う場合に必須 | OpenAI API key。未設定時は該当機能がエラーになる |
 | `OPENAI_MODEL` | 任意 | 省略時 `gpt-5.6-luna`。高品質生成には `gpt-5.6-sol` または `gpt-5.6` を指定。メール画面で選択したLUNA/SOLはリクエスト単位でこの値より優先 |
 | `OPENAI_MAX_DESCRIPTION_CHARS` | 任意 | 下書き生成へ渡す説明の上限。省略時 `1200` |
@@ -97,8 +104,8 @@ npm run test:integration
 - migration差分を確認し、本番データに対する破壊的変更を行わない。
 - `MAIL_SEND_ENABLED` は明示的に必要な環境だけ `true` にする。
 - Gmailの実送信を有効化する前に、承認、checklist、送信対象、配信停止、blockの運用確認を行う。現行コードではblock/配信停止をclaim前に共通拒否するguardが未実装である。
-- OpenAI API key、Gmail secret、refresh tokenをリポジトリへ保存しない。
-- 実OpenAI、実Gmail、外部サイトへの書き込みは、明示的な運用手順とテスト対象を定めてから行う。
+- Gemini/OpenAI API key、Gmail secret、refresh tokenをリポジトリへ保存しない。
+- 実Gemini、実OpenAI、実Gmail、外部サイトへの書き込みは、明示的な運用手順とテスト対象を定めてから行う。
 
 ## 5. 未実装の運用基盤
 

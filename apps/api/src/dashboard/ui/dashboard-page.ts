@@ -98,9 +98,9 @@ ${renderNavigationBadgesScript()}
       mailSort: { key: 'createdAt', direction: 'desc' }
     };
     const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
-    const AI_MODEL_STORAGE_KEY = 'salesAiSystem.aiModel';
-    const DEFAULT_AI_MODEL = 'gpt-5.6-luna';
-    const SELECTABLE_AI_MODELS = ['gpt-5.6-luna', 'gpt-5.6-sol'];
+    const AI_MODEL_STORAGE_KEY = 'salesAiSystem.aiModel.v2';
+    const DEFAULT_AI_MODEL = 'gemini-3.1-flash-lite';
+    const SELECTABLE_AI_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gpt-5.6-luna', 'gpt-5.6-sol'];
 
     function selectedAiModel() {
       const value = document.getElementById('aiModel')?.value || DEFAULT_AI_MODEL;
@@ -108,7 +108,23 @@ ${renderNavigationBadgesScript()}
     }
 
     function aiModelLabel(model = selectedAiModel()) {
-      return model === 'gpt-5.6-sol' ? '5.6 SOL' : '5.6 LUNA';
+      const labels = {
+        'gemini-3.1-flash-lite': 'Gemini 3.1 Flash-Lite',
+        'gemini-3.5-flash': 'Gemini 3.5 Flash',
+        'gpt-5.6-luna': '5.6 LUNA',
+        'gpt-5.6-sol': '5.6 SOL'
+      };
+      return labels[model] || model || '不明なモデル';
+    }
+
+    function aiProviderLabel(model = selectedAiModel()) {
+      return model.startsWith('gemini-') ? 'Gemini API' : 'OpenAI API';
+    }
+
+    function aiUsageNotice(model = selectedAiModel()) {
+      return model.startsWith('gemini-')
+        ? 'Gemini APIの利用枠を使用します。'
+        : 'OpenAI API料金が発生します。';
     }
 
     function rememberAiModelSelection() {
@@ -730,7 +746,7 @@ ${renderNavigationBadgesScript()}
         setStatus('mailStatus', message, 'warn');
         return;
       }
-        setStatus('mailStatus', 'AI下書き生成中（OpenAI API未使用）', 'warn');
+        setStatus('mailStatus', 'AI下書き生成中（外部AI API未使用）', 'warn');
       try {
         const templateKey = document.getElementById('templateKey').value;
         const result = await api('/api/ai/leads/' + state.selectedLeadId + '/email-draft', {
@@ -739,7 +755,7 @@ ${renderNavigationBadgesScript()}
         });
         state.selectedMailId = result.email.id;
         populateMailEditor(result.email, true);
-        setStatus('mailStatus', 'AI下書き生成完了（OpenAI API未使用）', 'ok');
+        setStatus('mailStatus', 'AI下書き生成完了（外部AI API未使用）', 'ok');
         await loadAll();
         await loadAiAnalysis();
         selectMail(state.selectedMailId);
@@ -758,9 +774,9 @@ ${renderNavigationBadgesScript()}
       }
       const model = selectedAiModel();
       const modelLabel = aiModelLabel(model);
-      const confirmed = window.confirm(modelLabel + 'で本文を整えます。OpenAI API料金が発生します。実行しますか？');
+      const confirmed = window.confirm(modelLabel + 'で本文を整えます。' + aiUsageNotice(model) + '実行しますか？');
       if (!confirmed) return;
-      setStatus('mailStatus', modelLabel + 'で本文を整えています（OpenAI API使用）', 'warn');
+      setStatus('mailStatus', modelLabel + 'で本文を整えています（' + aiProviderLabel(model) + '使用）', 'warn');
       try {
         const result = await api('/api/ai/mails/' + mail.id + '/polish', {
           method: 'POST',
@@ -1957,7 +1973,7 @@ ${renderNavigationBadgesScript()}
       const mail = currentSelectedMail();
       if (semanticButton) {
         semanticButton.disabled = !mail || !['draft', 'rejected'].includes(mail.status) || dirty;
-        semanticButton.title = dirty ? '先に本文を保存してください' : 'OpenAI APIを使って案件との意味整合性を確認します';
+        semanticButton.title = dirty ? '先に本文を保存してください' : '選択したAI APIを使って案件との意味整合性を確認します';
       }
     }
 
@@ -2203,13 +2219,13 @@ ${renderNavigationBadgesScript()}
       document.getElementById('polishButton').title = !mail
         ? '先にメールを選択してください'
         : ['draft', 'rejected'].includes(mail.status)
-          ? 'OpenAI APIを使って本文を整えます'
+          ? '選択したAI APIを使って本文を整えます'
           : '承認・送信フロー中のメールはAI整形できません';
       const semanticButton = document.getElementById('semanticCheckButton');
       if (semanticButton) {
         const dirty = hasUnsavedMailEditorChanges();
         semanticButton.disabled = !mail || !['draft', 'rejected'].includes(mail.status) || dirty;
-        semanticButton.title = dirty ? '先に本文を保存してください' : 'OpenAI APIを使って案件との意味整合性を確認します';
+        semanticButton.title = dirty ? '先に本文を保存してください' : '選択したAI APIを使って案件との意味整合性を確認します';
       }
       document.getElementById('reviewButton').disabled = !mail || mail.status !== 'draft';
       document.getElementById('reReviewButton').disabled = !mail || mail.status !== 'rejected';

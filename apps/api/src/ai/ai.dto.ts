@@ -1,7 +1,9 @@
 import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { SELECTABLE_AI_MODELS } from './domain/ai-model';
+import type { SelectableAiModel } from './domain/ai-model';
 
-export const SELECTABLE_AI_MODELS = ['gpt-5.6-luna', 'gpt-5.6-sol'] as const;
-export type SelectableAiModel = (typeof SELECTABLE_AI_MODELS)[number];
+export { SELECTABLE_AI_MODELS } from './domain/ai-model';
+export type { SelectableAiModel } from './domain/ai-model';
 
 export class GenerateMailDto {
   @IsString()

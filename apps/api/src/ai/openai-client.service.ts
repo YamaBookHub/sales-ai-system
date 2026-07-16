@@ -1,5 +1,5 @@
 import { BadGatewayException, Injectable, ServiceUnavailableException } from '@nestjs/common';
-import type { SelectableAiModel } from './ai.dto';
+import type { SelectableOpenAiModel } from './domain/ai-model';
 import { parseMailDraftJson } from './domain/ai-output-validator';
 import {
   parseSemanticConsistencyJson,
@@ -29,7 +29,7 @@ export const DEFAULT_OPENAI_MODEL = 'gpt-5.6-luna';
 
 @Injectable()
 export class OpenAiClientService {
-  async createSalesMailDraft(input: SalesMailDraftInput, requestedModel?: SelectableAiModel): Promise<SalesMailDraftOutput> {
+  async createSalesMailDraft(input: SalesMailDraftInput, requestedModel?: SelectableOpenAiModel): Promise<SalesMailDraftOutput> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       throw new ServiceUnavailableException('OpenAI APIキーが未設定です。.env の OPENAI_API_KEY を確認してください。');
@@ -94,7 +94,7 @@ export class OpenAiClientService {
 
   async checkSemanticConsistency(
     input: SemanticConsistencyInput,
-    requestedModel?: SelectableAiModel
+    requestedModel?: SelectableOpenAiModel
   ): Promise<SemanticConsistencyResult & { model: string; latencyMs: number }> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {

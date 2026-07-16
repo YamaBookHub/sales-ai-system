@@ -6,14 +6,16 @@ import {
 } from './sales-mail-draft.prompt';
 
 describe('sales-mail-draft prompt', () => {
-  it('selects the SOL prompt for SOL model names and the gpt-5.6 alias', () => {
+  it('selects the higher-judgment prompt for SOL, its alias, and Gemini Flash', () => {
     expect(salesMailPromptProfileForModel('gpt-5.6-sol')).toBe('sol');
     expect(salesMailPromptProfileForModel('gpt-5.6')).toBe('sol');
+    expect(salesMailPromptProfileForModel('gemini-3.5-flash')).toBe('sol');
     expect(buildSalesMailDraftSystemPrompt('gpt-5.6-sol')).toBe(buildSolSalesMailDraftSystemPrompt());
   });
 
   it('selects the LUNA prompt for the default and lower-cost model names', () => {
     expect(salesMailPromptProfileForModel('gpt-5.6-luna')).toBe('luna');
+    expect(salesMailPromptProfileForModel('gemini-3.1-flash-lite')).toBe('luna');
     expect(salesMailPromptProfileForModel('gpt-4.1-mini')).toBe('luna');
     expect(buildSalesMailDraftSystemPrompt()).toBe(buildLunaSalesMailDraftSystemPrompt());
   });

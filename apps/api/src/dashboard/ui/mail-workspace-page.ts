@@ -87,10 +87,16 @@ export function renderMailWorkspace(): string {
           <h2>作成・レビュー・確認</h2>
           <div class="toolbar">
             <label class="ai-model-picker" for="aiModel">
-              <span>OpenAIモデル</span>
+              <span>AIモデル</span>
               <select id="aiModel" onchange="rememberAiModelSelection()" title="AIで整える・AIで意味を確認する際に使用します">
-                <option value="gpt-5.6-luna">5.6 LUNA（標準・高速）</option>
-                <option value="gpt-5.6-sol">5.6 SOL（高品質）</option>
+                <optgroup label="Gemini API">
+                  <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite（低コスト・既定）</option>
+                  <option value="gemini-3.5-flash">Gemini 3.5 Flash（品質重視）</option>
+                </optgroup>
+                <optgroup label="OpenAI API">
+                  <option value="gpt-5.6-luna">5.6 LUNA（互換用）</option>
+                  <option value="gpt-5.6-sol">5.6 SOL（互換用）</option>
+                </optgroup>
               </select>
             </label>
             <span id="mailStatus" class="status"></span>

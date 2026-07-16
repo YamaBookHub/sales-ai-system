@@ -17,7 +17,7 @@ describe('CheckMailSemanticConsistencyUseCase', () => {
         update: jest.fn()
       }
     };
-    const openAi = {
+    const aiClient = {
       checkSemanticConsistency: jest.fn().mockResolvedValue({
         matchesProject: true,
         suspectedForeignFacts: [],
@@ -28,10 +28,10 @@ describe('CheckMailSemanticConsistencyUseCase', () => {
       })
     };
 
-    const result = await new CheckMailSemanticConsistencyUseCase(prisma as any, openAi as any).execute('mail_1', 'gpt-5.6-luna');
+    const result = await new CheckMailSemanticConsistencyUseCase(prisma as any, aiClient as any).execute('mail_1', 'gpt-5.6-luna');
 
     expect(result).toMatchObject({ mailId: 'mail_1', matchesProject: true, confidence: 0.92 });
-    expect(openAi.checkSemanticConsistency).toHaveBeenCalledWith(
+    expect(aiClient.checkSemanticConsistency).toHaveBeenCalledWith(
       expect.objectContaining({
         companyName: '株式会社テスト食品',
         projectTitle: '燻製サーモン',
@@ -44,11 +44,11 @@ describe('CheckMailSemanticConsistencyUseCase', () => {
 
   it('fails before calling AI when the mail does not exist', async () => {
     const prisma = { outreachEmail: { findUnique: jest.fn().mockResolvedValue(null) } };
-    const openAi = { checkSemanticConsistency: jest.fn() };
+    const aiClient = { checkSemanticConsistency: jest.fn() };
 
-    await expect(new CheckMailSemanticConsistencyUseCase(prisma as any, openAi as any).execute('missing'))
+    await expect(new CheckMailSemanticConsistencyUseCase(prisma as any, aiClient as any).execute('missing'))
       .rejects.toThrow('Mail not found');
-    expect(openAi.checkSemanticConsistency).not.toHaveBeenCalled();
+    expect(aiClient.checkSemanticConsistency).not.toHaveBeenCalled();
   });
 
   it('does not update anything when the AI provider fails', async () => {
@@ -64,10 +64,10 @@ describe('CheckMailSemanticConsistencyUseCase', () => {
         update: jest.fn()
       }
     };
-    const openAi = { checkSemanticConsistency: jest.fn().mockRejectedValue(new Error('OpenAI unavailable')) };
+    const aiClient = { checkSemanticConsistency: jest.fn().mockRejectedValue(new Error('AI provider unavailable')) };
 
-    await expect(new CheckMailSemanticConsistencyUseCase(prisma as any, openAi as any).execute('mail_1'))
-      .rejects.toThrow('OpenAI unavailable');
+    await expect(new CheckMailSemanticConsistencyUseCase(prisma as any, aiClient as any).execute('mail_1'))
+      .rejects.toThrow('AI provider unavailable');
     expect(prisma.outreachEmail.update).not.toHaveBeenCalled();
   });
 });

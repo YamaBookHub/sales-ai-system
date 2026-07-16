@@ -8,16 +8,29 @@ export type ParsedMailDraft = {
   riskFlags: string[];
 };
 
+export const MAIL_DRAFT_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    subject: { type: 'string' },
+    body: { type: 'string' },
+    factsUsed: { type: 'array', items: { type: 'string' } },
+    assumptions: { type: 'array', items: { type: 'string' } },
+    riskFlags: { type: 'array', items: { type: 'string' } }
+  },
+  required: ['subject', 'body', 'factsUsed', 'assumptions', 'riskFlags']
+};
+
 export function parseMailDraftJson(content: string): ParsedMailDraft {
   let parsed: unknown;
   try {
     parsed = JSON.parse(content);
   } catch {
-    throw new BadGatewayException('OpenAIのメール生成結果がJSON形式ではありませんでした。もう一度お試しください。');
+    throw new BadGatewayException('AIのメール生成結果がJSON形式ではありませんでした。もう一度お試しください。');
   }
 
   if (!isMailDraftShape(parsed)) {
-    throw new BadGatewayException('OpenAIのメール生成結果に必要な項目が不足しています。もう一度お試しください。');
+    throw new BadGatewayException('AIのメール生成結果に必要な項目が不足しています。もう一度お試しください。');
   }
 
   return {

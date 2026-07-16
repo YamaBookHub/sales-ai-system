@@ -13,8 +13,10 @@ describe('Mail workspace static HTML', () => {
     expect(mailWorkspaceHtml).toContain('data-ui="mail-lead-queue"');
     expect(mailWorkspaceHtml).toContain('data-ui="mail-focus-workspace"');
     expect(mailWorkspaceHtml).toContain('id="aiModel"');
-    expect(mailWorkspaceHtml).toContain('<option value="gpt-5.6-luna">5.6 LUNA（標準・高速）</option>');
-    expect(mailWorkspaceHtml).toContain('<option value="gpt-5.6-sol">5.6 SOL（高品質）</option>');
+    expect(mailWorkspaceHtml).toContain('<option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite（低コスト・既定）</option>');
+    expect(mailWorkspaceHtml).toContain('<option value="gemini-3.5-flash">Gemini 3.5 Flash（品質重視）</option>');
+    expect(mailWorkspaceHtml).toContain('<option value="gpt-5.6-luna">5.6 LUNA（互換用）</option>');
+    expect(mailWorkspaceHtml).toContain('<option value="gpt-5.6-sol">5.6 SOL（互換用）</option>');
     expect(mailWorkspaceHtml).toContain('data-mail-work-tab="review"');
     expect(mailWorkspaceHtml).toContain('id="checklistRows"');
   });

@@ -2,7 +2,9 @@ export type SalesMailPromptProfile = 'sol' | 'luna';
 
 export function salesMailPromptProfileForModel(model: string): SalesMailPromptProfile {
   const normalized = model.trim().toLowerCase();
-  return normalized === 'gpt-5.6' || normalized.startsWith('gpt-5.6-sol') ? 'sol' : 'luna';
+  return normalized === 'gpt-5.6' || normalized.startsWith('gpt-5.6-sol') || normalized === 'gemini-3.5-flash'
+    ? 'sol'
+    : 'luna';
 }
 
 export function buildSalesMailDraftSystemPrompt(model = 'gpt-5.6-luna') {

@@ -2,8 +2,13 @@ import { validate } from 'class-validator';
 import { SELECTABLE_AI_MODELS, SelectAiModelDto } from './ai.dto';
 
 describe('SelectAiModelDto', () => {
-  it('allows the LUNA and SOL models shown in the UI', async () => {
-    expect(SELECTABLE_AI_MODELS).toEqual(['gpt-5.6-luna', 'gpt-5.6-sol']);
+  it('allows the Gemini and OpenAI models shown in the UI', async () => {
+    expect(SELECTABLE_AI_MODELS).toEqual([
+      'gemini-3.1-flash-lite',
+      'gemini-3.5-flash',
+      'gpt-5.6-luna',
+      'gpt-5.6-sol'
+    ]);
 
     for (const model of SELECTABLE_AI_MODELS) {
       const dto = new SelectAiModelDto();

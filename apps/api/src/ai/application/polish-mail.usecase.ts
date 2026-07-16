@@ -1,14 +1,15 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AiClientService } from '../ai-client.service';
 import type { SelectableAiModel } from '../ai.dto';
+import { aiProviderForModel } from '../domain/ai-model';
 import { SalesMailDraftInput } from '../domain/openai-sales-mail-draft';
-import { OpenAiClientService } from '../openai-client.service';
 
 @Injectable()
 export class PolishMailUseCase {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly openAi: OpenAiClientService
+    private readonly aiClient: AiClientService
   ) {}
 
   async execute(mailId: string, model?: SelectableAiModel) {
@@ -32,7 +33,8 @@ export class PolishMailUseCase {
       templateKey: email.templateKey || 'normal',
       tone: 'low_sales_pressure'
     });
-    const draft = await this.openAi.createSalesMailDraft(aiInput, model);
+    const draft = await this.aiClient.createSalesMailDraft(aiInput, model);
+    const provider = aiProviderForModel(draft.model);
 
     const result = await this.prisma.$transaction(async (tx) => {
       const updatedEmail = await tx.outreachEmail.update({
@@ -42,7 +44,7 @@ export class PolishMailUseCase {
           body: draft.body,
           status: 'draft',
           failedReason: null,
-          events: { create: { type: 'generated', payload: { source: 'openai_polish', model: draft.model } } }
+          events: { create: { type: 'generated', payload: { source: `${provider}_polish`, model: draft.model } } }
         }
       });
 
@@ -51,9 +53,9 @@ export class PolishMailUseCase {
           leadId: lead.id,
           emailId: updatedEmail.id,
           type: 'email_draft',
-          provider: 'openai',
+          provider,
           model: draft.model,
-          promptVersion: 'v2_openai_sales_mail_polish',
+          promptVersion: `v3_${provider}_sales_mail_polish`,
           inputJson: { leadId: lead.id, mailId, requestedModel: model || null, ...aiInput },
           outputJson: {
             subject: draft.subject,

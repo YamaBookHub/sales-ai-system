@@ -6,13 +6,17 @@ import { GenerateMailDraftUseCase } from './application/generate-mail-draft.usec
 import { ListLeadGenerationsUseCase } from './application/list-lead-generations.usecase';
 import { PolishMailUseCase } from './application/polish-mail.usecase';
 import { AiController } from './ai.controller';
+import { AiClientService } from './ai-client.service';
 import { AiService } from './ai.service';
+import { GeminiClientService } from './gemini-client.service';
 import { OpenAiClientService } from './openai-client.service';
 
 @Module({
   controllers: [AiController],
   providers: [
     AiService,
+    AiClientService,
+    GeminiClientService,
     OpenAiClientService,
     AnalyzeLeadUseCase,
     CheckMailSemanticConsistencyUseCase,

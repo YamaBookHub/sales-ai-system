@@ -54,22 +54,22 @@ describe('PolishMailUseCase', () => {
       },
       $transaction: jest.fn((callback) => callback(tx))
     };
-    const openAi = {
+    const aiClient = {
       createSalesMailDraft: jest.fn().mockResolvedValue(draft)
     };
 
-    return { prisma, openAi, tx };
+    return { prisma, aiClient, tx };
   };
 
   it('keeps polished AI mail as draft', async () => {
-    const { prisma, openAi, tx } = createDeps();
-    const useCase = new PolishMailUseCase(prisma as any, openAi as any);
+    const { prisma, aiClient, tx } = createDeps();
+    const useCase = new PolishMailUseCase(prisma as any, aiClient as any);
 
     const result = await useCase.execute(email.id, 'gpt-5.6-sol');
 
     expect(result.email.status).toBe('draft');
     expect(result.model).toBe('gpt-test');
-    expect(openAi.createSalesMailDraft).toHaveBeenCalledWith(expect.objectContaining({
+    expect(aiClient.createSalesMailDraft).toHaveBeenCalledWith(expect.objectContaining({
       companyName: 'テスト株式会社',
       projectTitle: '真空保存できる米びつ'
     }), 'gpt-5.6-sol');
@@ -95,22 +95,37 @@ describe('PolishMailUseCase', () => {
     );
   });
 
-  it('does not update DB when OpenAI fails', async () => {
-    const { prisma, openAi } = createDeps();
-    openAi.createSalesMailDraft.mockRejectedValue(new BadGatewayException('OpenAI failed'));
-    const useCase = new PolishMailUseCase(prisma as any, openAi as any);
+  it('records Gemini as the provider when a Gemini model is used', async () => {
+    const { prisma, aiClient, tx } = createDeps();
+    aiClient.createSalesMailDraft.mockResolvedValue({ ...draft, model: 'gemini-3.1-flash-lite' });
+
+    await new PolishMailUseCase(prisma as any, aiClient as any).execute(email.id, 'gemini-3.1-flash-lite');
+
+    expect(tx.aiGeneration.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+        promptVersion: 'v3_gemini_sales_mail_polish'
+      })
+    }));
+  });
+
+  it('does not update DB when the selected AI provider fails', async () => {
+    const { prisma, aiClient } = createDeps();
+    aiClient.createSalesMailDraft.mockRejectedValue(new BadGatewayException('AI failed'));
+    const useCase = new PolishMailUseCase(prisma as any, aiClient as any);
 
     await expect(useCase.execute(email.id)).rejects.toThrow(BadGatewayException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('rejects non-draft mail before calling OpenAI', async () => {
-    const { prisma, openAi } = createDeps();
+  it('rejects non-draft mail before calling AI', async () => {
+    const { prisma, aiClient } = createDeps();
     prisma.outreachEmail.findUnique.mockResolvedValue({ ...email, status: 'queued' });
-    const useCase = new PolishMailUseCase(prisma as any, openAi as any);
+    const useCase = new PolishMailUseCase(prisma as any, aiClient as any);
 
     await expect(useCase.execute(email.id)).rejects.toThrow(ConflictException);
-    expect(openAi.createSalesMailDraft).not.toHaveBeenCalled();
+    expect(aiClient.createSalesMailDraft).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
