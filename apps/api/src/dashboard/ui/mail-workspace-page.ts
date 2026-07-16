@@ -94,6 +94,7 @@ export function renderMailWorkspace(): string {
                   <option value="gemini-3.5-flash">Gemini 3.5 Flash（品質重視）</option>
                 </optgroup>
                 <optgroup label="OpenAI API">
+                  <option value="gpt-4.1-mini">GPT-4.1 mini（旧既定・低コスト）</option>
                   <option value="gpt-5.6-luna">5.6 LUNA（互換用）</option>
                   <option value="gpt-5.6-sol">5.6 SOL（互換用）</option>
                 </optgroup>

@@ -37,6 +37,7 @@ describe('AI model selection', () => {
   it('identifies the provider from the model', () => {
     expect(isGeminiModel('gemini-3.1-flash-lite')).toBe(true);
     expect(aiProviderForModel('gemini-3.5-flash')).toBe('gemini');
+    expect(aiProviderForModel('gpt-4.1-mini')).toBe('openai');
     expect(aiProviderForModel('gpt-5.6-luna')).toBe('openai');
   });
 });

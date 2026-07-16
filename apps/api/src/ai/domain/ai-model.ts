@@ -1,5 +1,5 @@
 export const GEMINI_AI_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash'] as const;
-export const OPENAI_AI_MODELS = ['gpt-5.6-luna', 'gpt-5.6-sol'] as const;
+export const OPENAI_AI_MODELS = ['gpt-4.1-mini', 'gpt-5.6-luna', 'gpt-5.6-sol'] as const;
 export const SELECTABLE_AI_MODELS = [...GEMINI_AI_MODELS, ...OPENAI_AI_MODELS] as const;
 
 export type SelectableGeminiModel = (typeof GEMINI_AI_MODELS)[number];

@@ -6,6 +6,7 @@ describe('SelectAiModelDto', () => {
     expect(SELECTABLE_AI_MODELS).toEqual([
       'gemini-3.1-flash-lite',
       'gemini-3.5-flash',
+      'gpt-4.1-mini',
       'gpt-5.6-luna',
       'gpt-5.6-sol'
     ]);

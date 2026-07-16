@@ -29,7 +29,7 @@
 | `GEMINI_FLASH_LITE_INPUT_COST_PER_1M` / `GEMINI_FLASH_LITE_OUTPUT_COST_PER_1M` | 任意 | Flash-Liteの概算コスト記録用単価。既定値は `$0.25` / `$1.50` |
 | `GEMINI_FLASH_INPUT_COST_PER_1M` / `GEMINI_FLASH_OUTPUT_COST_PER_1M` | 任意 | Flashの概算コスト記録用単価。既定値は `$1.50` / `$9.00` |
 | `OPENAI_API_KEY` | OpenAIの下書き生成/整合性確認を使う場合に必須 | OpenAI API key。未設定時は該当機能がエラーになる |
-| `OPENAI_MODEL` | 任意 | 省略時 `gpt-5.6-luna`。高品質生成には `gpt-5.6-sol` または `gpt-5.6` を指定。メール画面で選択したLUNA/SOLはリクエスト単位でこの値より優先 |
+| `OPENAI_MODEL` | 任意 | OpenAI client単体の省略時は `gpt-5.6-luna`。画面で選択したGPT-4.1 mini/LUNA/SOLはリクエスト単位でこの値より優先 |
 | `OPENAI_MAX_DESCRIPTION_CHARS` | 任意 | 下書き生成へ渡す説明の上限。省略時 `1200` |
 | `OPENAI_MAX_OUTPUT_TOKENS` | 任意 | 下書き生成の出力上限。省略時 `1200` |
 | `OPENAI_SEMANTIC_CHECK_MAX_OUTPUT_TOKENS` | 任意 | 整合性確認の出力上限。省略時 `400` |

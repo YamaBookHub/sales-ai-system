@@ -100,7 +100,7 @@ ${renderNavigationBadgesScript()}
     const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
     const AI_MODEL_STORAGE_KEY = 'salesAiSystem.aiModel.v2';
     const DEFAULT_AI_MODEL = 'gemini-3.1-flash-lite';
-    const SELECTABLE_AI_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gpt-5.6-luna', 'gpt-5.6-sol'];
+    const SELECTABLE_AI_MODELS = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gpt-4.1-mini', 'gpt-5.6-luna', 'gpt-5.6-sol'];
 
     function selectedAiModel() {
       const value = document.getElementById('aiModel')?.value || DEFAULT_AI_MODEL;
@@ -111,6 +111,7 @@ ${renderNavigationBadgesScript()}
       const labels = {
         'gemini-3.1-flash-lite': 'Gemini 3.1 Flash-Lite',
         'gemini-3.5-flash': 'Gemini 3.5 Flash',
+        'gpt-4.1-mini': 'GPT-4.1 mini',
         'gpt-5.6-luna': '5.6 LUNA',
         'gpt-5.6-sol': '5.6 SOL'
       };

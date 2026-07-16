@@ -17,6 +17,7 @@ describe('openai-client model options', () => {
   });
 
   it('keeps the explicit SOL and LUNA API model ids', () => {
+    expect(resolveOpenAiModelId('gpt-4.1-mini')).toBe('gpt-4.1-mini');
     expect(resolveOpenAiModelId('gpt-5.6-sol')).toBe('gpt-5.6-sol');
     expect(resolveOpenAiModelId('gpt-5.6-luna')).toBe('gpt-5.6-luna');
   });

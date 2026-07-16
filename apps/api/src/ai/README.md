@@ -25,7 +25,7 @@
 - AI生成メールは下書き保存まで。自動送信しない
 - 外部AI失敗時に既存メールやリード状態を壊さない
 - プロンプトは事実ベース、低圧、断定的な成果保証なし
-- Gemini 3.5 FlashとSOLは判断重視、Gemini 3.1 Flash-LiteとLUNAは手順重視のメール指示を使用する
+- Gemini 3.5 FlashとSOLは判断重視、Gemini 3.1 Flash-Lite、GPT-4.1 mini、LUNAは手順重視のメール指示を使用する
 - 既定モデルは `gemini-3.1-flash-lite`。全モデルが同じJSON契約と `docs/08_MAIL.md` の正本に従う
 - メール画面で選択したGemini/OpenAIモデルは、AI整形と意味確認のリクエストに適用する
 - 画面から指定できるモデルは `SELECTABLE_AI_MODELS` の許可リストに限定し、未指定時は `AI_DEFAULT_MODEL`、互換用 `OPENAI_MODEL` の順にフォールバックする
