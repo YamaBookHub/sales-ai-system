@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ok } from '../common/api-response';
-import { GenerateMailDto } from './ai.dto';
+import { GenerateMailDto, SelectAiModelDto } from './ai.dto';
 import { AiService } from './ai.service';
 
 @Controller('ai')
@@ -23,13 +23,13 @@ export class AiController {
   }
 
   @Post('mails/:mailId/polish')
-  async polishMail(@Param('mailId') mailId: string) {
-    return ok(await this.ai.polishMail(mailId));
+  async polishMail(@Param('mailId') mailId: string, @Body() dto: SelectAiModelDto) {
+    return ok(await this.ai.polishMail(mailId, dto?.model));
   }
 
   @Post('mails/:mailId/semantic-consistency')
-  async checkMailSemanticConsistency(@Param('mailId') mailId: string) {
-    return ok(await this.ai.checkMailSemanticConsistency(mailId));
+  async checkMailSemanticConsistency(@Param('mailId') mailId: string, @Body() dto: SelectAiModelDto) {
+    return ok(await this.ai.checkMailSemanticConsistency(mailId, dto?.model));
   }
 
   @Get('leads/:leadId/generations')

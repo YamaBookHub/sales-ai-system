@@ -65,9 +65,14 @@ describe('PolishMailUseCase', () => {
     const { prisma, openAi, tx } = createDeps();
     const useCase = new PolishMailUseCase(prisma as any, openAi as any);
 
-    const result = await useCase.execute(email.id);
+    const result = await useCase.execute(email.id, 'gpt-5.6-sol');
 
     expect(result.email.status).toBe('draft');
+    expect(result.model).toBe('gpt-test');
+    expect(openAi.createSalesMailDraft).toHaveBeenCalledWith(expect.objectContaining({
+      companyName: 'テスト株式会社',
+      projectTitle: '真空保存できる米びつ'
+    }), 'gpt-5.6-sol');
     expect(tx.outreachEmail.update).toHaveBeenCalledWith({
       where: { id: email.id },
       data: expect.objectContaining({
@@ -83,7 +88,8 @@ describe('PolishMailUseCase', () => {
           leadId: email.lead.id,
           emailId: email.id,
           provider: 'openai',
-          type: 'email_draft'
+          type: 'email_draft',
+          inputJson: expect.objectContaining({ requestedModel: 'gpt-5.6-sol' })
         })
       })
     );

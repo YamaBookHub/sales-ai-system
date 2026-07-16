@@ -1,4 +1,5 @@
 import { BadGatewayException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import type { SelectableAiModel } from './ai.dto';
 import { parseMailDraftJson } from './domain/ai-output-validator';
 import {
   parseSemanticConsistencyJson,
@@ -28,13 +29,13 @@ export const DEFAULT_OPENAI_MODEL = 'gpt-5.6-luna';
 
 @Injectable()
 export class OpenAiClientService {
-  async createSalesMailDraft(input: SalesMailDraftInput): Promise<SalesMailDraftOutput> {
+  async createSalesMailDraft(input: SalesMailDraftInput, requestedModel?: SelectableAiModel): Promise<SalesMailDraftOutput> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       throw new ServiceUnavailableException('OpenAI APIキーが未設定です。.env の OPENAI_API_KEY を確認してください。');
     }
 
-    const configuredModel = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+    const configuredModel = requestedModel || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
     const model = resolveOpenAiModelId(configuredModel);
     const maxTokens = numberFromEnv('OPENAI_MAX_OUTPUT_TOKENS', 1200);
     const maxDescriptionLength = numberFromEnv('OPENAI_MAX_DESCRIPTION_CHARS', 1200);
@@ -91,13 +92,16 @@ export class OpenAiClientService {
     };
   }
 
-  async checkSemanticConsistency(input: SemanticConsistencyInput): Promise<SemanticConsistencyResult & { model: string; latencyMs: number }> {
+  async checkSemanticConsistency(
+    input: SemanticConsistencyInput,
+    requestedModel?: SelectableAiModel
+  ): Promise<SemanticConsistencyResult & { model: string; latencyMs: number }> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       throw new ServiceUnavailableException('OpenAI APIキーが未設定です。.env の OPENAI_API_KEY を確認してください。');
     }
 
-    const model = resolveOpenAiModelId(process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL);
+    const model = resolveOpenAiModelId(requestedModel || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL);
     const startedAt = Date.now();
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -154,7 +158,7 @@ export function chatCompletionOptions(model: string, maxTokens: number, legacyTe
 }
 
 export function resolveOpenAiModelId(configuredModel: string) {
-  return configuredModel.trim().toLowerCase() === 'gpt-5.6-sol' ? 'gpt-5.6' : configuredModel.trim();
+  return configuredModel.trim();
 }
 
 function parseChatCompletionResponse(rawText: string): ChatCompletionResponse {

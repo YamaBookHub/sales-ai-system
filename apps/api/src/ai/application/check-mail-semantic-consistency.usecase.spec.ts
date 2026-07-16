@@ -28,14 +28,17 @@ describe('CheckMailSemanticConsistencyUseCase', () => {
       })
     };
 
-    const result = await new CheckMailSemanticConsistencyUseCase(prisma as any, openAi as any).execute('mail_1');
+    const result = await new CheckMailSemanticConsistencyUseCase(prisma as any, openAi as any).execute('mail_1', 'gpt-5.6-luna');
 
     expect(result).toMatchObject({ mailId: 'mail_1', matchesProject: true, confidence: 0.92 });
-    expect(openAi.checkSemanticConsistency).toHaveBeenCalledWith(expect.objectContaining({
-      companyName: '株式会社テスト食品',
-      projectTitle: '燻製サーモン',
-      factsUsed: ['支援者数: 50人']
-    }));
+    expect(openAi.checkSemanticConsistency).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyName: '株式会社テスト食品',
+        projectTitle: '燻製サーモン',
+        factsUsed: ['支援者数: 50人']
+      }),
+      'gpt-5.6-luna'
+    );
     expect(prisma.outreachEmail.update).not.toHaveBeenCalled();
   });
 

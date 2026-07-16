@@ -190,6 +190,10 @@ describe('DashboardController HTML contracts', () => {
     expect(mailHtml).toContain('id="semanticConsistencyResult"');
     expect(mailHtml).toContain('function checkMailSemanticConsistency()');
     expect(mailHtml).toContain("'/api/ai/mails/' + mail.id + '/semantic-consistency'");
+    expect(mailHtml).toContain('id="aiModel"');
+    expect(mailHtml).toContain("body: JSON.stringify({ model })");
+    expect(mailHtml).toContain('function selectedAiModel()');
+    expect(mailHtml).toContain('function restoreAiModelSelection()');
     expect(mailHtml).toContain('id="mailContextBar" data-ui="mail-context-bar"');
     expect(mailHtml).toContain('id="nextLeadButton"');
     expect(mailHtml).toContain('id="mailEditorSaveState"');

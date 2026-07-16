@@ -6,6 +6,7 @@ import { GenerateMailDraftUseCase } from './application/generate-mail-draft.usec
 import { ListLeadGenerationsUseCase } from './application/list-lead-generations.usecase';
 import { PolishMailUseCase } from './application/polish-mail.usecase';
 import { GenerateMailDto } from './ai.dto';
+import type { SelectableAiModel } from './ai.dto';
 
 @Injectable()
 export class AiService {
@@ -26,8 +27,8 @@ export class AiService {
     return this.generateMailDraftUseCase.execute(leadId, dto);
   }
 
-  async polishMail(mailId: string) {
-    return this.polishMailUseCase.execute(mailId);
+  async polishMail(mailId: string, model?: SelectableAiModel) {
+    return this.polishMailUseCase.execute(mailId, model);
   }
 
   async classifyReply(replyId: string) {
@@ -38,7 +39,7 @@ export class AiService {
     return this.listLeadGenerationsUseCase.execute(leadId);
   }
 
-  async checkMailSemanticConsistency(mailId: string) {
-    return this.checkMailSemanticConsistencyUseCase.execute(mailId);
+  async checkMailSemanticConsistency(mailId: string, model?: SelectableAiModel) {
+    return this.checkMailSemanticConsistencyUseCase.execute(mailId, model);
   }
 }

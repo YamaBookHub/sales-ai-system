@@ -86,6 +86,13 @@ export function renderMailWorkspace(): string {
         <div class="section-head">
           <h2>作成・レビュー・確認</h2>
           <div class="toolbar">
+            <label class="ai-model-picker" for="aiModel">
+              <span>OpenAIモデル</span>
+              <select id="aiModel" onchange="rememberAiModelSelection()" title="AIで整える・AIで意味を確認する際に使用します">
+                <option value="gpt-5.6-luna">5.6 LUNA（標準・高速）</option>
+                <option value="gpt-5.6-sol">5.6 SOL（高品質）</option>
+              </select>
+            </label>
             <span id="mailStatus" class="status"></span>
             <button id="nextLeadButton" type="button" onclick="selectNextLead()" disabled>次の案件へ</button>
           </div>

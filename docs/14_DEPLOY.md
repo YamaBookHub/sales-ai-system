@@ -22,7 +22,7 @@
 | 変数 | 必須条件 | 説明 |
 |---|---|---|
 | `OPENAI_API_KEY` | OpenAIの下書き生成/整合性確認を使う場合に必須 | OpenAI API key。未設定時は該当機能がエラーになる |
-| `OPENAI_MODEL` | 任意 | 省略時 `gpt-5.6-luna`。高品質生成には `gpt-5.6-sol`（API送信時は `gpt-5.6` へ変換）または `gpt-5.6` を指定 |
+| `OPENAI_MODEL` | 任意 | 省略時 `gpt-5.6-luna`。高品質生成には `gpt-5.6-sol` または `gpt-5.6` を指定。メール画面で選択したLUNA/SOLはリクエスト単位でこの値より優先 |
 | `OPENAI_MAX_DESCRIPTION_CHARS` | 任意 | 下書き生成へ渡す説明の上限。省略時 `1200` |
 | `OPENAI_MAX_OUTPUT_TOKENS` | 任意 | 下書き生成の出力上限。省略時 `1200` |
 | `OPENAI_SEMANTIC_CHECK_MAX_OUTPUT_TOKENS` | 任意 | 整合性確認の出力上限。省略時 `400` |

@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { SelectableAiModel } from '../ai.dto';
 import { SalesMailDraftInput } from '../domain/openai-sales-mail-draft';
 import { OpenAiClientService } from '../openai-client.service';
 
@@ -10,7 +11,7 @@ export class PolishMailUseCase {
     private readonly openAi: OpenAiClientService
   ) {}
 
-  async execute(mailId: string) {
+  async execute(mailId: string, model?: SelectableAiModel) {
     const email = await this.prisma.outreachEmail.findUnique({
       where: { id: mailId },
       include: {
@@ -31,7 +32,7 @@ export class PolishMailUseCase {
       templateKey: email.templateKey || 'normal',
       tone: 'low_sales_pressure'
     });
-    const draft = await this.openAi.createSalesMailDraft(aiInput);
+    const draft = await this.openAi.createSalesMailDraft(aiInput, model);
 
     const result = await this.prisma.$transaction(async (tx) => {
       const updatedEmail = await tx.outreachEmail.update({
@@ -41,7 +42,7 @@ export class PolishMailUseCase {
           body: draft.body,
           status: 'draft',
           failedReason: null,
-          events: { create: { type: 'generated', payload: { source: 'openai_polish' } } }
+          events: { create: { type: 'generated', payload: { source: 'openai_polish', model: draft.model } } }
         }
       });
 
@@ -53,7 +54,7 @@ export class PolishMailUseCase {
           provider: 'openai',
           model: draft.model,
           promptVersion: 'v2_openai_sales_mail_polish',
-          inputJson: { leadId: lead.id, mailId, ...aiInput },
+          inputJson: { leadId: lead.id, mailId, requestedModel: model || null, ...aiInput },
           outputJson: {
             subject: draft.subject,
             body: draft.body,
@@ -76,7 +77,8 @@ export class PolishMailUseCase {
       aiGenerationId: result.aiGeneration.id,
       factsUsed: draft.factsUsed,
       assumptions: draft.assumptions,
-      riskFlags: draft.riskFlags
+      riskFlags: draft.riskFlags,
+      model: draft.model
     };
   }
 }

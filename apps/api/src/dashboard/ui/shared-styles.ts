@@ -140,6 +140,8 @@ export function renderSharedStyles(page: SharedStylePage): string {
     }
     textarea { min-height: 300px; resize: vertical; line-height: 1.8; }
     .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .ai-model-picker { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .ai-model-picker select { width: auto; min-width: 210px; padding: 7px 9px; }
     .muted { color: var(--muted); }
     .status { font-size: 12px; min-height: 18px; }
     .status.ok { color: var(--ok); }

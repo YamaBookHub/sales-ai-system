@@ -98,6 +98,33 @@ ${renderNavigationBadgesScript()}
       mailSort: { key: 'createdAt', direction: 'desc' }
     };
     const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
+    const AI_MODEL_STORAGE_KEY = 'salesAiSystem.aiModel';
+    const DEFAULT_AI_MODEL = 'gpt-5.6-luna';
+    const SELECTABLE_AI_MODELS = ['gpt-5.6-luna', 'gpt-5.6-sol'];
+
+    function selectedAiModel() {
+      const value = document.getElementById('aiModel')?.value || DEFAULT_AI_MODEL;
+      return SELECTABLE_AI_MODELS.includes(value) ? value : DEFAULT_AI_MODEL;
+    }
+
+    function aiModelLabel(model = selectedAiModel()) {
+      return model === 'gpt-5.6-sol' ? '5.6 SOL' : '5.6 LUNA';
+    }
+
+    function rememberAiModelSelection() {
+      try {
+        window.localStorage.setItem(AI_MODEL_STORAGE_KEY, selectedAiModel());
+      } catch {}
+    }
+
+    function restoreAiModelSelection() {
+      const select = document.getElementById('aiModel');
+      if (!select) return;
+      try {
+        const saved = window.localStorage.getItem(AI_MODEL_STORAGE_KEY);
+        if (saved && SELECTABLE_AI_MODELS.includes(saved)) select.value = saved;
+      } catch {}
+    }
 
     async function api(path, options = {}) {
       return window.SalesAiApi.request(path, options, { includeOperatorEmail: true });
@@ -729,14 +756,19 @@ ${renderNavigationBadgesScript()}
         setStatus('mailStatus', 'AIで整えられるのは下書きまたは棄却後のメールだけです。', 'warn');
         return;
       }
-      const confirmed = window.confirm('OpenAI APIを使って本文を整えます。少額のAPI料金が発生します。実行しますか？');
+      const model = selectedAiModel();
+      const modelLabel = aiModelLabel(model);
+      const confirmed = window.confirm(modelLabel + 'で本文を整えます。OpenAI API料金が発生します。実行しますか？');
       if (!confirmed) return;
-      setStatus('mailStatus', 'AIで本文を整えています（OpenAI API使用）', 'warn');
+      setStatus('mailStatus', modelLabel + 'で本文を整えています（OpenAI API使用）', 'warn');
       try {
-        const result = await api('/api/ai/mails/' + mail.id + '/polish', { method: 'POST' });
+        const result = await api('/api/ai/mails/' + mail.id + '/polish', {
+          method: 'POST',
+          body: JSON.stringify({ model })
+        });
         state.selectedMailId = result.email.id;
         populateMailEditor(result.email, true);
-        setStatus('mailStatus', 'AI整形が完了しました。本文を確認してください。', 'ok');
+        setStatus('mailStatus', aiModelLabel(result.model || model) + 'でのAI整形が完了しました。本文を確認してください。', 'ok');
         await loadAll();
         await loadAiAnalysis();
         selectMail(state.selectedMailId);
@@ -935,11 +967,16 @@ ${renderNavigationBadgesScript()}
       }
       const button = document.getElementById('semanticCheckButton');
       if (button) button.disabled = true;
-      setStatus('mailStatus', 'AIで案件との意味整合性を確認中', 'warn');
+      const model = selectedAiModel();
+      const modelLabel = aiModelLabel(model);
+      setStatus('mailStatus', modelLabel + 'で案件との意味整合性を確認中', 'warn');
       try {
-        const result = await api('/api/ai/mails/' + mail.id + '/semantic-consistency', { method: 'POST' });
+        const result = await api('/api/ai/mails/' + mail.id + '/semantic-consistency', {
+          method: 'POST',
+          body: JSON.stringify({ model })
+        });
         renderSemanticConsistencyResult(result);
-        setStatus('mailStatus', 'AI意味確認が完了しました。人間の本文確認は必要です。', result.matchesProject ? 'ok' : 'warn');
+        setStatus('mailStatus', aiModelLabel(result.model || model) + 'でのAI意味確認が完了しました。人間の本文確認は必要です。', result.matchesProject ? 'ok' : 'warn');
       } catch (error) {
         renderSemanticConsistencyResult({ error: error.message });
         setStatus('mailStatus', 'AI意味確認に失敗しました。本文と案件情報を人間が確認してください。', 'error');
@@ -968,6 +1005,7 @@ ${renderNavigationBadgesScript()}
       container.className = 'semantic-consistency-result ' + (matches ? '' : 'warn');
       container.innerHTML =
         '<strong>AI意味確認（助言）</strong>' +
+        '<span class="muted">使用モデル: ' + escapeHtml(aiModelLabel(result.model)) + '</span>' +
         '<span>' + escapeHtml(matches ? '案件との大きな不一致は見つかりませんでした。' : '案件との不一致または別案件情報の混入を確認してください。') + '</span>' +
         '<span>' + escapeHtml(result.reason || '理由未取得') + ' 信頼度 ' + confidence + '%</span>' +
         (suspected ? '<ul>' + suspected + '</ul>' : '') +
@@ -2499,6 +2537,7 @@ ${renderNavigationBadgesScript()}
       event.returnValue = '';
     });
 
+    restoreAiModelSelection();
     loadAll();
   </script>
 </body>
