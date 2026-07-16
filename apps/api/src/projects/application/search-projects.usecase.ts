@@ -39,7 +39,8 @@ export class SearchProjectsUseCase {
     const result = await provider.search({ ...dto, excludeUrls: dto.excludeUrls || [] });
     if (dto.status === 'endingSoon') {
       return {
-        items: sortEndingSoon(result.items, normalizeEndingSoonDays(dto.endingSoonDays)).slice(0, normalizeResultLimit(dto.limit))
+        items: sortEndingSoon(result.items, normalizeEndingSoonDays(dto.endingSoonDays)).slice(0, normalizeResultLimit(dto.limit)),
+        diagnostics: result.diagnostics
       };
     }
     return result;

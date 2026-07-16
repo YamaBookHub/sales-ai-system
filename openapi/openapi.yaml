@@ -258,7 +258,7 @@ paths:
           description: Search job response
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ApiResponse' }
+              schema: { $ref: '#/components/schemas/ProjectSearchJobResponse' }
   /api/projects/search-jobs/{id}:
     get:
       summary: Get a project search job
@@ -269,7 +269,7 @@ paths:
           description: Search job response
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ApiResponse' }
+              schema: { $ref: '#/components/schemas/ProjectSearchJobResponse' }
   /api/projects/search-jobs/{id}/cancel:
     post:
       summary: Cancel a project search job
@@ -280,7 +280,7 @@ paths:
           description: Search job response
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ApiResponse' }
+              schema: { $ref: '#/components/schemas/ProjectSearchJobResponse' }
   /api/leads:
     get:
       summary: List sales leads
@@ -1045,6 +1045,53 @@ components:
         - type: object
           properties:
             source: { $ref: '#/components/schemas/ProjectSource' }
+    ProjectSearchCompletionReason:
+      type: string
+      enum: [desired_reached, source_exhausted, condition_shortage, excluded_existing, cancelled, failed]
+    ProjectSearchDiagnostics:
+      type: object
+      required: [sourceCandidateCount, conditionMatchedCount, excludedCount, scanComplete]
+      properties:
+        sourceCandidateCount: { type: integer, minimum: 0 }
+        conditionMatchedCount: { type: integer, minimum: 0 }
+        excludedCount: { type: integer, minimum: 0 }
+        scanComplete: { type: boolean }
+    ProjectSearchJob:
+      type: object
+      required: [id, status, source, desiredLimit, searchedLimit, items, itemCount, importableCount, message, startedAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [running, completed, cancelled, failed]
+        source: { $ref: '#/components/schemas/ProjectSource' }
+        desiredLimit: { type: integer, minimum: 1 }
+        searchedLimit: { type: integer, minimum: 0 }
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        itemCount: { type: integer, minimum: 0 }
+        importableCount: { type: integer, minimum: 0 }
+        diagnostics: { $ref: '#/components/schemas/ProjectSearchDiagnostics' }
+        completionReason: { $ref: '#/components/schemas/ProjectSearchCompletionReason' }
+        message: { type: string }
+        startedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ProjectSearchJobResponse:
+      type: object
+      required: [data, meta, error]
+      properties:
+        data: { $ref: '#/components/schemas/ProjectSearchJob' }
+        meta:
+          type: object
+          nullable: true
+          additionalProperties: true
+        error:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ErrorResponse'
     CreateLeadRequest:
       type: object
       required: [companyId]

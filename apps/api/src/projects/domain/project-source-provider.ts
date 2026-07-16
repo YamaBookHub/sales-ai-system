@@ -16,6 +16,18 @@ export type ProjectSearchResult = {
   category?: string | null;
 };
 
+export type ProjectSearchDiagnostics = {
+  sourceCandidateCount: number;
+  conditionMatchedCount: number;
+  excludedCount: number;
+  scanComplete: boolean;
+};
+
+export type ProjectSourceSearchResult = {
+  items: ProjectSearchResult[];
+  diagnostics?: ProjectSearchDiagnostics;
+};
+
 export type NormalizedImportedProject = {
   source: ProjectSource;
   platform: {
@@ -65,7 +77,7 @@ export type ProjectSourceProvider = {
   readonly name: string;
   readonly baseUrl: string;
   categories(): Promise<{ items: ProjectSourceCategory[] }>;
-  search(input: SearchCampfireProjectsDto): Promise<{ items: ProjectSearchResult[] }>;
+  search(input: SearchCampfireProjectsDto): Promise<ProjectSourceSearchResult>;
   import(url: string): Promise<NormalizedImportedProject>;
   normalizeUrl(url: string): string;
 };

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import * as cheerio from 'cheerio';
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import { normalizeEndingSoonDays } from '../projects/domain/project-import-policy';
+import { ProjectSearchDiagnostics } from '../projects/domain/project-source-provider';
 import { RawProjectPageSnapshot } from '../projects/infrastructure/parsers/parser.types';
 import { parseCampfireDetail } from '../projects/infrastructure/parsers/campfire/campfire-detail.parser';
 import { parseCampfireListing } from '../projects/infrastructure/parsers/campfire/campfire-listing.parser';
@@ -17,7 +18,7 @@ const PROFILE_LOOKUP_CONCURRENCY = clampNumber(Number(process.env.CAMPFIRE_PROFI
 const SEARCH_CACHE_TTL_MS = clampNumber(Number(process.env.CAMPFIRE_SEARCH_CACHE_TTL_MS || 5 * 60 * 1000), 0, 30 * 60 * 1000);
 const CAMPFIRE_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36';
-const searchCache = new Map<string, { expiresAt: number; items: CampfireSearchResult[] }>();
+const searchCache = new Map<string, { expiresAt: number; items: CampfireSearchResult[]; diagnostics: ProjectSearchDiagnostics }>();
 
 export type ScrapedCampfireProject = {
   projectUrl: string;
@@ -112,11 +113,11 @@ export class CampfireScraperService {
     }
   }
 
-  async search(input: CampfireSearchInput): Promise<{ items: CampfireSearchResult[]; total: number }> {
+  async search(input: CampfireSearchInput): Promise<{ items: CampfireSearchResult[]; total: number; diagnostics: ProjectSearchDiagnostics }> {
     const cacheKey = buildSearchCacheKey(input);
-    const cachedItems = readSearchCache(cacheKey);
-    if (cachedItems) {
-      return { items: cachedItems, total: cachedItems.length };
+    const cached = readSearchCache(cacheKey);
+    if (cached) {
+      return { items: cached.items, total: cached.items.length, diagnostics: cached.diagnostics };
     }
 
     const browser = await chromium.launch({ headless: true });
@@ -127,12 +128,12 @@ export class CampfireScraperService {
       await openPage(page, buildCampfireSearchUrl(input.keyword, input.category));
       const resultLimit = normalizeSearchLimit(input.limit);
       const excludedUrls = buildExcludedUrlSet(input.excludeUrls);
-      const items = hasProfileProjectFilter(input)
+      const collection = hasProfileProjectFilter(input)
         ? await collectSearchResultsMatchingProfileRange(page, input, resultLimit, excludedUrls)
         : await collectSearchResults(page, resultLimit, excludedUrls, input);
-      const sortedItems = sortSearchResults(items, input).slice(0, resultLimit);
-      writeSearchCache(cacheKey, sortedItems);
-      return { items: sortedItems, total: sortedItems.length };
+      const sortedItems = sortSearchResults(collection.items, input).slice(0, resultLimit);
+      writeSearchCache(cacheKey, sortedItems, collection.diagnostics);
+      return { items: sortedItems, total: sortedItems.length, diagnostics: collection.diagnostics };
     } finally {
       await browser.close();
     }
@@ -227,51 +228,78 @@ function extractSearchResults(html: string): CampfireSearchResult[] {
   return parsed.value.map(mapCampfireListingItem);
 }
 
+type SearchCollectionTracker = {
+  sourceUrls: Set<string>;
+  conditionMatchedUrls: Set<string>;
+  excludedUrls: Set<string>;
+};
+
+function createSearchCollectionTracker(): SearchCollectionTracker {
+  return { sourceUrls: new Set(), conditionMatchedUrls: new Set(), excludedUrls: new Set() };
+}
+
+function searchCollectionDiagnostics(tracker: SearchCollectionTracker, scanComplete: boolean): ProjectSearchDiagnostics {
+  return {
+    sourceCandidateCount: tracker.sourceUrls.size,
+    conditionMatchedCount: tracker.conditionMatchedUrls.size,
+    excludedCount: tracker.excludedUrls.size,
+    scanComplete
+  };
+}
+
 async function collectSearchResults(page: Page, limit: number, excludedUrls = new Set<string>(), input: CampfireSearchInput = {}) {
   let items: CampfireSearchResult[] = [];
   let unchangedCount = 0;
+  let scanComplete = false;
+  const tracker = createSearchCollectionTracker();
 
   for (let attempt = 0; attempt < 8 && items.length < limit; attempt += 1) {
     const beforeCount = items.length;
-    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input);
+    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input, tracker);
 
     if (items.length >= limit) break;
 
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
     await page.waitForTimeout(500);
-    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input);
+    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input, tracker);
 
     if (items.length >= limit) break;
 
     const clickedMore = await clickNextSearchResults(page);
     if (clickedMore) {
       await page.waitForTimeout(700);
-      items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input);
+      items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input, tracker);
     }
 
     unchangedCount = items.length === beforeCount ? unchangedCount + 1 : 0;
-    if (!clickedMore && unchangedCount >= 2) break;
+    if (!clickedMore && unchangedCount >= 2) {
+      scanComplete = true;
+      break;
+    }
   }
 
-  return items.slice(0, limit);
+  if (items.length < limit) scanComplete = true;
+  return { items: items.slice(0, limit), diagnostics: searchCollectionDiagnostics(tracker, scanComplete) };
 }
 
 async function collectSearchResultsMatchingProfileRange(page: Page, input: CampfireSearchInput, limit: number, excludedUrls = new Set<string>()) {
   let items: CampfireSearchResult[] = [];
   let matched: CampfireSearchResult[] = [];
   let unchangedCount = 0;
+  let scanComplete = false;
+  const tracker = createSearchCollectionTracker();
   const checkedUrls = new Set<string>();
   const maxCandidates = Math.min(Math.max(limit * 10, 100), 300);
   for (let attempt = 0; attempt < 20 && matched.length < limit && items.length < maxCandidates; attempt += 1) {
     const beforeCount = items.length;
-    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input);
+    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input, tracker);
     matched = await collectProfileMatchesFromCandidates(page.context(), items, input, checkedUrls, matched, limit);
 
     if (matched.length >= limit || items.length >= maxCandidates) break;
 
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
     await page.waitForTimeout(350);
-    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input);
+    items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input, tracker);
     matched = await collectProfileMatchesFromCandidates(page.context(), items, input, checkedUrls, matched, limit);
 
     if (matched.length >= limit || items.length >= maxCandidates) break;
@@ -279,15 +307,27 @@ async function collectSearchResultsMatchingProfileRange(page: Page, input: Campf
     const clickedMore = await clickNextSearchResults(page);
     if (clickedMore) {
       await page.waitForTimeout(700);
-      items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input);
+      items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input, tracker);
       matched = await collectProfileMatchesFromCandidates(page.context(), items, input, checkedUrls, matched, limit);
     }
 
     unchangedCount = items.length === beforeCount ? unchangedCount + 1 : 0;
-    if (!clickedMore && unchangedCount >= 2) break;
+    if (!clickedMore && unchangedCount >= 2) {
+      scanComplete = true;
+      break;
+    }
   }
 
-  return matched;
+  if (matched.length < limit) scanComplete = true;
+  return {
+    items: matched,
+    diagnostics: {
+      sourceCandidateCount: tracker.sourceUrls.size,
+      conditionMatchedCount: matched.length,
+      excludedCount: 0,
+      scanComplete
+    }
+  };
 }
 
 async function collectProfileMatchesFromCandidates(
@@ -336,8 +376,16 @@ function mergeSearchResults(
   current: CampfireSearchResult[],
   next: CampfireSearchResult[],
   excludedUrls: Set<string>,
-  input: CampfireSearchInput = {}
+  input: CampfireSearchInput = {},
+  tracker?: SearchCollectionTracker
 ) {
+  next.forEach((item) => {
+    const key = normalizeUrlForUnique(item.url);
+    tracker?.sourceUrls.add(key);
+    if (!matchesSearchStatus(item, input)) return;
+    tracker?.conditionMatchedUrls.add(key);
+    if (excludedUrls.has(key)) tracker?.excludedUrls.add(key);
+  });
   return uniqueBy(
     [
       ...current,
@@ -431,14 +479,18 @@ function readSearchCache(key: string) {
     searchCache.delete(key);
     return null;
   }
-  return cached.items.map((item) => ({ ...item }));
+  return {
+    items: cached.items.map((item) => ({ ...item })),
+    diagnostics: { ...cached.diagnostics }
+  };
 }
 
-function writeSearchCache(key: string, items: CampfireSearchResult[]) {
+function writeSearchCache(key: string, items: CampfireSearchResult[], diagnostics: ProjectSearchDiagnostics) {
   if (!SEARCH_CACHE_TTL_MS) return;
   searchCache.set(key, {
     expiresAt: Date.now() + SEARCH_CACHE_TTL_MS,
-    items: items.map((item) => ({ ...item }))
+    items: items.map((item) => ({ ...item })),
+    diagnostics: { ...diagnostics }
   });
   pruneSearchCache();
 }

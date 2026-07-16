@@ -20,5 +20,7 @@ describe('URL search static HTML', () => {
     expect(urlSearchHtml).toContain('onchange="syncCampfireSearchEndingSoonFilter()"');
     expect(urlSearchHtml).toContain('onchange="syncCampfireDisplayEndingSoonFilter(); renderCampfireCandidates()"');
     expect(urlSearchHtml).toContain('募集中のみでは終了日数の条件は使いません');
+    expect(urlSearchHtml).toContain("setStatus('campfireSearchStatusText', job.message");
+    expect(urlSearchHtml).toContain(": job.message;");
   });
 });

@@ -6,7 +6,12 @@ import {
   normalizeResultLimit,
   progressiveSearchLimits
 } from '../domain/project-import-policy';
-import { ProjectSourceProvider } from '../domain/project-source-provider';
+import { ProjectSearchDiagnostics, ProjectSourceProvider } from '../domain/project-source-provider';
+import {
+  decideProjectSearchCompletion,
+  ProjectSearchCompletionReason,
+  projectSearchCompletionMessage
+} from '../domain/project-search-completion';
 import { SearchCampfireProjectsDto } from '../projects.dto';
 import { PrismaProjectImportRepository } from '../infrastructure/prisma-project-import.repository';
 
@@ -18,6 +23,8 @@ type SearchJob = {
   searchedLimit: number;
   items: Awaited<ReturnType<ProjectSourceProvider['search']>>['items'];
   importableCount: number;
+  diagnostics?: ProjectSearchDiagnostics;
+  completionReason?: ProjectSearchCompletionReason;
   message: string;
   startedAt: string;
   updatedAt: string;
@@ -72,7 +79,13 @@ export class ProjectSearchJobManager {
     if (job.status === 'running') {
       job.cancelled = true;
       job.status = 'cancelled';
-      job.message = '検索を停止しました';
+      job.completionReason = 'cancelled';
+      job.message = projectSearchCompletionMessage({
+        reason: 'cancelled',
+        desiredLimit: job.desiredLimit,
+        itemCount: job.items.length,
+        importableCount: job.importableCount
+      });
       job.updatedAt = new Date().toISOString();
     }
     return this.publicSearchJob(job);
@@ -93,6 +106,7 @@ export class ProjectSearchJobManager {
         job.message = `候補を取得中です（最大${limit}件まで確認中）`;
         job.updatedAt = new Date().toISOString();
         const result = await searchWithProvider(provider, { ...dto, limit, excludeUrls });
+        job.diagnostics = result.diagnostics;
         job.items = mergeSearchItems(job.items, result.items);
         job.importableCount = countImportableSearchItems(job.items, existingUrls);
         job.message = `候補 ${job.items.length}件 / 取込可能 ${job.importableCount}件`;
@@ -100,13 +114,33 @@ export class ProjectSearchJobManager {
         if (job.importableCount >= job.desiredLimit) break;
       }
       if (!job.cancelled) {
-        job.status = 'completed';
-        job.message = `検索完了: 候補 ${job.items.length}件 / 取込可能 ${job.importableCount}件`;
+        const completionReason = decideProjectSearchCompletion({
+          desiredLimit: job.desiredLimit,
+          importableCount: job.importableCount,
+          dto,
+          diagnostics: job.diagnostics
+        });
+        job.completionReason = completionReason;
+        job.status = completionReason === 'failed' ? 'failed' : 'completed';
+        job.message = projectSearchCompletionMessage({
+          reason: completionReason,
+          desiredLimit: job.desiredLimit,
+          itemCount: job.items.length,
+          importableCount: job.importableCount
+        });
         job.updatedAt = new Date().toISOString();
       }
     } catch (error) {
+      if (job.cancelled) return;
       job.status = 'failed';
-      job.message = error instanceof Error ? error.message : '検索に失敗しました';
+      job.completionReason = 'failed';
+      job.message = projectSearchCompletionMessage({
+        reason: 'failed',
+        desiredLimit: job.desiredLimit,
+        itemCount: job.items.length,
+        importableCount: job.importableCount,
+        errorMessage: error instanceof Error ? error.message : undefined
+      });
       job.updatedAt = new Date().toISOString();
     }
   }
@@ -121,6 +155,8 @@ export class ProjectSearchJobManager {
       items: job.items,
       itemCount: job.items.length,
       importableCount: job.importableCount,
+      diagnostics: job.diagnostics,
+      completionReason: job.completionReason,
       message: job.message,
       startedAt: job.startedAt,
       updatedAt: job.updatedAt

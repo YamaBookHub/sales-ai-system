@@ -550,7 +550,7 @@ ${renderNavigationBadgesScript()}
         stopCampfireSearchTimer();
         stopCampfireSearchPoll();
         document.getElementById('stopSearchButton').disabled = true;
-        setStatus('campfireSearchStatusText', (job.status === 'failed' ? '検索失敗' : job.status === 'cancelled' ? '検索停止' : '検索完了') + ' / ' + currentSearchElapsedText(), job.status === 'failed' ? 'error' : 'ok');
+        setStatus('campfireSearchStatusText', job.message + ' / ' + currentSearchElapsedText(), job.status === 'failed' ? 'error' : 'ok');
       } catch (error) {
         stopCampfireSearchTimer();
         stopCampfireSearchPoll();
@@ -566,10 +566,12 @@ ${renderNavigationBadgesScript()}
       const importableCount = state.campfireCandidates.filter((item) => isCandidateImportable(item)).length;
       const runningText = job.status === 'running' ? '取得中' : job.status === 'cancelled' ? '停止済み' : job.status === 'failed' ? '失敗' : '完了';
       const elapsed = currentSearchElapsedText();
-      const message = runningText + ' / 候補 ' + state.campfireCandidates.length + '件 / 取込可能 ' + importableCount + '件' + (job.searchedLimit ? ' / 確認中 ' + job.searchedLimit + '件枠' : '');
+      const message = job.status === 'running'
+        ? runningText + ' / 候補 ' + state.campfireCandidates.length + '件 / 取込可能 ' + importableCount + '件' + (job.searchedLimit ? ' / 確認中 ' + job.searchedLimit + '件枠' : '')
+        : job.message;
       document.getElementById('campfireCandidateCount').textContent = message;
       if (job.status !== 'running') {
-        setStatus('campfireSearchStatusText', (job.status === 'completed' ? '検索完了' : runningText) + (elapsed ? ' / ' + elapsed : ''), job.status === 'failed' ? 'error' : 'ok');
+        setStatus('campfireSearchStatusText', job.message + (elapsed ? ' / ' + elapsed : ''), job.status === 'failed' ? 'error' : 'ok');
       }
     }
 

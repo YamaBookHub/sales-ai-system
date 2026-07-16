@@ -10,6 +10,12 @@ describe('SearchProjectsUseCase', () => {
     const campfireProvider = {
       source: 'campfire',
       search: jest.fn().mockResolvedValue({
+        diagnostics: {
+          sourceCandidateCount: 4,
+          conditionMatchedCount: 2,
+          excludedCount: 0,
+          scanComplete: true
+        },
         items: [
           { url: 'https://camp-fire.jp/projects/1', daysLeft: 20, isActive: true },
           { url: 'https://camp-fire.jp/projects/2', daysLeft: 3, isActive: true },
@@ -46,6 +52,12 @@ describe('SearchProjectsUseCase', () => {
       'https://camp-fire.jp/projects/2',
       'https://camp-fire.jp/projects/4'
     ]);
+    expect(result.diagnostics).toEqual({
+      sourceCandidateCount: 4,
+      conditionMatchedCount: 2,
+      excludedCount: 0,
+      scanComplete: true
+    });
   });
 
   it('starts search job with selected provider and usecase search callback', () => {

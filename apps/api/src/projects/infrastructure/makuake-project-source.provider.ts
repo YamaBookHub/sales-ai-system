@@ -25,31 +25,39 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
     const browser = await chromium.launch({ headless: true });
     try {
       const context = await browser.newContext({ userAgent: MAKUAKE_USER_AGENT });
-      const rawItems = (
-        await runWithConcurrency(buildMakuakeSearchUrls(input), 3, async (url) => {
-          const page = await context.newPage();
-          try {
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-            await page.waitForTimeout(900);
-            return await collectSearchResultsFromPage(page);
-          } catch {
-            return [];
-          } finally {
-            await page.close().catch(() => undefined);
-          }
-        })
-      ).flat();
+      const pageResults = await runWithConcurrency(buildMakuakeSearchUrls(input), 3, async (url) => {
+        const page = await context.newPage();
+        try {
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+          await page.waitForTimeout(900);
+          return await collectSearchResultsFromPage(page);
+        } catch {
+          return { items: [], scanComplete: false };
+        } finally {
+          await page.close().catch(() => undefined);
+        }
+      });
+      const rawItems = pageResults.flatMap((result) => result.items);
       const candidatePoolSize = searchCandidatePoolSize(input);
-      const candidates = sortSearchResults(uniqueBy(rawItems, (item) => normalizeUrlForUnique(item.url)), input)
-        .filter((item) => matchesKeyword(item, input.keyword))
-        .slice(0, candidatePoolSize);
+      const sourceCandidates = uniqueBy(rawItems, (item) => normalizeUrlForUnique(item.url));
+      const keywordMatches = sourceCandidates.filter((item) => matchesKeyword(item, input.keyword));
+      const candidates = sortSearchResults(keywordMatches, input).slice(0, candidatePoolSize);
       const enrichedItems = await enrichSearchResults(context, candidates);
       const excluded = new Set((input.excludeUrls || []).map((url) => normalizeUrlForUnique(url)));
-      const items = sortSearchResults(enrichedItems, input)
+      const conditionMatches = sortSearchResults(enrichedItems, input).filter((item) => matchesNumericFilters(item, input));
+      const excludedCount = conditionMatches.filter((item) => excluded.has(normalizeUrlForUnique(item.url))).length;
+      const items = conditionMatches
         .filter((item) => !excluded.has(normalizeUrlForUnique(item.url)))
-        .filter((item) => matchesNumericFilters(item, input))
         .slice(0, normalizeLimit(input.limit));
-      return { items };
+      return {
+        items,
+        diagnostics: {
+          sourceCandidateCount: sourceCandidates.length,
+          conditionMatchedCount: conditionMatches.length,
+          excludedCount,
+          scanComplete: pageResults.every((result) => result.scanComplete) && candidates.length < candidatePoolSize
+        }
+      };
     } finally {
       await browser.close();
     }
@@ -177,16 +185,22 @@ function buildMakuakeSearchUrls(input: SearchCampfireProjectsDto) {
 
 async function collectSearchResultsFromPage(page: Page) {
   const items: MakuakeSearchResult[] = [];
+  let unchangedCount = 0;
   for (let index = 0; index < 4; index += 1) {
     try {
+      const beforeCount = items.length;
       items.push(...extractSearchResults(await page.content()));
+      const uniqueItems = uniqueBy(items, (item) => normalizeUrlForUnique(item.url));
+      items.splice(0, items.length, ...uniqueItems);
+      unchangedCount = items.length === beforeCount ? unchangedCount + 1 : 0;
+      if (unchangedCount >= 2) return { items, scanComplete: true };
       await page.evaluate(() => window.scrollBy(0, Math.round(window.innerHeight * 0.85)));
       await page.waitForTimeout(350);
     } catch {
-      break;
+      return { items: uniqueBy(items, (item) => normalizeUrlForUnique(item.url)), scanComplete: false };
     }
   }
-  return uniqueBy(items, (item) => normalizeUrlForUnique(item.url));
+  return { items: uniqueBy(items, (item) => normalizeUrlForUnique(item.url)), scanComplete: true };
 }
 
 async function enrichSearchResults(context: BrowserContext, items: MakuakeSearchResult[]) {
