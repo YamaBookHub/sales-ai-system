@@ -5,9 +5,14 @@ describe('PrismaMailWorkflowRepository', () => {
   it('claims queued mail for sending atomically', async () => {
     const tx = {
       outreachEmail: {
+        findUnique: jest.fn().mockResolvedValue({
+          companyId: 'company_1', contactId: null, toEmail: 'to@example.com',
+          company: { isBlocked: false }, contact: null
+        }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'mail_1', status: 'sending' })
       },
+      contactPerson: { findFirst: jest.fn().mockResolvedValue(null) },
       emailEvent: {
         create: jest.fn()
       }
@@ -46,9 +51,14 @@ describe('PrismaMailWorkflowRepository', () => {
   it('rejects claim when mail is not queued anymore', async () => {
     const tx = {
       outreachEmail: {
+        findUnique: jest.fn().mockResolvedValue({
+          companyId: 'company_1', contactId: null, toEmail: 'to@example.com',
+          company: { isBlocked: false }, contact: null
+        }),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         findUniqueOrThrow: jest.fn()
       },
+      contactPerson: { findFirst: jest.fn().mockResolvedValue(null) },
       emailEvent: {
         create: jest.fn()
       }
@@ -61,5 +71,35 @@ describe('PrismaMailWorkflowRepository', () => {
     await expect(repository.claimForSending('mail_1', 'key_1')).rejects.toThrow(ConflictException);
     expect(tx.outreachEmail.findUniqueOrThrow).not.toHaveBeenCalled();
     expect(tx.emailEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a legacy email when its matching address is unsubscribed', async () => {
+    const tx = {
+      outreachEmail: {
+        findUnique: jest.fn().mockResolvedValue({
+          companyId: 'company_1', contactId: null, toEmail: 'to@example.com',
+          company: { isBlocked: false }, contact: null
+        }),
+        update: jest.fn()
+      },
+      contactPerson: {
+        findFirst: jest.fn().mockResolvedValue({ deletedAt: null, isUnsubscribed: true })
+      },
+      salesLead: { update: jest.fn() },
+      emailEvent: { create: jest.fn() }
+    };
+    const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
+    const repository = new PrismaMailWorkflowRepository(prisma as any);
+
+    await expect(repository.transitionIfDeliveryAllowed('mail_1', 'in_review', 'reviewed')).rejects.toThrow(ConflictException);
+    expect(tx.outreachEmail.update).not.toHaveBeenCalled();
+    expect(tx.contactPerson.findFirst).toHaveBeenCalledWith({
+      where: {
+        companyId: 'company_1',
+        email: { equals: 'to@example.com', mode: 'insensitive' },
+        OR: [{ deletedAt: { not: null } }, { isUnsubscribed: true }]
+      },
+      select: { deletedAt: true, isUnsubscribed: true }
+    });
   });
 });

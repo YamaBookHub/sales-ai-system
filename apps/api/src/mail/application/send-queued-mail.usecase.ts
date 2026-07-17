@@ -22,6 +22,8 @@ export class SendQueuedMailUseCase {
     const claimedEmail = await this.mails.claimForSending(id, idempotencyKey);
 
     try {
+      // A contact can be unsubscribed after queueing; check once more immediately before the provider call.
+      await this.mails.assertDeliveryAllowed(id);
       const result = await this.sender.send(buildMailSendRequest(claimedEmail, idempotencyKey));
       return this.mails.markSentAfterSend(id, result, idempotencyKey);
     } catch (error) {

@@ -8,6 +8,6 @@ export class ApproveMailUseCase {
 
   async execute(id: string) {
     assertChecklistComplete(await this.mails.checklistComplete(id));
-    return this.mails.transition(id, 'approved', 'approved', { approvedAt: new Date() });
+    return this.mails.transitionIfDeliveryAllowed(id, 'approved', 'approved', { approvedAt: new Date() });
   }
 }

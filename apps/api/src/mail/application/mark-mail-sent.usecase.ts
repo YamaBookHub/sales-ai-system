@@ -14,6 +14,6 @@ export class MarkMailSentUseCase {
     const payload = email.status === 'sending'
       ? { manual: true, recoveredFrom: 'sending' }
       : { manual: true };
-    return this.mails.transition(id, 'sent', 'sent', { sentAt }, payload);
+    return this.mails.transitionIfDeliveryAllowed(id, 'sent', 'sent', { sentAt }, payload);
   }
 }

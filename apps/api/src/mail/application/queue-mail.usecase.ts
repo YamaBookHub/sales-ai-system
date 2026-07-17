@@ -10,6 +10,6 @@ export class QueueMailUseCase {
     const email = await this.mails.get(id);
     const checklistComplete = await this.mails.checklistComplete(id);
     assertCanQueue(email.status, checklistComplete);
-    return this.mails.transition(id, 'queued', 'queued');
+    return this.mails.transitionIfDeliveryAllowed(id, 'queued', 'queued');
   }
 }

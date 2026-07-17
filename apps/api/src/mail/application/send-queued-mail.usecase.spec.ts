@@ -16,6 +16,7 @@ describe('SendQueuedMailUseCase', () => {
       get: jest.fn().mockResolvedValue(email),
       checklistComplete: jest.fn().mockResolvedValue(true),
       claimForSending: jest.fn().mockResolvedValue({ ...email, status: 'sending' }),
+      assertDeliveryAllowed: jest.fn().mockResolvedValue(undefined),
       markSentAfterSend: jest.fn().mockResolvedValue({ ...email, status: 'sent' }),
       markFailedAfterSend: jest.fn().mockResolvedValue({ ...email, status: 'failed' })
     };
@@ -89,6 +90,16 @@ describe('SendQueuedMailUseCase', () => {
     await expect(useCase.execute(email.id)).rejects.toThrow(ConflictException);
     expect(sender.send).not.toHaveBeenCalled();
     expect(mails.markFailedAfterSend).not.toHaveBeenCalled();
+  });
+
+  it('does not call sender when the contact stops delivery after the claim', async () => {
+    const { mails, sender } = createDeps();
+    mails.assertDeliveryAllowed.mockRejectedValue(new ConflictException('unsubscribed'));
+    const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
+
+    await expect(useCase.execute(email.id)).rejects.toThrow(ConflictException);
+    expect(sender.send).not.toHaveBeenCalled();
+    expect(mails.markFailedAfterSend).toHaveBeenCalledWith(email.id, expect.any(ConflictException), 'mail:mail_1:retry:0');
   });
 
   it('does not claim a queued non-email channel when the provider rejects it', async () => {

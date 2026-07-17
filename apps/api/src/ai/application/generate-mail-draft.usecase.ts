@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { PrismaService } from '../../prisma/prisma.service';
 import { GenerateMailDto } from '../ai.dto';
 import { buildLocalMailDraft, buildLocalMailInput } from '../domain/local-mail-draft';
+import { resolveMailRecipient } from '../../mail/infrastructure/contact-recipient.resolver';
 
 @Injectable()
 export class GenerateMailDraftUseCase {
@@ -35,10 +36,13 @@ export class GenerateMailDraftUseCase {
     const draft = buildLocalMailDraft(aiInput);
 
     const result = await this.prisma.$transaction(async (tx) => {
+      const recipient = await resolveMailRecipient(tx, lead.companyId);
       const email = await tx.outreachEmail.create({
         data: {
           leadId: lead.id,
           companyId: lead.companyId,
+          contactId: recipient?.id,
+          toEmail: recipient?.email,
           templateKey: dto.templateKey,
           subject: draft.subject,
           body: draft.body,

@@ -15,6 +15,9 @@ describe('MailService draft creation', () => {
       },
       salesLead: {
         update: jest.fn().mockResolvedValue({ id: lead.id, status: 'drafted' })
+      },
+      contactPerson: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'contact_1', email: 'primary@example.com' })
       }
     };
     const prisma = {
@@ -60,6 +63,8 @@ describe('MailService draft creation', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           body: '手動で作成した本文',
+          contactId: 'contact_1',
+          toEmail: 'primary@example.com',
           status: 'draft'
         })
       })

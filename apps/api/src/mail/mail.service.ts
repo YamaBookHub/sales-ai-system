@@ -12,6 +12,7 @@ import { RetryMailUseCase } from './application/retry-mail.usecase';
 import { SendQueuedMailUseCase } from './application/send-queued-mail.usecase';
 import { GenerateMailDraftUseCase } from '../ai/application/generate-mail-draft.usecase';
 import { DEFAULT_CHECKLIST_ITEMS } from './mail-checklist.defaults';
+import { resolveMailRecipient } from './infrastructure/contact-recipient.resolver';
 import {
   CreateMailDraftDto,
   CreateMailReplyDto,
@@ -121,10 +122,13 @@ export class MailService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      const recipient = await resolveMailRecipient(tx, lead.companyId);
       const email = await tx.outreachEmail.create({
         data: {
           leadId: lead.id,
           companyId: lead.companyId,
+          contactId: recipient?.id,
+          toEmail: recipient?.email,
           templateKey: dto.templateKey,
           subject: `${projectPlatformLabel(lead.project)}でのプロジェクトを拝見しご連絡いたしました`,
           body: manualInstruction,
@@ -208,6 +212,16 @@ export class MailService {
           }
         }
       });
+
+      if (classification.category === 'unsubscribe' && email.contactId) {
+        await tx.contactPerson.update({
+          where: { id: email.contactId },
+          data: {
+            isUnsubscribed: true,
+            unsubscribedAt: receivedAt
+          }
+        });
+      }
 
       if (email.leadId) {
         await tx.salesLead.update({

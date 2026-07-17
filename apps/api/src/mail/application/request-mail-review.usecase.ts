@@ -6,6 +6,6 @@ export class RequestMailReviewUseCase {
   constructor(private readonly mails: PrismaMailWorkflowRepository) {}
 
   execute(id: string) {
-    return this.mails.transition(id, 'in_review', 'reviewed');
+    return this.mails.transitionIfDeliveryAllowed(id, 'in_review', 'reviewed');
   }
 }

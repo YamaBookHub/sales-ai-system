@@ -30,6 +30,9 @@ describe('GenerateMailDraftUseCase', () => {
       },
       aiGeneration: {
         create: jest.fn().mockResolvedValue({ id: 'generation_1' })
+      },
+      contactPerson: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'contact_1', email: 'primary@example.com' })
       }
     };
     const prisma = {
@@ -64,6 +67,9 @@ describe('GenerateMailDraftUseCase', () => {
         })
       })
     );
+    expect(tx.outreachEmail.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ contactId: 'contact_1', toEmail: 'primary@example.com' })
+    }));
     expect(tx.salesLead.update).toHaveBeenCalledWith({
       where: { id: lead.id },
       data: { status: 'drafted' }
