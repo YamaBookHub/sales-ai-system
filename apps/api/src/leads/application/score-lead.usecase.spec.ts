@@ -5,6 +5,8 @@ describe('ScoreLeadUseCase', () => {
     const repository = {
       getForScoring: jest.fn().mockResolvedValue({
         id: 'lead_1',
+        nextActionAt: new Date('2026-07-18T00:00:00.000Z'),
+        nextFollowUpAt: new Date('2026-07-21T00:00:00.000Z'),
         project: {
           amount: 3500000,
           supporterCount: 240,
@@ -26,9 +28,7 @@ describe('ScoreLeadUseCase', () => {
         urgencyScore: 10,
         totalScore: 65
       }),
-      expect.objectContaining({
-        priority: 'medium'
-      })
+      'medium'
     );
   });
 });

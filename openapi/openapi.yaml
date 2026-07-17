@@ -1119,32 +1119,43 @@ components:
       properties:
         status: { $ref: '#/components/schemas/LeadStatus' }
         priority: { $ref: '#/components/schemas/LeadPriority' }
-        ownerMemo: { type: string }
-        nextActionAt: { type: string, format: date-time }
-        contactEmail: { type: string }
-        contactFormUrl: { type: string }
-        siteMessageUrl: { type: string }
-        contactMemo: { type: string }
-        sendMethod: { type: string }
-        sentAt: { type: string, format: date-time }
-        nextFollowUpAt: { type: string, format: date-time }
-        brandWebsiteUrl: { type: string }
-        instagramUrl: { type: string }
-        tiktokUrl: { type: string }
-        xUrl: { type: string }
-        brandAnalysisMemo: { type: string }
-        snsAnalysisMemo: { type: string }
-        companyName: { type: string }
-        projectTitle: { type: string }
-        projectUrl: { type: string }
+        ownerMemo: { type: string, nullable: true }
+        nextActionAt: { type: string, format: date-time, nullable: true }
+        contactEmail: { type: string, format: email, nullable: true }
+        contactFormUrl: { type: string, format: uri, nullable: true }
+        siteMessageUrl: { type: string, format: uri, nullable: true }
+        contactMemo: { type: string, nullable: true }
+        sendMethod: { type: string, nullable: true }
+        sentAt: { type: string, format: date-time, nullable: true }
+        nextFollowUpAt: { type: string, format: date-time, nullable: true }
+        brandWebsiteUrl: { type: string, format: uri, nullable: true }
+        instagramUrl: { type: string, format: uri, nullable: true }
+        tiktokUrl: { type: string, format: uri, nullable: true }
+        xUrl: { type: string, format: uri, nullable: true }
+        brandAnalysisMemo: { type: string, nullable: true }
+        snsAnalysisMemo: { type: string, nullable: true }
+        leadReason: { type: string, nullable: true }
+        companyName: { type: string, minLength: 1 }
+        companyWebsiteUrl: { type: string, format: uri, nullable: true }
+        companyInquiryUrl: { type: string, format: uri, nullable: true }
+        companyIndustry: { type: string, nullable: true }
+        companyLocation: { type: string, nullable: true }
+        companySourceTotalAmount: { type: integer, minimum: 0, nullable: true }
+        companySourceProjectCount: { type: integer, minimum: 0, nullable: true }
+        companySourceSupporterCount: { type: integer, minimum: 0, nullable: true }
+        companyMemo: { type: string, nullable: true }
+        projectTitle: { type: string, minLength: 1 }
+        projectUrl: { type: string, format: uri }
         projectSource: { $ref: '#/components/schemas/PlatformType' }
         projectStatus: { $ref: '#/components/schemas/ProjectStatus' }
-        projectAmount: { type: integer }
-        projectSupporterCount: { type: integer }
-        projectTargetAmount: { type: integer }
-        projectEndDate: { type: string, format: date-time }
-        projectCategory: { type: string }
-        projectDescription: { type: string }
+        projectAmount: { type: integer, minimum: 0 }
+        projectSupporterCount: { type: integer, minimum: 0 }
+        projectTargetAmount: { type: integer, minimum: 0, nullable: true }
+        projectStartDate: { type: string, format: date-time, nullable: true }
+        projectEndDate: { type: string, format: date-time, nullable: true }
+        projectCategory: { type: string, nullable: true }
+        projectLocation: { type: string, nullable: true }
+        projectDescription: { type: string, nullable: true }
     CreateTaskRequest:
       type: object
       required: [title]

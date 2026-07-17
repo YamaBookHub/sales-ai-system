@@ -382,6 +382,7 @@ Recommended next action:
 ### LL-003 詳細編集契約
 
 - Priority: P0
+- Status: complete
 - Model: Terra / T3 / high
 - Depends on: LR-004
 - 目的: 選択案件の会社・案件・営業・分析・連絡先項目を、手入力または選択肢で更新できる契約を完成する。

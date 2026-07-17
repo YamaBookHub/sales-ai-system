@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { applyLeadPolicy } from '../domain/lead-policy';
+import { priorityForScore } from '../domain/lead-policy';
 import { calculateLeadScore } from '../domain/lead-score';
 import { PrismaLeadRepository } from '../infrastructure/prisma-lead.repository';
 
@@ -16,6 +16,6 @@ export class ScoreLeadUseCase {
       endDate: lead.project?.endDate
     });
 
-    return this.leads.recordScore(id, leadScore, applyLeadPolicy({ score: leadScore.totalScore }));
+    return this.leads.recordScore(id, leadScore, priorityForScore(leadScore.totalScore));
   }
 }

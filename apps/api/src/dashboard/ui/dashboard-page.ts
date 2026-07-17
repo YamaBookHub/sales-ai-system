@@ -1631,6 +1631,18 @@ ${renderNavigationBadgesScript()}
       return items.length ? label + '\\n' + items.map((item) => '・' + item).join('\\n') : '';
     }
 
+    function renderLeadMemoSuggestions(memo) {
+      const suggestions = [
+        memo.contactMemo ? '<strong>連絡先メモ案</strong><br>' + escapeHtml(memo.contactMemo) : '',
+        memo.brandAnalysisMemo ? '<strong>ブランド分析案</strong><br>' + escapeHtml(memo.brandAnalysisMemo) : '',
+        memo.snsAnalysisMemo ? '<strong>SNS分析案</strong><br>' + escapeHtml(memo.snsAnalysisMemo) : ''
+      ].filter(Boolean);
+      if (!suggestions.length) return '';
+      return '<details class="row"><summary>AI分析からの提案（未保存）</summary><div class="detail-text">' +
+        suggestions.join('<hr>') +
+      '</div></details>';
+    }
+
     function leadProjectSource(lead) {
       const project = lead?.project || {};
       return [project.title, project.description, project.category].filter(Boolean).join(' ');
@@ -1655,10 +1667,25 @@ ${renderNavigationBadgesScript()}
     function renderLeadManagementForm(lead) {
       const memo = suggestedLeadMemos(lead);
       const project = lead.project || {};
+      const company = lead.company || {};
       return '<div class="row">' +
           '<label>選択案件の詳細</label>' +
           '<div class="grid-2">' +
-            formInput('leadCompanyName', '企業名', lead.company?.name || '') +
+            formInput('leadCompanyName', '企業名', company.name || '') +
+            formInput('leadCompanyWebsiteUrl', '会社HP', company.websiteUrl) +
+            formInput('leadCompanyInquiryUrl', '会社問い合わせURL', company.inquiryUrl) +
+            formInput('leadCompanyIndustry', '業種', company.industry) +
+            formInput('leadCompanyLocation', '会社所在地', company.location) +
+            formInput('leadCompanySourceTotalAmount', '実行者累計金額', company.sourceTotalAmount ?? '', '', 'number') +
+            formInput('leadCompanySourceProjectCount', '実行者PJ数', company.sourceProjectCount ?? '', '', 'number') +
+            formInput('leadCompanySourceSupporterCount', '実行者累計支援者', company.sourceSupporterCount ?? '', '', 'number') +
+          '</div>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label for="leadCompanyMemo">会社メモ</label>' +
+          '<textarea id="leadCompanyMemo" style="min-height:80px">' + escapeHtml(company.memo || '') + '</textarea>' +
+        '</div>' +
+        (lead.project ? '<div class="row"><label>案件情報</label><div class="grid-2">' +
             formSelect('leadProjectSource', '取得元', projectPlatformType(project), [
               ['campfire', 'CAMPFIRE'],
               ['makuake', 'Makuake'],
@@ -1677,14 +1704,16 @@ ${renderNavigationBadgesScript()}
             ]) +
             formInput('leadProjectAmount', '支援額', project.amount || 0, '', 'number') +
             formInput('leadProjectSupporterCount', '支援者数', project.supporterCount || 0, '', 'number') +
-            formInput('leadProjectTargetAmount', '目標金額', project.targetAmount || '', '', 'number') +
+            formInput('leadProjectTargetAmount', '目標金額', project.targetAmount ?? '', '', 'number') +
+            formInput('leadProjectStartDate', '開始日時', toDateTimeLocal(project.startDate), '', 'datetime-local') +
             formInput('leadProjectEndDate', '終了日時', toDateTimeLocal(project.endDate), '', 'datetime-local') +
+            formInput('leadProjectLocation', '案件地域', project.location) +
           '</div>' +
         '</div>' +
         '<div class="row">' +
           '<label for="leadProjectDescription">プロジェクト説明</label>' +
           '<textarea id="leadProjectDescription" style="min-height:100px">' + escapeHtml(project.description || '') + '</textarea>' +
-        '</div>' +
+        '</div>' : '<div class="notice">この営業対象には案件が紐づいていないため、会社情報と営業情報だけ編集できます。</div>') +
         '<div class="row">' +
           '<label>営業状態</label>' +
           '<div class="grid-2">' +
@@ -1728,7 +1757,8 @@ ${renderNavigationBadgesScript()}
           '<label>送信記録</label>' +
           '<div class="grid-2">' +
             formInput('leadSentAt', '送信日', toDateTimeLocal(lead.sentAt), '', 'datetime-local') +
-            formInput('leadNextFollowUpAt', '次回確認日', toDateTimeLocal(lead.nextFollowUpAt || lead.nextActionAt), '', 'datetime-local') +
+            formInput('leadNextActionAt', '次対応日時', toDateTimeLocal(lead.nextActionAt), '', 'datetime-local') +
+            formInput('leadNextFollowUpAt', '次回確認日', toDateTimeLocal(lead.nextFollowUpAt), '', 'datetime-local') +
           '</div>' +
         '</div>' +
         '<div class="row">' +
@@ -1741,17 +1771,26 @@ ${renderNavigationBadgesScript()}
           '</div>' +
         '</div>' +
         '<div class="row">' +
+          '<label for="leadReason">営業対象にした理由</label>' +
+          '<textarea id="leadReason" style="min-height:80px">' + escapeHtml(lead.reason || '') + '</textarea>' +
+        '</div>' +
+        '<div class="row">' +
+          '<label for="leadOwnerMemo">営業メモ</label>' +
+          '<textarea id="leadOwnerMemo" style="min-height:80px">' + escapeHtml(lead.ownerMemo || '') + '</textarea>' +
+        '</div>' +
+        '<div class="row">' +
           '<label for="leadContactMemo">連絡先メモ</label>' +
-          '<textarea id="leadContactMemo" style="min-height:80px">' + escapeHtml(lead.contactMemo || memo.contactMemo || '') + '</textarea>' +
+          '<textarea id="leadContactMemo" style="min-height:80px">' + escapeHtml(lead.contactMemo || '') + '</textarea>' +
         '</div>' +
         '<div class="row">' +
           '<label for="leadBrandAnalysisMemo">ブランド分析メモ</label>' +
-          '<textarea id="leadBrandAnalysisMemo" style="min-height:100px">' + escapeHtml(lead.brandAnalysisMemo || memo.brandAnalysisMemo || '') + '</textarea>' +
+          '<textarea id="leadBrandAnalysisMemo" style="min-height:100px">' + escapeHtml(lead.brandAnalysisMemo || '') + '</textarea>' +
         '</div>' +
         '<div class="row">' +
           '<label for="leadSnsAnalysisMemo">SNS分析メモ</label>' +
-          '<textarea id="leadSnsAnalysisMemo" style="min-height:100px">' + escapeHtml(lead.snsAnalysisMemo || memo.snsAnalysisMemo || '') + '</textarea>' +
+          '<textarea id="leadSnsAnalysisMemo" style="min-height:100px">' + escapeHtml(lead.snsAnalysisMemo || '') + '</textarea>' +
         '</div>' +
+        renderLeadMemoSuggestions(memo) +
         '<div class="toolbar">' +
           '<button class="primary" onclick="saveLeadManagement()">営業情報を保存</button>' +
           '<span id="leadSaveStatus" class="status"></span>' +
@@ -2125,36 +2164,52 @@ ${renderNavigationBadgesScript()}
 
     async function saveLeadManagement() {
       if (!state.selectedLeadId) return;
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      if (!lead) return;
       setStatus('leadSaveStatus', '保存中', 'warn');
       const payload = {
         companyName: fieldValue('leadCompanyName'),
+        companyWebsiteUrl: nullableFieldValue('leadCompanyWebsiteUrl'),
+        companyInquiryUrl: nullableFieldValue('leadCompanyInquiryUrl'),
+        companyIndustry: nullableFieldValue('leadCompanyIndustry'),
+        companyLocation: nullableFieldValue('leadCompanyLocation'),
+        companySourceTotalAmount: nullableNumberFieldValue('leadCompanySourceTotalAmount'),
+        companySourceProjectCount: nullableNumberFieldValue('leadCompanySourceProjectCount'),
+        companySourceSupporterCount: nullableNumberFieldValue('leadCompanySourceSupporterCount'),
+        companyMemo: nullableFieldValue('leadCompanyMemo'),
+        status: fieldValue('leadStatus'),
+        priority: fieldValue('leadPriority'),
+        contactEmail: nullableFieldValue('leadContactEmail'),
+        contactFormUrl: nullableFieldValue('leadContactFormUrl'),
+        siteMessageUrl: nullableFieldValue('leadSiteMessageUrl'),
+        contactMemo: nullableFieldValue('leadContactMemo'),
+        sendMethod: nullableFieldValue('leadSendMethod'),
+        sentAt: nullableDateTimeFieldValue('leadSentAt'),
+        nextActionAt: nullableDateTimeFieldValue('leadNextActionAt'),
+        nextFollowUpAt: nullableDateTimeFieldValue('leadNextFollowUpAt'),
+        brandWebsiteUrl: nullableFieldValue('leadBrandWebsiteUrl'),
+        instagramUrl: nullableFieldValue('leadInstagramUrl'),
+        tiktokUrl: nullableFieldValue('leadTiktokUrl'),
+        xUrl: nullableFieldValue('leadXUrl'),
+        leadReason: nullableFieldValue('leadReason'),
+        ownerMemo: nullableFieldValue('leadOwnerMemo'),
+        brandAnalysisMemo: nullableFieldValue('leadBrandAnalysisMemo'),
+        snsAnalysisMemo: nullableFieldValue('leadSnsAnalysisMemo')
+      };
+      if (lead.project) Object.assign(payload, {
         projectSource: fieldValue('leadProjectSource'),
         projectTitle: fieldValue('leadProjectTitle'),
         projectUrl: fieldValue('leadProjectUrl'),
         projectStatus: fieldValue('leadProjectStatus'),
         projectAmount: numberFieldValue('leadProjectAmount'),
         projectSupporterCount: numberFieldValue('leadProjectSupporterCount'),
-        projectTargetAmount: optionalNumberFieldValue('leadProjectTargetAmount'),
-        projectEndDate: dateTimeValue('leadProjectEndDate') || undefined,
-        projectCategory: fieldValue('leadProjectCategory'),
-        projectDescription: fieldValue('leadProjectDescription'),
-        status: fieldValue('leadStatus'),
-        priority: fieldValue('leadPriority'),
-        contactEmail: fieldValue('leadContactEmail'),
-        contactFormUrl: fieldValue('leadContactFormUrl'),
-        siteMessageUrl: fieldValue('leadSiteMessageUrl'),
-        contactMemo: fieldValue('leadContactMemo'),
-        sendMethod: fieldValue('leadSendMethod'),
-        sentAt: dateTimeValue('leadSentAt') || undefined,
-        nextFollowUpAt: dateTimeValue('leadNextFollowUpAt') || undefined,
-        nextActionAt: dateTimeValue('leadNextFollowUpAt') || undefined,
-        brandWebsiteUrl: fieldValue('leadBrandWebsiteUrl'),
-        instagramUrl: fieldValue('leadInstagramUrl'),
-        tiktokUrl: fieldValue('leadTiktokUrl'),
-        xUrl: fieldValue('leadXUrl'),
-        brandAnalysisMemo: fieldValue('leadBrandAnalysisMemo'),
-        snsAnalysisMemo: fieldValue('leadSnsAnalysisMemo')
-      };
+        projectTargetAmount: nullableNumberFieldValue('leadProjectTargetAmount'),
+        projectStartDate: nullableDateTimeFieldValue('leadProjectStartDate'),
+        projectEndDate: nullableDateTimeFieldValue('leadProjectEndDate'),
+        projectCategory: nullableFieldValue('leadProjectCategory'),
+        projectLocation: nullableFieldValue('leadProjectLocation'),
+        projectDescription: nullableFieldValue('leadProjectDescription')
+      });
       try {
         await api('/api/leads/' + state.selectedLeadId, {
           method: 'PATCH',
@@ -2445,7 +2500,7 @@ ${renderNavigationBadgesScript()}
     function formInput(id, label, value, placeholder = '', type = 'text') {
       return '<div class="row">' +
         '<label for="' + escapeHtml(id) + '">' + escapeHtml(label) + '</label>' +
-        '<input id="' + escapeHtml(id) + '" type="' + escapeHtml(type) + '" value="' + escapeAttr(value || '') + '" placeholder="' + escapeAttr(placeholder) + '" />' +
+        '<input id="' + escapeHtml(id) + '" type="' + escapeHtml(type) + '" value="' + escapeAttr(value ?? '') + '" placeholder="' + escapeAttr(placeholder) + '" />' +
       '</div>';
     }
 
@@ -2467,6 +2522,15 @@ ${renderNavigationBadgesScript()}
       return value ? new Date(value).toISOString() : '';
     }
 
+    function nullableFieldValue(id) {
+      return fieldValue(id) || null;
+    }
+
+    function nullableDateTimeFieldValue(id) {
+      const value = fieldValue(id);
+      return value ? new Date(value).toISOString() : null;
+    }
+
     function numberFieldValue(id) {
       const value = Number(fieldValue(id) || 0);
       return Number.isFinite(value) ? value : 0;
@@ -2477,6 +2541,13 @@ ${renderNavigationBadgesScript()}
       if (!raw) return undefined;
       const value = Number(raw);
       return Number.isFinite(value) ? value : undefined;
+    }
+
+    function nullableNumberFieldValue(id) {
+      const raw = fieldValue(id);
+      if (!raw) return null;
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : null;
     }
 
     function compactPayload(payload) {

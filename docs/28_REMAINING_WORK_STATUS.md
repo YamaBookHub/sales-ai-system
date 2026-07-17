@@ -36,7 +36,7 @@ Baseline:
 | 11 | LS-004 | P0 | complete | Terra T3 | LS-002, LS-003 | 2026-07-16 / 6終了理由・両provider診断・71 suites・233 tests・build成功 | 検索終了理由 |
 | 12 | LS-005 | P0 | complete | Terra T3 + Sol audit | LS-004 | 2026-07-16 / AbortSignal伝播・context-first close・74 suites・240 tests・build成功 | 即時停止 |
 | 13 | LS-007 | P0 | complete | Terra T3 | LR-004 | 2026-07-16 / advisory lock・実DB並列4 tests成功 | 並列取り込み排他 |
-| 14 | LL-003 | P0 | pending | Terra T3 | LR-004 | - | 詳細編集契約 |
+| 14 | LL-003 | P0 | complete | Terra T3 + read-only audit | LR-004 | 2026-07-17 / 3モデル一括更新・null消去・手入力保護・77 suites 252 tests・integration 5 tests成功 | 詳細編集契約 |
 | 15 | LL-004 | P0 | pending | Terra T3 + Sol audit | LL-003 | - | Contact CRUD |
 | 16 | SO-001 | P0 | complete | Luna T2 | LM-001 | 2026-07-16 / mark-sent API・sent event・UI実装済み | 手動送信記録 |
 | 17 | SO-002 | P0 | pending | Terra T3 | SO-001, LL-004 | - | 返信・次回対応 |
@@ -98,3 +98,4 @@ Baseline:
 | 2026-07-16 | LS-003 | Luna worker + main audit | complete | CAMPFIRE listing・detail・profileをsanitized fixture化。汎用project link fallbackとカテゴリ境界を追加 |
 | 2026-07-16 | LS-004 | Terra T3 + read-only audit agent | complete | 検索診断契約、6終了理由、停止後失敗上書き防止、API/UI表示を実装。71 suites・233 tests・OpenAPI・Prisma・build成功 |
 | 2026-07-16 | LS-005 | Terra T3 + Sol audit agent | complete | job固有AbortSignalを両providerへ伝播し、context→browserをclose-once化。cancel競合、2秒以内停止をmock Playwrightで固定。74 suites・240 tests・build成功 |
+| 2026-07-17 | LL-003 | Terra T3 + read-only audit agent | complete | Company・Project・Leadの一括編集、null消去、日程分離、手入力メモ保護、案件なし409、Lead再読込と取得処理のadvisory lock、query付きURL保持、スコア再計算の日程保護を実装。77 suites・252 tests、実DB5 tests、OpenAPI・Prisma・build成功 |

@@ -31,12 +31,16 @@ export function applyLeadPolicy(input: LeadPolicyInput, now = new Date()): LeadP
     return patch;
   }
 
-  const nextActionAt = input.nextActionAt ?? defaultNextActionAt(input.status, priority, now);
+  const nextActionAt = input.nextActionAt !== undefined
+    ? input.nextActionAt
+    : defaultNextActionAt(input.status, priority, now);
   if (nextActionAt !== undefined) {
     patch.nextActionAt = nextActionAt;
   }
 
-  const nextFollowUpAt = input.nextFollowUpAt ?? defaultNextFollowUpAt(input.status, now);
+  const nextFollowUpAt = input.nextFollowUpAt !== undefined
+    ? input.nextFollowUpAt
+    : defaultNextFollowUpAt(input.status, now);
   if (nextFollowUpAt !== undefined) {
     patch.nextFollowUpAt = nextFollowUpAt;
   }

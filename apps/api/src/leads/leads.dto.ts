@@ -1,5 +1,5 @@
 import { LeadPriority, LeadStatus, PlatformType, ProjectStatus } from '@prisma/client';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsDateString, IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, IsUrl, IsUUID, Min } from 'class-validator';
 
 export class CreateLeadDto {
   @IsUUID()
@@ -85,74 +85,115 @@ export class UpdateLeadDto {
 
   @IsOptional()
   @IsString()
-  ownerMemo?: string;
+  ownerMemo?: string | null;
 
   @IsOptional()
   @IsDateString()
-  nextActionAt?: string;
+  nextActionAt?: string | null;
+
+  @IsOptional()
+  @IsEmail()
+  contactEmail?: string | null;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  contactFormUrl?: string | null;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  siteMessageUrl?: string | null;
 
   @IsOptional()
   @IsString()
-  contactEmail?: string;
+  contactMemo?: string | null;
 
   @IsOptional()
   @IsString()
-  contactFormUrl?: string;
-
-  @IsOptional()
-  @IsString()
-  siteMessageUrl?: string;
-
-  @IsOptional()
-  @IsString()
-  contactMemo?: string;
-
-  @IsOptional()
-  @IsString()
-  sendMethod?: string;
+  sendMethod?: string | null;
 
   @IsOptional()
   @IsDateString()
-  sentAt?: string;
+  sentAt?: string | null;
 
   @IsOptional()
   @IsDateString()
-  nextFollowUpAt?: string;
+  nextFollowUpAt?: string | null;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  brandWebsiteUrl?: string | null;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  instagramUrl?: string | null;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  tiktokUrl?: string | null;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  xUrl?: string | null;
 
   @IsOptional()
   @IsString()
-  brandWebsiteUrl?: string;
+  brandAnalysisMemo?: string | null;
 
   @IsOptional()
   @IsString()
-  instagramUrl?: string;
+  snsAnalysisMemo?: string | null;
 
   @IsOptional()
   @IsString()
-  tiktokUrl?: string;
+  leadReason?: string | null;
 
   @IsOptional()
   @IsString()
-  xUrl?: string;
-
-  @IsOptional()
-  @IsString()
-  brandAnalysisMemo?: string;
-
-  @IsOptional()
-  @IsString()
-  snsAnalysisMemo?: string;
-
-  @IsOptional()
-  @IsString()
+  @IsNotEmpty()
   companyName?: string;
 
   @IsOptional()
-  @IsString()
-  projectTitle?: string;
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  companyWebsiteUrl?: string | null;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  companyInquiryUrl?: string | null;
 
   @IsOptional()
   @IsString()
+  companyIndustry?: string | null;
+
+  @IsOptional()
+  @IsString()
+  companyLocation?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  companySourceTotalAmount?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  companySourceProjectCount?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  companySourceSupporterCount?: number | null;
+
+  @IsOptional()
+  @IsString()
+  companyMemo?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  projectTitle?: string;
+
+  @IsOptional()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
   projectUrl?: string;
 
   @IsOptional()
@@ -165,25 +206,36 @@ export class UpdateLeadDto {
 
   @IsOptional()
   @IsInt()
+  @Min(0)
   projectAmount?: number;
 
   @IsOptional()
   @IsInt()
+  @Min(0)
   projectSupporterCount?: number;
 
   @IsOptional()
   @IsInt()
-  projectTargetAmount?: number;
+  @Min(0)
+  projectTargetAmount?: number | null;
 
   @IsOptional()
   @IsDateString()
-  projectEndDate?: string;
+  projectStartDate?: string | null;
+
+  @IsOptional()
+  @IsDateString()
+  projectEndDate?: string | null;
 
   @IsOptional()
   @IsString()
-  projectCategory?: string;
+  projectCategory?: string | null;
 
   @IsOptional()
   @IsString()
-  projectDescription?: string;
+  projectLocation?: string | null;
+
+  @IsOptional()
+  @IsString()
+  projectDescription?: string | null;
 }

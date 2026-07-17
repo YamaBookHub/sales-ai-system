@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { LeadPriority, LeadStatus } from '@prisma/client';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { LeadPriority, LeadStatus, PlatformType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizeImportedCompanyName, projectImportLockKeys } from '../projects/domain/project-import-policy';
 import { applyLeadPolicy } from './domain/lead-policy';
 import { ACTIVE_TASK_STATUSES, TaskRecord, toTaskView } from './domain/task';
 import { CreateLeadDto, UpdateLeadDto } from './leads.dto';
@@ -38,7 +39,7 @@ export class LeadsService {
       this.prisma.salesLead.count({ where })
     ]);
 
-    return { items: items.map((lead) => withTaskSummary(sanitizeLeadMemos(lead))), page, limit, total };
+    return { items: items.map((lead) => withTaskSummary(lead)), page, limit, total };
   }
 
   create(dto: CreateLeadDto) {
@@ -92,15 +93,10 @@ export class LeadsService {
       throw new NotFoundException('Lead not found');
     }
 
-    return withTaskSummary(sanitizeLeadMemos(lead));
+    return withTaskSummary(lead);
   }
 
   async update(id: string, dto: UpdateLeadDto) {
-    const lead = await this.prisma.salesLead.findUnique({ where: { id } });
-    if (!lead) {
-      throw new NotFoundException('Lead not found');
-    }
-
     const {
       companyName,
       projectTitle,
@@ -110,9 +106,20 @@ export class LeadsService {
       projectAmount,
       projectSupporterCount,
       projectTargetAmount,
+      projectStartDate,
       projectEndDate,
       projectCategory,
+      projectLocation,
       projectDescription,
+      companyWebsiteUrl,
+      companyInquiryUrl,
+      companyIndustry,
+      companyLocation,
+      companySourceTotalAmount,
+      companySourceProjectCount,
+      companySourceSupporterCount,
+      companyMemo,
+      leadReason,
       nextActionAt,
       sentAt,
       nextFollowUpAt,
@@ -120,25 +127,51 @@ export class LeadsService {
     } = dto;
 
     const companyData = compactData({
-      name: companyName,
-      normalizedName: companyName ? normalizeCompanyName(companyName) : undefined
+      name: companyName === undefined ? undefined : requiredTrimmed(companyName, '企業名'),
+      normalizedName: companyName === undefined ? undefined : normalizeCompanyName(requiredTrimmed(companyName, '企業名')),
+      websiteUrl: nullableTrimmed(companyWebsiteUrl),
+      inquiryUrl: nullableTrimmed(companyInquiryUrl),
+      industry: nullableTrimmed(companyIndustry),
+      location: nullableTrimmed(companyLocation),
+      sourceTotalAmount: companySourceTotalAmount,
+      sourceProjectCount: companySourceProjectCount,
+      sourceSupporterCount: companySourceSupporterCount,
+      memo: nullableTrimmed(companyMemo)
     });
+    const parsedProjectStartDate = parseNullableDate(projectStartDate);
+    const parsedProjectEndDate = parseNullableDate(projectEndDate);
     const projectData = compactData({
-      title: projectTitle,
-      url: projectUrl,
+      title: projectTitle === undefined ? undefined : requiredTrimmed(projectTitle, '案件名'),
+      url: projectUrl === undefined ? undefined : requiredTrimmed(projectUrl, 'プロジェクトURL'),
       status: projectStatus,
       amount: projectAmount,
       supporterCount: projectSupporterCount,
       targetAmount: projectTargetAmount,
-      endDate: projectEndDate ? new Date(projectEndDate) : undefined,
-      category: projectCategory,
-      description: projectDescription
+      startDate: parsedProjectStartDate,
+      endDate: parsedProjectEndDate,
+      daysLeft: projectEndDate === undefined ? undefined : daysUntil(parsedProjectEndDate),
+      category: nullableTrimmed(projectCategory),
+      location: nullableTrimmed(projectLocation),
+      description: nullableTrimmed(projectDescription)
     });
     const leadData = compactData({
       ...leadDto,
-      nextActionAt: parseOptionalDate(nextActionAt),
-      sentAt: parseOptionalDate(sentAt),
-      nextFollowUpAt: parseOptionalDate(nextFollowUpAt)
+      reason: nullableTrimmed(leadReason),
+      ownerMemo: nullableTrimmed(leadDto.ownerMemo),
+      contactEmail: nullableTrimmed(leadDto.contactEmail),
+      contactFormUrl: nullableTrimmed(leadDto.contactFormUrl),
+      siteMessageUrl: nullableTrimmed(leadDto.siteMessageUrl),
+      contactMemo: nullableTrimmed(leadDto.contactMemo),
+      sendMethod: nullableTrimmed(leadDto.sendMethod),
+      brandWebsiteUrl: nullableTrimmed(leadDto.brandWebsiteUrl),
+      instagramUrl: nullableTrimmed(leadDto.instagramUrl),
+      tiktokUrl: nullableTrimmed(leadDto.tiktokUrl),
+      xUrl: nullableTrimmed(leadDto.xUrl),
+      brandAnalysisMemo: nullableTrimmed(leadDto.brandAnalysisMemo),
+      snsAnalysisMemo: nullableTrimmed(leadDto.snsAnalysisMemo),
+      nextActionAt: parseNullableDate(nextActionAt),
+      sentAt: parseNullableDate(sentAt),
+      nextFollowUpAt: parseNullableDate(nextFollowUpAt)
     });
     const leadPolicy = applyLeadPolicy({
       status: leadData.status,
@@ -147,33 +180,64 @@ export class LeadsService {
       nextFollowUpAt: leadData.nextFollowUpAt
     });
 
+    const hasProjectPatch = projectSource !== undefined || Object.keys(projectData).length > 0;
+
     return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `lead-detail:${id}`);
+      const lead = await tx.salesLead.findUnique({
+        where: { id },
+        include: { company: true, project: { include: { platform: true } } }
+      });
+      if (!lead) {
+        throw new NotFoundException('Lead not found');
+      }
+      if (hasProjectPatch && !lead.project) {
+        throw new ConflictException('この営業対象には案件が紐づいていないため、案件情報は更新できません。');
+      }
+
+      const effectiveProjectUrl = lead.project ? String(projectData.url ?? lead.project.url) : '';
+      const effectiveProjectSource = lead.project ? (projectSource ?? lead.project.platform.type) : null;
+      if (lead.project && hasProjectPatch && effectiveProjectSource) {
+        assertProjectSourceMatchesUrl(effectiveProjectSource, effectiveProjectUrl);
+      }
+
+      const effectiveCompanyName = String(companyData.name ?? lead.company.name);
+      const currentLockKeys = lead.project
+        ? projectImportLockKeys(lead.project.url, lead.company.name)
+        : [`project-import:company:${normalizeImportedCompanyName(lead.company.name)}`];
+      const nextLockKeys = lead.project
+        ? projectImportLockKeys(String(projectData.url ?? lead.project.url), effectiveCompanyName)
+        : [`project-import:company:${normalizeImportedCompanyName(effectiveCompanyName)}`];
+      for (const lockKey of Array.from(new Set([...currentLockKeys, ...nextLockKeys])).sort()) {
+        await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', lockKey);
+      }
       if (Object.keys(companyData).length) {
         await tx.company.update({ where: { id: lead.companyId }, data: companyData });
       }
-      if (lead.projectId && Object.keys(projectData).length) {
-        const platform = projectSource
+      if (lead.project && hasProjectPatch) {
+        const shouldRefreshPlatform = projectSource !== undefined || projectData.url !== undefined;
+        const platform = shouldRefreshPlatform && effectiveProjectSource
           ? await tx.crowdfundingPlatform.upsert({
               where: {
                 type_baseUrl: {
-                  type: projectSource,
-                  baseUrl: platformBaseUrl(projectSource)
+                  type: effectiveProjectSource,
+                  baseUrl: platformBaseUrl(effectiveProjectSource, effectiveProjectUrl)
                 }
               },
-              update: { name: platformName(projectSource), isActive: true },
+              update: { name: platformName(effectiveProjectSource), isActive: true },
               create: {
-                type: projectSource,
-                name: platformName(projectSource),
-                baseUrl: platformBaseUrl(projectSource)
+                type: effectiveProjectSource,
+                name: platformName(effectiveProjectSource),
+                baseUrl: platformBaseUrl(effectiveProjectSource, effectiveProjectUrl)
               }
             })
           : null;
         await tx.crowdfundingProject.update({
-          where: { id: lead.projectId },
-          data: { ...projectData, ...(platform ? { platformId: platform.id } : {}), scrapedAt: new Date() }
+          where: { id: lead.project.id },
+          data: { ...projectData, ...(platform ? { platformId: platform.id } : {}) }
         });
       }
-      return sanitizeLeadMemos(await tx.salesLead.update({
+      return tx.salesLead.update({
         where: { id },
         data: { ...leadData, ...leadPolicy },
         include: {
@@ -181,7 +245,7 @@ export class LeadsService {
           project: { include: { platform: true } },
           scores: { orderBy: { createdAt: 'desc' }, take: 1 }
         }
-      }));
+      });
     });
   }
 
@@ -202,6 +266,11 @@ function parseOptionalDate(value?: string) {
   return value ? new Date(value) : undefined;
 }
 
+function parseNullableDate(value?: string | null) {
+  if (value === undefined) return undefined;
+  return value === null ? null : new Date(value);
+}
+
 function platformName(type: 'campfire' | 'makuake' | 'green_funding' | 'other') {
   return ({
     campfire: 'CAMPFIRE',
@@ -211,22 +280,13 @@ function platformName(type: 'campfire' | 'makuake' | 'green_funding' | 'other') 
   })[type];
 }
 
-function platformBaseUrl(type: 'campfire' | 'makuake' | 'green_funding' | 'other') {
+function platformBaseUrl(type: PlatformType, projectUrl: string) {
   return ({
     campfire: 'https://camp-fire.jp',
     makuake: 'https://www.makuake.com',
     green_funding: 'https://greenfunding.jp',
-    other: 'https://example.com'
+    other: new URL(projectUrl).origin
   })[type];
-}
-
-function sanitizeLeadMemos<T extends { project?: { title?: string | null; description?: string | null; category?: string | null } | null; brandAnalysisMemo?: string | null; snsAnalysisMemo?: string | null }>(lead: T): T {
-  const source = [lead.project?.title, lead.project?.description, lead.project?.category].filter(Boolean).join(' ');
-  return {
-    ...lead,
-    brandAnalysisMemo: isMemoCompatibleWithProject(lead.brandAnalysisMemo, source) ? lead.brandAnalysisMemo : null,
-    snsAnalysisMemo: isMemoCompatibleWithProject(lead.snsAnalysisMemo, source) ? lead.snsAnalysisMemo : null
-  };
 }
 
 function withTaskSummary<T extends { tasks?: TaskRecord[]; _count?: { tasks: number } }>(lead: T) {
@@ -236,14 +296,35 @@ function withTaskSummary<T extends { tasks?: TaskRecord[]; _count?: { tasks: num
   return { ...rest, nextTask, activeTaskCount };
 }
 
-function isMemoCompatibleWithProject(memo?: string | null, projectSource = '') {
-  if (!memo || !projectSource) return true;
-  const rules = [
-    { pattern: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/, required: /米びつ|米櫃|お米|キッチン|真空保存|鮮度|保存容器|収納/ },
-    { pattern: /醤油差し|醤油|サイフォン|有田焼|陶磁器|器|食卓|残量|ガラス管|NEO CLAY/i, required: /醤油差し|醤油|サイフォン|有田焼|陶磁器|器|食卓|残量|ガラス管|NEO CLAY/i },
-    { pattern: /エアベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/, required: /エアベッド|ベッド|寝心地|車中泊|キャンプ|アウトドア|来客|寝具/ },
-    { pattern: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/, required: /ライブ|コンサート|ファン|音楽|バンド|周年|公演/ },
-    { pattern: /焼き鳥|焼鳥|炭火|店舗|飲食|居酒屋|リフォーム|改装/, required: /焼き鳥|焼鳥|炭火|店舗|飲食|居酒屋|リフォーム|改装/ }
-  ];
-  return rules.every((rule) => !rule.pattern.test(memo) || rule.required.test(projectSource));
+
+function nullableTrimmed(value?: string | null) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function requiredTrimmed(value: string, label: string) {
+  const trimmed = value.trim();
+  if (!trimmed) throw new BadRequestException(`${label}は空にできません。`);
+  return trimmed;
+}
+
+function daysUntil(value: Date | null | undefined) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  return Math.max(0, Math.ceil((value.getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+}
+
+function assertProjectSourceMatchesUrl(source: PlatformType, projectUrl: string) {
+  if (source === 'other') return;
+  const hostname = new URL(projectUrl).hostname.toLowerCase();
+  const matches = {
+    campfire: hostname === 'camp-fire.jp' || hostname.endsWith('.camp-fire.jp'),
+    makuake: hostname === 'makuake.com' || hostname.endsWith('.makuake.com'),
+    green_funding: hostname === 'greenfunding.jp' || hostname.endsWith('.greenfunding.jp')
+  }[source];
+  if (!matches) {
+    throw new BadRequestException('取得元とプロジェクトURLのドメインが一致しません。');
+  }
 }

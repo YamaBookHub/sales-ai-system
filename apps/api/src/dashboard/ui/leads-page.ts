@@ -816,6 +816,18 @@ export function renderLeadsPage() {
       return items.length ? label + '\\n' + items.map((item) => '・' + item).join('\\n') : '';
     }
 
+    function renderLeadMemoSuggestions(memo) {
+      const suggestions = [
+        memo.ownerMemo ? '<strong>営業メモ案</strong><br>' + escapeHtml(memo.ownerMemo) : '',
+        memo.brandAnalysisMemo ? '<strong>ブランド分析案</strong><br>' + escapeHtml(memo.brandAnalysisMemo) : '',
+        memo.snsAnalysisMemo ? '<strong>SNS分析案</strong><br>' + escapeHtml(memo.snsAnalysisMemo) : ''
+      ].filter(Boolean);
+      if (!suggestions.length) return '';
+      return '<details class="row"><summary>AI分析からの提案（未保存）</summary><div class="detail-text">' +
+        suggestions.join('<hr>') +
+      '</div></details>';
+    }
+
     function leadProjectSource(lead) {
       const project = lead?.project || {};
       return [project.title, project.description, project.category].filter(Boolean).join(' ');
@@ -840,10 +852,24 @@ export function renderLeadsPage() {
     function renderLeadEditPanel(lead) {
       const memo = suggestedLeadMemos(lead);
       const project = lead.project || {};
+      const company = lead.company || {};
       return '<div class="row">' +
         '<label>選択案件の詳細</label>' +
         '<div class="form-grid">' +
-          inputField('leadCompanyNameEdit', '企業名', lead.company?.name || '') +
+          inputField('leadCompanyNameEdit', '企業名', company.name || '') +
+          inputField('leadCompanyWebsiteUrlEdit', '会社HP', company.websiteUrl) +
+          inputField('leadCompanyInquiryUrlEdit', '会社問い合わせURL', company.inquiryUrl) +
+          inputField('leadCompanyIndustryEdit', '業種', company.industry) +
+          inputField('leadCompanyLocationEdit', '会社所在地', company.location) +
+          inputField('leadCompanySourceTotalAmountEdit', '実行者累計金額', company.sourceTotalAmount ?? '', '', 'number') +
+          inputField('leadCompanySourceProjectCountEdit', '実行者PJ数', company.sourceProjectCount ?? '', '', 'number') +
+          inputField('leadCompanySourceSupporterCountEdit', '実行者累計支援者', company.sourceSupporterCount ?? '', '', 'number') +
+        '</div>' +
+        '<div class="row">' +
+          '<label for="leadCompanyMemoEdit">会社メモ</label>' +
+          '<textarea id="leadCompanyMemoEdit">' + escapeHtml(company.memo || '') + '</textarea>' +
+        '</div>' +
+        (lead.project ? '<div class="form-grid">' +
           selectField('leadProjectSourceEdit', '取得元', projectPlatformType(project), [
             ['campfire', 'CAMPFIRE'],
             ['makuake', 'Makuake'],
@@ -862,13 +888,15 @@ export function renderLeadsPage() {
           ]) +
           inputField('leadProjectAmountEdit', '支援額', project.amount || 0, '', 'number') +
           inputField('leadProjectSupporterCountEdit', '支援者数', project.supporterCount || 0, '', 'number') +
-          inputField('leadProjectTargetAmountEdit', '目標金額', project.targetAmount || '', '', 'number') +
+          inputField('leadProjectTargetAmountEdit', '目標金額', project.targetAmount ?? '', '', 'number') +
+          inputField('leadProjectStartDateEdit', '開始日時', toDateTimeLocal(project.startDate), '', 'datetime-local') +
           inputField('leadProjectEndDateEdit', '終了日時', toDateTimeLocal(project.endDate), '', 'datetime-local') +
+          inputField('leadProjectLocationEdit', '案件地域', project.location) +
         '</div>' +
         '<div class="row">' +
           '<label for="leadProjectDescriptionEdit">プロジェクト説明</label>' +
           '<textarea id="leadProjectDescriptionEdit">' + escapeHtml(project.description || '') + '</textarea>' +
-        '</div>' +
+        '</div>' : '<div class="notice">この営業対象には案件が紐づいていないため、会社情報と営業情報だけ編集できます。</div>') +
       '</div>' +
       '<div class="row">' +
         '<label>営業管理</label>' +
@@ -899,7 +927,9 @@ export function renderLeadsPage() {
             ['サイト内メッセージ', 'サイト内メッセージ'],
             ['その他', 'その他']
           ]) +
-          inputField('leadNextActionAtEdit', '次対応日時', toDateTimeLocal(lead.nextFollowUpAt || lead.nextActionAt), '', 'datetime-local') +
+          inputField('leadNextActionAtEdit', '次対応日時', toDateTimeLocal(lead.nextActionAt), '', 'datetime-local') +
+          inputField('leadSentAtEdit', '送信日時', toDateTimeLocal(lead.sentAt), '', 'datetime-local') +
+          inputField('leadNextFollowUpAtEdit', '次回確認日時', toDateTimeLocal(lead.nextFollowUpAt), '', 'datetime-local') +
           inputField('leadContactEmailEdit', 'メールアドレス', lead.contactEmail) +
           inputField('leadContactFormUrlEdit', 'フォームURL', lead.contactFormUrl) +
           inputField('leadSiteMessageUrlEdit', 'サイト内メッセージURL', lead.siteMessageUrl) +
@@ -913,17 +943,22 @@ export function renderLeadsPage() {
           '<textarea id="leadContactMemoEdit">' + escapeHtml(lead.contactMemo || '') + '</textarea>' +
         '</div>' +
         '<div class="row">' +
+          '<label for="leadReasonEdit">営業対象にした理由</label>' +
+          '<textarea id="leadReasonEdit">' + escapeHtml(lead.reason || '') + '</textarea>' +
+        '</div>' +
+        '<div class="row">' +
           '<label for="leadOwnerMemoEdit">営業メモ</label>' +
-          '<textarea id="leadOwnerMemoEdit">' + escapeHtml(lead.ownerMemo || memo.ownerMemo || '') + '</textarea>' +
+          '<textarea id="leadOwnerMemoEdit">' + escapeHtml(lead.ownerMemo || '') + '</textarea>' +
         '</div>' +
         '<div class="row">' +
           '<label for="leadBrandAnalysisMemoEdit">ブランド分析メモ</label>' +
-          '<textarea id="leadBrandAnalysisMemoEdit">' + escapeHtml(lead.brandAnalysisMemo || memo.brandAnalysisMemo || '') + '</textarea>' +
+          '<textarea id="leadBrandAnalysisMemoEdit">' + escapeHtml(lead.brandAnalysisMemo || '') + '</textarea>' +
         '</div>' +
         '<div class="row">' +
           '<label for="leadSnsAnalysisMemoEdit">SNS分析メモ</label>' +
-          '<textarea id="leadSnsAnalysisMemoEdit">' + escapeHtml(lead.snsAnalysisMemo || memo.snsAnalysisMemo || '') + '</textarea>' +
+          '<textarea id="leadSnsAnalysisMemoEdit">' + escapeHtml(lead.snsAnalysisMemo || '') + '</textarea>' +
         '</div>' +
+        renderLeadMemoSuggestions(memo) +
         '<div class="toolbar">' +
           '<button class="primary" onclick="saveLeadEdit()">営業情報を保存</button>' +
           '<span id="leadEditStatus" class="status"></span>' +
@@ -933,39 +968,56 @@ export function renderLeadsPage() {
 
     async function saveLeadEdit() {
       if (!state.selectedLeadId) return;
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      if (!lead) return;
       setInlineStatus('leadEditStatus', '保存中', 'warn');
       try {
+        const payload = {
+          companyName: value('leadCompanyNameEdit'),
+          companyWebsiteUrl: nullableValue('leadCompanyWebsiteUrlEdit'),
+          companyInquiryUrl: nullableValue('leadCompanyInquiryUrlEdit'),
+          companyIndustry: nullableValue('leadCompanyIndustryEdit'),
+          companyLocation: nullableValue('leadCompanyLocationEdit'),
+          companySourceTotalAmount: nullableNumberValue('leadCompanySourceTotalAmountEdit'),
+          companySourceProjectCount: nullableNumberValue('leadCompanySourceProjectCountEdit'),
+          companySourceSupporterCount: nullableNumberValue('leadCompanySourceSupporterCountEdit'),
+          companyMemo: nullableValue('leadCompanyMemoEdit'),
+          status: value('leadStatusEdit'),
+          priority: value('leadPriorityEdit'),
+          sendMethod: nullableValue('leadSendMethodEdit'),
+          nextActionAt: nullableDateTimeValue('leadNextActionAtEdit'),
+          sentAt: nullableDateTimeValue('leadSentAtEdit'),
+          nextFollowUpAt: nullableDateTimeValue('leadNextFollowUpAtEdit'),
+          contactEmail: nullableValue('leadContactEmailEdit'),
+          contactFormUrl: nullableValue('leadContactFormUrlEdit'),
+          siteMessageUrl: nullableValue('leadSiteMessageUrlEdit'),
+          brandWebsiteUrl: nullableValue('leadBrandWebsiteUrlEdit'),
+          instagramUrl: nullableValue('leadInstagramUrlEdit'),
+          tiktokUrl: nullableValue('leadTiktokUrlEdit'),
+          xUrl: nullableValue('leadXUrlEdit'),
+          leadReason: nullableValue('leadReasonEdit'),
+          ownerMemo: nullableValue('leadOwnerMemoEdit'),
+          contactMemo: nullableValue('leadContactMemoEdit'),
+          brandAnalysisMemo: nullableValue('leadBrandAnalysisMemoEdit'),
+          snsAnalysisMemo: nullableValue('leadSnsAnalysisMemoEdit')
+        };
+        if (lead.project) Object.assign(payload, {
+          projectSource: value('leadProjectSourceEdit'),
+          projectTitle: value('leadProjectTitleEdit'),
+          projectUrl: value('leadProjectUrlEdit'),
+          projectStatus: value('leadProjectStatusEdit'),
+          projectAmount: numberValue('leadProjectAmountEdit'),
+          projectSupporterCount: numberValue('leadProjectSupporterCountEdit'),
+          projectTargetAmount: nullableNumberValue('leadProjectTargetAmountEdit'),
+          projectStartDate: nullableDateTimeValue('leadProjectStartDateEdit'),
+          projectEndDate: nullableDateTimeValue('leadProjectEndDateEdit'),
+          projectCategory: nullableValue('leadProjectCategoryEdit'),
+          projectLocation: nullableValue('leadProjectLocationEdit'),
+          projectDescription: nullableValue('leadProjectDescriptionEdit')
+        });
         await api('/api/leads/' + state.selectedLeadId, {
           method: 'PATCH',
-          body: JSON.stringify(compactPayload({
-            companyName: value('leadCompanyNameEdit'),
-            projectSource: value('leadProjectSourceEdit'),
-            projectTitle: value('leadProjectTitleEdit'),
-            projectUrl: value('leadProjectUrlEdit'),
-            projectStatus: value('leadProjectStatusEdit'),
-            projectAmount: numberValue('leadProjectAmountEdit'),
-            projectSupporterCount: numberValue('leadProjectSupporterCountEdit'),
-            projectTargetAmount: optionalNumberValue('leadProjectTargetAmountEdit'),
-            projectEndDate: dateTimeValue('leadProjectEndDateEdit'),
-            projectCategory: value('leadProjectCategoryEdit'),
-            projectDescription: value('leadProjectDescriptionEdit'),
-            status: value('leadStatusEdit'),
-            priority: value('leadPriorityEdit'),
-            sendMethod: value('leadSendMethodEdit'),
-            nextActionAt: dateTimeValue('leadNextActionAtEdit'),
-            nextFollowUpAt: dateTimeValue('leadNextActionAtEdit'),
-            contactEmail: value('leadContactEmailEdit'),
-            contactFormUrl: value('leadContactFormUrlEdit'),
-            siteMessageUrl: value('leadSiteMessageUrlEdit'),
-            brandWebsiteUrl: value('leadBrandWebsiteUrlEdit'),
-            instagramUrl: value('leadInstagramUrlEdit'),
-            tiktokUrl: value('leadTiktokUrlEdit'),
-            xUrl: value('leadXUrlEdit'),
-            ownerMemo: value('leadOwnerMemoEdit'),
-            contactMemo: value('leadContactMemoEdit'),
-            brandAnalysisMemo: value('leadBrandAnalysisMemoEdit'),
-            snsAnalysisMemo: value('leadSnsAnalysisMemoEdit')
-          }))
+          body: JSON.stringify(payload)
         });
         setInlineStatus('leadEditStatus', '保存しました', 'ok');
         await loadAll();
@@ -983,6 +1035,16 @@ export function renderLeadsPage() {
       return raw ? new Date(raw).toISOString() : '';
     }
 
+    function nullableValue(id) {
+      const raw = value(id);
+      return raw || null;
+    }
+
+    function nullableDateTimeValue(id) {
+      const raw = value(id);
+      return raw ? new Date(raw).toISOString() : null;
+    }
+
     function numberValue(id) {
       const raw = value(id);
       const number = Number(raw || 0);
@@ -994,6 +1056,13 @@ export function renderLeadsPage() {
       if (!raw) return undefined;
       const number = Number(raw);
       return Number.isFinite(number) ? number : undefined;
+    }
+
+    function nullableNumberValue(id) {
+      const raw = value(id);
+      if (!raw) return null;
+      const number = Number(raw);
+      return Number.isFinite(number) ? number : null;
     }
 
     function compactPayload(payload) {
@@ -1016,7 +1085,7 @@ export function renderLeadsPage() {
     }
 
     function inputField(id, label, fieldValue, placeholder = '', type = 'text') {
-      return '<div class="row"><label for="' + escapeHtml(id) + '">' + escapeHtml(label) + '</label><input id="' + escapeHtml(id) + '" type="' + escapeHtml(type) + '" value="' + escapeAttr(fieldValue || '') + '" placeholder="' + escapeAttr(placeholder) + '" /></div>';
+      return '<div class="row"><label for="' + escapeHtml(id) + '">' + escapeHtml(label) + '</label><input id="' + escapeHtml(id) + '" type="' + escapeHtml(type) + '" value="' + escapeAttr(fieldValue ?? '') + '" placeholder="' + escapeAttr(placeholder) + '" /></div>';
     }
 
     function selectField(id, label, selectedValue, options) {

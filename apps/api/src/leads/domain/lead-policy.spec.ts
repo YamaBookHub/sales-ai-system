@@ -30,4 +30,12 @@ describe('lead-policy', () => {
       nextFollowUpAt: null
     });
   });
+
+  it('preserves explicit null action dates instead of recreating defaults', () => {
+    expect(applyLeadPolicy({ score: 90, nextActionAt: null, nextFollowUpAt: null }, now)).toEqual({
+      priority: 'high',
+      nextActionAt: null,
+      nextFollowUpAt: null
+    });
+  });
 });

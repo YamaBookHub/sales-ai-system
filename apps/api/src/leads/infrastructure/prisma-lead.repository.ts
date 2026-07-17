@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LeadPriority } from '@prisma/client';
 import { LeadScoreResult } from '../domain/lead-score';
 
 @Injectable()
@@ -21,7 +22,7 @@ export class PrismaLeadRepository {
     return lead;
   }
 
-  async recordScore(leadId: string, leadScore: LeadScoreResult, leadPolicy: Record<string, unknown>) {
+  async recordScore(leadId: string, leadScore: LeadScoreResult, priority?: LeadPriority) {
     return this.prisma.$transaction(async (tx) => {
       const score = await tx.leadScore.create({
         data: {
@@ -34,7 +35,7 @@ export class PrismaLeadRepository {
         where: { id: leadId },
         data: {
           score: leadScore.totalScore,
-          ...leadPolicy
+          ...(priority ? { priority } : {})
         }
       });
 
