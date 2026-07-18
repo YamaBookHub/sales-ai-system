@@ -42,6 +42,7 @@
 | 33 | 33_REPLY_FOLLOWUP_CONTRACT.md | 返信分類・次回対応・Task・配信停止の原子更新契約 | 作成済み |
 | 34 | 34_CONTACT_ELIGIBILITY_CONTRACT.md | 配信拒否・送信先正規化・重複接触防止契約 | 作成済み |
 | 35 | 35_OPPORTUNITY_PIPELINE_CONTRACT.md | 商談状態・履歴・権限・移行・集計契約 | 作成済み |
+| 36 | 36_STRUCTURED_LEAD_ANALYSIS_CONTRACT.md | 案件別の構造化分析・確認・履歴・メール固定契約 | 作成済み |
 
 ## 付属仕様
 - `../prisma/schema.prisma`
