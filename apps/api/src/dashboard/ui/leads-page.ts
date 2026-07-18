@@ -2,7 +2,7 @@ import { renderLeadsPageDocument } from './leads-page-static';
 
 export function renderLeadsPage() {
     return renderLeadsPageDocument(`    const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
-    const state = { leads: [], mails: [], aiGenerations: [], tasks: [], assignees: [], selectedLeadId: null, editingTaskId: null, listPage: 1, pageSize: 20, leadFilterSignature: '', summaryFilter: 'all', sort: { table: 'lead', key: '', direction: 'asc' } };
+    const state = { leads: [], mails: [], aiGenerations: [], tasks: [], assignees: [], companyContacts: [], contactsCompanyId: null, selectedContactId: null, contactsLoading: false, selectedLeadId: null, editingTaskId: null, listPage: 1, pageSize: 20, leadFilterSignature: '', summaryFilter: 'all', sort: { table: 'lead', key: '', direction: 'asc' } };
 
     async function api(path, options = {}) {
       return window.SalesAiApi.request(path, options, { includeOperatorEmail: true });
@@ -21,6 +21,7 @@ export function renderLeadsPage() {
         applyUrlFilters();
         populateSourceFilterOptions('sourceFilter');
         render();
+        void loadCompanyContacts();
         void loadTaskAssignees();
         void loadLeadTasks();
         setPageStatus(state.leads.length ? '読み込み完了' : '営業案件は0件です', state.leads.length ? 'ok' : 'empty');
@@ -201,7 +202,111 @@ export function renderLeadsPage() {
         rowBlock('ブランド/SNS', snsDetail(lead), true) +
         rowBlock('次にやること', nextActionLabel(lead, mail)) +
         rowBlock('最新メール件名', mail?.subject || '未生成') +
+        renderCompanyContactManager(lead) +
         renderLeadEditPanel(lead);
+    }
+
+    function renderCompanyContactManager(lead) {
+      const matchesSelectedCompany = state.contactsCompanyId === lead.companyId;
+      return '<div class="row"><label>連絡先管理</label><div class="detail-text">' +
+        window.SalesAiContacts.renderContactManager({
+          contacts: matchesSelectedCompany ? state.companyContacts : [],
+          selectedId: matchesSelectedCompany ? state.selectedContactId : null,
+          loading: state.contactsLoading || !matchesSelectedCompany
+        }) +
+      '</div></div>';
+    }
+
+    async function loadCompanyContacts(successMessage = '') {
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      if (!lead) {
+        state.companyContacts = [];
+        state.contactsCompanyId = null;
+        state.selectedContactId = null;
+        state.contactsLoading = false;
+        return;
+      }
+      const companyId = lead.companyId;
+      state.contactsCompanyId = companyId;
+      state.contactsLoading = true;
+      renderDetail();
+      try {
+        const result = await api('/api/companies/' + companyId + '/contacts');
+        if (state.contactsCompanyId !== companyId) return;
+        state.companyContacts = Array.isArray(result) ? result : (result.items || []);
+        if (!state.companyContacts.some((contact) => contact.id === state.selectedContactId)) {
+          state.selectedContactId = window.SalesAiContacts.primaryContact(state.companyContacts)?.id || null;
+        }
+        state.contactsLoading = false;
+        renderDetail();
+        if (successMessage) setInlineStatus('companyContactStatus', successMessage, 'ok');
+      } catch (error) {
+        if (state.contactsCompanyId !== companyId) return;
+        state.contactsLoading = false;
+        state.companyContacts = [];
+        renderDetail();
+        setInlineStatus('companyContactStatus', '連絡先を読み込めません: ' + error.message, 'error');
+      }
+    }
+
+    function selectCompanyContact(id) {
+      state.selectedContactId = id;
+      renderDetail();
+    }
+
+    function newCompanyContact() {
+      state.selectedContactId = null;
+      renderDetail();
+    }
+
+    async function saveCompanyContact() {
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      if (!lead) return;
+      setInlineStatus('companyContactStatus', '保存中', 'warn');
+      const payload = {
+        name: nullableValue('companyContactName'),
+        roleTitle: nullableValue('companyContactRoleTitle'),
+        email: nullableValue('companyContactEmail'),
+        inquiryUrl: nullableValue('companyContactInquiryUrl'),
+        isPrimary: document.getElementById('companyContactPrimary').checked
+      };
+      try {
+        const path = state.selectedContactId
+          ? '/api/contacts/' + state.selectedContactId
+          : '/api/companies/' + lead.companyId + '/contacts';
+        const contact = await api(path, { method: state.selectedContactId ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
+        state.selectedContactId = contact.id || state.selectedContactId;
+        await loadCompanyContacts('連絡先を保存しました');
+      } catch (error) {
+        setInlineStatus('companyContactStatus', error.message, 'error');
+      }
+    }
+
+    async function archiveCompanyContact() {
+      if (!state.selectedContactId || !window.confirm('この連絡先をアーカイブしますか？')) return;
+      try {
+        await api('/api/contacts/' + state.selectedContactId + '/archive', { method: 'POST', body: '{}' });
+        state.selectedContactId = null;
+        await loadCompanyContacts('連絡先をアーカイブしました');
+      } catch (error) {
+        setInlineStatus('companyContactStatus', error.message, 'error');
+      }
+    }
+
+    async function toggleCompanyContactUnsubscribe() {
+      const contact = state.companyContacts.find((item) => item.id === state.selectedContactId);
+      if (!contact) return;
+      if (!contact.isUnsubscribed && !window.confirm('この連絡先を配信停止にしますか？')) return;
+      try {
+        if (contact.isUnsubscribed) {
+          await api('/api/contacts/' + contact.id, { method: 'PATCH', body: JSON.stringify({ isUnsubscribed: false }) });
+        } else {
+          await api('/api/contacts/' + contact.id + '/unsubscribe', { method: 'POST', body: '{}' });
+        }
+        await loadCompanyContacts(contact.isUnsubscribed ? '配信停止を解除しました' : '配信停止にしました');
+      } catch (error) {
+        setInlineStatus('companyContactStatus', error.message, 'error');
+      }
     }
 
     async function loadLeadAnalysis() {
@@ -658,6 +763,7 @@ export function renderLeadsPage() {
       renderDetail();
       renderLeadAnalysis();
       renderTaskWorkspace();
+      void loadCompanyContacts();
       void loadLeadTasks();
       void loadLeadAnalysis();
     }

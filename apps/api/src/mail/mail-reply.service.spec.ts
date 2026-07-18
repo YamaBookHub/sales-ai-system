@@ -22,7 +22,7 @@ describe('MailService reply recording', () => {
 
     expect(tx.contactPerson.update).toHaveBeenCalledWith({
       where: { id: 'contact_1' },
-      data: { isUnsubscribed: true, unsubscribedAt: expect.any(Date) }
+      data: { isUnsubscribed: true, unsubscribedAt: expect.any(Date), isPrimary: false }
     });
   });
 });

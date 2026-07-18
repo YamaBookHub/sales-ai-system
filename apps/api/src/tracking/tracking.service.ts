@@ -128,17 +128,21 @@ export class TrackingService {
     if (dto.contactId) {
       const contact = await this.prisma.contactPerson.update({
         where: { id: dto.contactId },
-        data: { isUnsubscribed: true, unsubscribedAt: new Date() }
+        data: { isUnsubscribed: true, unsubscribedAt: new Date(), isPrimary: false }
       });
       return { contactId: contact.id, isUnsubscribed: true };
     }
 
     if (dto.email) {
-      await this.prisma.contactPerson.updateMany({
-        where: { email: dto.email },
-        data: { isUnsubscribed: true, unsubscribedAt: new Date() }
+      const email = dto.email.trim();
+      const result = await this.prisma.contactPerson.updateMany({
+        where: { email: { equals: email, mode: 'insensitive' }, deletedAt: null },
+        data: { isUnsubscribed: true, unsubscribedAt: new Date(), isPrimary: false }
       });
-      return { email: dto.email, isUnsubscribed: true };
+      if (result.count === 0) {
+        return { email, isUnsubscribed: false, message: '一致する有効な連絡先が見つかりません。' };
+      }
+      return { email, isUnsubscribed: true, updatedCount: result.count };
     }
 
     return { isUnsubscribed: false, message: 'email or contactId is required' };

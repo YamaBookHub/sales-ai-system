@@ -34,6 +34,10 @@ describe('TrackingService', () => {
     salesLead: {
       findUnique: jest.fn().mockResolvedValue({ score: 40 }),
       update: jest.fn()
+    },
+    contactPerson: {
+      update: jest.fn().mockResolvedValue({ id: 'contact_1' }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 })
     }
   });
 
@@ -137,6 +141,52 @@ describe('TrackingService', () => {
           clickCount: 2
         }
       ]
+    });
+  });
+
+  it('unsubscribes a contact and clears its primary flag', async () => {
+    const prisma = createPrisma();
+    const service = new TrackingService(prisma as any);
+
+    await expect(service.unsubscribe({ contactId: 'contact_1' })).resolves.toMatchObject({
+      contactId: 'contact_1',
+      isUnsubscribed: true
+    });
+    expect(prisma.contactPerson.update).toHaveBeenCalledWith({
+      where: { id: 'contact_1' },
+      data: {
+        isUnsubscribed: true,
+        unsubscribedAt: expect.any(Date),
+        isPrimary: false
+      }
+    });
+  });
+
+  it('matches email case-insensitively and reports when no active contact was updated', async () => {
+    const prisma = createPrisma();
+    const service = new TrackingService(prisma as any);
+
+    await expect(service.unsubscribe({ email: ' Contact@Example.COM ' })).resolves.toMatchObject({
+      email: 'Contact@Example.COM',
+      isUnsubscribed: true,
+      updatedCount: 1
+    });
+    expect(prisma.contactPerson.updateMany).toHaveBeenCalledWith({
+      where: {
+        email: { equals: 'Contact@Example.COM', mode: 'insensitive' },
+        deletedAt: null
+      },
+      data: {
+        isUnsubscribed: true,
+        unsubscribedAt: expect.any(Date),
+        isPrimary: false
+      }
+    });
+
+    prisma.contactPerson.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(service.unsubscribe({ email: 'missing@example.com' })).resolves.toMatchObject({
+      isUnsubscribed: false,
+      message: '一致する有効な連絡先が見つかりません。'
     });
   });
 });

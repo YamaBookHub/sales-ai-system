@@ -30,6 +30,9 @@ describe('Lead page static HTML', () => {
     expect(html).toContain("projectLocation: nullableValue('leadProjectLocationEdit')");
     expect(html).toContain('AI分析からの提案（未保存）');
     expect(html).toContain("escapeAttr(fieldValue ?? '')");
+    expect(html).toContain('data-ui="company-contact-manager"');
+    expect(html).toContain("'/api/companies/' + companyId + '/contacts'");
+    expect(html).toContain("'/api/contacts/' + state.selectedContactId + '/archive'");
     expect(html).not.toContain("nextFollowUpAt: dateTimeValue('leadNextActionAtEdit')");
   });
 });

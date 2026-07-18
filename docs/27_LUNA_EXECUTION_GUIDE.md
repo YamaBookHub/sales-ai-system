@@ -392,6 +392,7 @@ Recommended next action:
 ### LL-004 Contact CRUD
 
 - Priority: P0
+- Status: complete
 - Model: Terra / T3 / high
 - Depends on: LL-003
 - 目的: 会社の複数連絡先、primary、配信停止、問い合わせURLを管理する。

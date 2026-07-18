@@ -150,6 +150,8 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('function changeLeadPage(delta)');
     expect(html).toContain('id="leadDetail"');
     expect(html).toContain('id="leadAnalysis"');
+    expect(html).toContain('data-ui="company-contact-manager"');
+    expect(html).toContain('function loadCompanyContacts(successMessage = \'\')');
     expect(html).toContain('function renderAiEvidenceSection(label, values, type)');
     expect(html).toContain('function showAiGeneration(index)');
     expect(html).toContain('リスク情報なし（安全判定ではありません）');
@@ -205,6 +207,9 @@ describe('DashboardController HTML contracts', () => {
     expect(mailHtml).toContain('const leadQueueScrollTop = leadQueue ? leadQueue.scrollTop : 0;');
     expect(mailHtml).toContain('if (leadQueue) leadQueue.scrollTop = leadQueueScrollTop;');
     expect(mailHtml).toContain('id="mailLeadSummary"');
+    expect(mailHtml).toContain('data-ui="company-contact-manager"');
+    expect(mailHtml).toContain("'/api/companies/' + companyId + '/contacts'");
+    expect(mailHtml).toContain('連絡先を確認できません。再読み込みしてください');
     expect(mailHtml).toContain('id="mailMaterialEngagement"');
     expect(mailHtml).toContain('function loadMailEngagement(mail)');
     expect(mailHtml).toContain("'/api/t/mails/' + encodeURIComponent(mail.id) + '/engagement'");

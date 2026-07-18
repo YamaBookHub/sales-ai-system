@@ -8,6 +8,7 @@ import { renderClientApiScript } from '../client/api-client';
 import { renderClientProjectsScript } from '../client/render-projects';
 import { renderClientLeadsScript } from '../client/render-leads';
 import { renderClientMailScript } from '../client/render-mail';
+import { renderClientContactsScript } from '../client/contacts';
 import { renderNavigationBadgesScript } from '../client/navigation-badges';
 import { renderTopNavigation } from './top-navigation';
 
@@ -70,6 +71,7 @@ ${renderClientApiScript()}
 ${renderClientProjectsScript()}
 ${renderClientLeadsScript()}
 ${renderClientMailScript()}
+${renderClientContactsScript()}
 ${renderNavigationBadgesScript()}
     const state = {
       leads: [],
@@ -77,6 +79,11 @@ ${renderNavigationBadgesScript()}
       mailTemplates: [],
       checklist: [],
       aiGenerations: [],
+      companyContacts: [],
+      contactsCompanyId: null,
+      selectedContactId: null,
+      contactsLoading: false,
+      contactsError: '',
       checklistComplete: false,
       selectedLeadId: null,
       selectedMailId: null,
@@ -288,6 +295,7 @@ ${renderNavigationBadgesScript()}
         renderMails();
         populateMailEditor(selectedMail);
         renderLeadDetail();
+        void loadCompanyContacts();
         if (state.selectedLeadId) void loadAiAnalysis();
         if (!state.campfireCategories.length) void loadCampfireCategories();
         onSourcePlatformChange();
@@ -1538,7 +1546,119 @@ ${renderNavigationBadgesScript()}
           '<label>プロジェクト説明</label>' +
           '<div class="detail-text">' + escapeHtml(project.description || '未取得') + '</div>' +
         '</div>' +
+        renderCompanyContactManager(lead) +
         renderLeadManagementForm(lead);
+    }
+
+    function renderCompanyContactManager(lead) {
+      const matchesSelectedCompany = state.contactsCompanyId === lead.companyId;
+      return '<div class="row"><label>連絡先管理</label><div class="detail-text">' +
+        window.SalesAiContacts.renderContactManager({
+          contacts: matchesSelectedCompany ? state.companyContacts : [],
+          selectedId: matchesSelectedCompany ? state.selectedContactId : null,
+          loading: state.contactsLoading || !matchesSelectedCompany
+        }) +
+      '</div></div>';
+    }
+
+    async function loadCompanyContacts(successMessage = '') {
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      if (!lead) {
+        state.companyContacts = [];
+        state.contactsCompanyId = null;
+        state.selectedContactId = null;
+        state.contactsLoading = false;
+        state.contactsError = '';
+        return;
+      }
+      const companyId = lead.companyId;
+      state.contactsCompanyId = companyId;
+      state.contactsLoading = true;
+      state.contactsError = '';
+      renderLeadDetail();
+      try {
+        const result = await api('/api/companies/' + companyId + '/contacts');
+        if (state.contactsCompanyId !== companyId) return;
+        state.companyContacts = Array.isArray(result) ? result : (result.items || []);
+        if (!state.companyContacts.some((contact) => contact.id === state.selectedContactId)) {
+          state.selectedContactId = window.SalesAiContacts.primaryContact(state.companyContacts)?.id || null;
+        }
+        state.contactsLoading = false;
+        state.contactsError = '';
+        renderLeadDetail();
+        renderLeads();
+        updateMailButtons(currentSelectedMail());
+        if (successMessage) setStatus('companyContactStatus', successMessage, 'ok');
+      } catch (error) {
+        if (state.contactsCompanyId !== companyId) return;
+        state.contactsLoading = false;
+        state.companyContacts = [];
+        state.contactsError = error.message || '連絡先を読み込めませんでした';
+        renderLeadDetail();
+        renderLeads();
+        updateMailButtons(currentSelectedMail());
+        setStatus('companyContactStatus', '連絡先を読み込めません: ' + error.message, 'error');
+      }
+    }
+
+    function selectCompanyContact(id) {
+      state.selectedContactId = id;
+      renderLeadDetail();
+    }
+
+    function newCompanyContact() {
+      state.selectedContactId = null;
+      renderLeadDetail();
+    }
+
+    async function saveCompanyContact() {
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      if (!lead) return;
+      setStatus('companyContactStatus', '保存中', 'warn');
+      const payload = {
+        name: nullableFieldValue('companyContactName'),
+        roleTitle: nullableFieldValue('companyContactRoleTitle'),
+        email: nullableFieldValue('companyContactEmail'),
+        inquiryUrl: nullableFieldValue('companyContactInquiryUrl'),
+        isPrimary: document.getElementById('companyContactPrimary').checked
+      };
+      try {
+        const path = state.selectedContactId
+          ? '/api/contacts/' + state.selectedContactId
+          : '/api/companies/' + lead.companyId + '/contacts';
+        const contact = await api(path, { method: state.selectedContactId ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
+        state.selectedContactId = contact.id || state.selectedContactId;
+        await loadCompanyContacts('連絡先を保存しました');
+      } catch (error) {
+        setStatus('companyContactStatus', error.message, 'error');
+      }
+    }
+
+    async function archiveCompanyContact() {
+      if (!state.selectedContactId || !window.confirm('この連絡先をアーカイブしますか？')) return;
+      try {
+        await api('/api/contacts/' + state.selectedContactId + '/archive', { method: 'POST', body: '{}' });
+        state.selectedContactId = null;
+        await loadCompanyContacts('連絡先をアーカイブしました');
+      } catch (error) {
+        setStatus('companyContactStatus', error.message, 'error');
+      }
+    }
+
+    async function toggleCompanyContactUnsubscribe() {
+      const contact = state.companyContacts.find((item) => item.id === state.selectedContactId);
+      if (!contact) return;
+      if (!contact.isUnsubscribed && !window.confirm('この連絡先を配信停止にしますか？')) return;
+      try {
+        if (contact.isUnsubscribed) {
+          await api('/api/contacts/' + contact.id, { method: 'PATCH', body: JSON.stringify({ isUnsubscribed: false }) });
+        } else {
+          await api('/api/contacts/' + contact.id + '/unsubscribe', { method: 'POST', body: '{}' });
+        }
+        await loadCompanyContacts(contact.isUnsubscribed ? '配信停止を解除しました' : '配信停止にしました');
+      } catch (error) {
+        setStatus('companyContactStatus', error.message, 'error');
+      }
     }
 
     function renderAnalysisCards(output) {
@@ -1953,7 +2073,27 @@ ${renderNavigationBadgesScript()}
     }
 
     function canGenerateMail() {
-      return Boolean(state.selectedLeadId && selectedLeadMails().length === 0);
+      const safety = selectedLeadContactSafety();
+      return Boolean(state.selectedLeadId && selectedLeadMails().length === 0 && safety.ready && !safety.blocked);
+    }
+
+    function selectedLeadContactSafety() {
+      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      if (!lead) return { ready: false, blocked: false, message: '営業対象を選択してください' };
+      if (state.contactsLoading || state.contactsCompanyId !== lead.companyId) {
+        return { ready: false, blocked: false, message: '連絡先を確認中です' };
+      }
+      if (state.contactsError) {
+        return { ready: false, blocked: true, message: '連絡先を確認できません。再読み込みしてください' };
+      }
+      if (!state.companyContacts.length) {
+        return { ready: true, blocked: false, message: '会社の連絡先台帳は未登録です' };
+      }
+      const primary = window.SalesAiContacts.primaryContact(state.companyContacts);
+      if (!primary) {
+        return { ready: true, blocked: true, message: '登録済み連絡先がすべて配信停止です' };
+      }
+      return { ready: true, blocked: false, message: '優先連絡先: ' + (primary.email || primary.inquiryUrl || primary.name || '連絡方法未登録') };
     }
 
     function ensureSelectedMailForLead() {
@@ -2094,6 +2234,7 @@ ${renderNavigationBadgesScript()}
       }
       renderSelectedMailWorkspace();
       renderLeadDetail();
+      void loadCompanyContacts();
       renderAiAnalysis();
       void loadAiAnalysis();
       return true;
@@ -2259,18 +2400,24 @@ ${renderNavigationBadgesScript()}
       const generateHelp = document.getElementById('generateHelp');
       const hasLead = Boolean(state.selectedLeadId);
       const hasExistingMails = selectedLeadMails().length > 0;
+      const contactSafety = selectedLeadContactSafety();
+      const contactBlocked = !contactSafety.ready || contactSafety.blocked;
       generateButton.disabled = !canGenerateMail();
       generateButton.title = !hasLead
         ? '先に営業対象一覧から対象を選択してください'
         : hasExistingMails
           ? '既存メールがあります。履歴から選択して編集・レビューしてください'
-          : 'この対象の新規メールを生成できます';
+          : contactBlocked
+            ? contactSafety.message
+            : 'この対象の新規メールを生成できます';
       if (generateHelp) {
         generateHelp.textContent = !hasLead
           ? '先に上の一覧から対象を選択'
           : hasExistingMails
             ? '既存メールがあります。履歴から選択してください'
-            : 'メール未生成です。ここから新規作成できます';
+            : contactBlocked
+              ? contactSafety.message
+              : 'メール未生成です。ここから新規作成できます';
       }
       document.getElementById('saveButton').disabled = !mail;
       document.getElementById('polishButton').disabled = !mail || !['draft', 'rejected'].includes(mail.status);
@@ -2285,12 +2432,12 @@ ${renderNavigationBadgesScript()}
         semanticButton.disabled = !mail || !['draft', 'rejected'].includes(mail.status) || dirty;
         semanticButton.title = dirty ? '先に本文を保存してください' : '選択したAI APIを使って案件との意味整合性を確認します';
       }
-      document.getElementById('reviewButton').disabled = !mail || mail.status !== 'draft';
-      document.getElementById('reReviewButton').disabled = !mail || mail.status !== 'rejected';
+      document.getElementById('reviewButton').disabled = !mail || mail.status !== 'draft' || contactBlocked;
+      document.getElementById('reReviewButton').disabled = !mail || mail.status !== 'rejected' || contactBlocked;
       document.getElementById('rejectButton').disabled = !mail || !['in_review', 'approved'].includes(mail.status);
-      document.getElementById('approveButton').disabled = !mail || mail.status !== 'in_review' || !state.checklistComplete;
-      document.getElementById('queueButton').disabled = !mail || mail.status !== 'approved' || !state.checklistComplete;
-      document.getElementById('markSentButton').disabled = !mail || !['approved', 'queued', 'sending'].includes(mail.status);
+      document.getElementById('approveButton').disabled = !mail || mail.status !== 'in_review' || !state.checklistComplete || contactBlocked;
+      document.getElementById('queueButton').disabled = !mail || mail.status !== 'approved' || !state.checklistComplete || contactBlocked;
+      document.getElementById('markSentButton').disabled = !mail || !['approved', 'queued', 'sending'].includes(mail.status) || (mail.status !== 'sending' && contactBlocked);
       const markSentButton = document.getElementById('markSentButton');
       if (markSentButton) {
         const manual = isManualSendMethod(state.leads.find((lead) => lead.id === state.selectedLeadId));
@@ -2305,7 +2452,7 @@ ${renderNavigationBadgesScript()}
       if (materialLinkButton) materialLinkButton.disabled = !mail || !['draft', 'rejected'].includes(mail.status);
       updatePrimaryMailAction(mail);
       const guide = document.getElementById('mailActionGuide');
-      if (guide) guide.textContent = mailActionGuideText(mail);
+      if (guide) guide.textContent = contactBlocked ? contactSafety.message : mailActionGuideText(mail);
     }
 
     function updatePrimaryMailAction(mail) {

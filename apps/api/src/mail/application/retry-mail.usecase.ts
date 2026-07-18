@@ -9,6 +9,11 @@ export class RetryMailUseCase {
   async execute(id: string) {
     const email = await this.mails.get(id);
     assertCanRetry(email.status);
-    return this.mails.retry(id);
+    return this.mails.transitionIfDeliveryAllowed(
+      id,
+      'queued',
+      'retried',
+      { retryCount: { increment: 1 } }
+    );
   }
 }

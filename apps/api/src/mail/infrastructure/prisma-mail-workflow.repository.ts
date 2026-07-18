@@ -63,17 +63,6 @@ export class PrismaMailWorkflowRepository {
     });
   }
 
-  retry(id: string) {
-    return this.prisma.outreachEmail.update({
-      where: { id },
-      data: {
-        status: 'queued',
-        retryCount: { increment: 1 },
-        events: { create: { type: 'retried' } }
-      }
-    });
-  }
-
   async claimForSending(id: string, idempotencyKey: string) {
     const email = await this.prisma.$transaction(async (tx) => {
       assertMailDeliveryAllowed(await this.deliverySnapshot(tx, id));
@@ -197,7 +186,7 @@ export class PrismaMailWorkflowRepository {
         contactId: true,
         toEmail: true,
         company: { select: { isBlocked: true } },
-        contact: { select: { deletedAt: true, isUnsubscribed: true } }
+        contact: { select: { deletedAt: true, isUnsubscribed: true, email: true } }
       }
     });
     if (!email) throw new NotFoundException('Mail not found');
@@ -213,6 +202,24 @@ export class PrismaMailWorkflowRepository {
       })
       : null;
 
-    return { company: email.company, contact: email.contact, legacyMatchedContact };
+    const [registeredContactCount, activeContactCount] = !email.contactId
+      ? await Promise.all([
+        reader.contactPerson.count({
+          where: { companyId: email.companyId, deletedAt: null }
+        }),
+        reader.contactPerson.count({
+          where: { companyId: email.companyId, deletedAt: null, isUnsubscribed: false }
+        })
+      ])
+      : [0, 0];
+
+    return {
+      company: email.company,
+      contact: email.contact,
+      legacyMatchedContact,
+      mailToEmail: email.toEmail,
+      registeredContactCount,
+      activeContactCount
+    };
   }
 }

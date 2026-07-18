@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AiModule } from './ai/ai.module';
 import { CompaniesModule } from './companies/companies.module';
+import { ContactsModule } from './contacts/contacts.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthModule } from './health/health.module';
 import { LeadsModule } from './leads/leads.module';
@@ -15,6 +16,7 @@ import { TrackingModule } from './tracking/tracking.module';
     DashboardModule,
     HealthModule,
     CompaniesModule,
+    ContactsModule,
     ProjectsModule,
     LeadsModule,
     MailModule,

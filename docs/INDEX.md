@@ -38,6 +38,7 @@
 | 29 | 29_PARSER_BOUNDARY_DESIGN.md | 取得・HTML parser・正規化の境界、fixture方針 | 作成済み |
 | 30 | 30_SALES_OPERATIONS_PRIORITY_ROADMAP.md | 取得から受注・失注までの業務優先順位と完成条件 | 作成済み |
 | 31 | 31_LEAD_DETAIL_EDIT_CONTRACT.md | 選択案件の編集可否・保存先・手入力保護契約 | 作成済み |
+| 32 | 32_CONTACT_MANAGEMENT_CONTRACT.md | 複数連絡先・優先・配信停止・メール連携契約 | 作成済み |
 
 ## 付属仕様
 - `../prisma/schema.prisma`

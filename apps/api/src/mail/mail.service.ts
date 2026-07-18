@@ -218,7 +218,8 @@ export class MailService {
           where: { id: email.contactId },
           data: {
             isUnsubscribed: true,
-            unsubscribedAt: receivedAt
+            unsubscribedAt: receivedAt,
+            isPrimary: false
           }
         });
       }

@@ -9,6 +9,12 @@ export class RequestMailReReviewUseCase {
   async execute(id: string) {
     const email = await this.mails.get(id);
     assertCanRequestReReview(email.status);
-    return this.mails.transition(id, 'in_review', 'reviewed', { failedReason: null }, { reReview: true });
+    return this.mails.transitionIfDeliveryAllowed(
+      id,
+      'in_review',
+      'reviewed',
+      { failedReason: null },
+      { reReview: true }
+    );
   }
 }

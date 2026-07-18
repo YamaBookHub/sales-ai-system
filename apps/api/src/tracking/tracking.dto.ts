@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 
 export class CreateTrackedLinkDto {
   @IsUUID()
@@ -16,7 +16,7 @@ export class CreateTrackedLinkDto {
 
 export class UnsubscribeDto {
   @IsOptional()
-  @IsString()
+  @IsEmail()
   email?: string;
 
   @IsOptional()

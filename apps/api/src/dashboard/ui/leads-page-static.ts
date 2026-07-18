@@ -2,6 +2,7 @@ import { renderSharedStyles } from './shared-styles';
 import { renderClientViewRulesScript } from '../client/view-rules';
 import { renderClientApiScript } from '../client/api-client';
 import { renderNavigationBadgesScript } from '../client/navigation-badges';
+import { renderClientContactsScript } from '../client/contacts';
 import { renderTopNavigation } from './top-navigation';
 
 export function renderLeadsPageDocument(clientScript: string): string {
@@ -167,7 +168,7 @@ export function renderLeadsPageDocument(clientScript: string): string {
 
   </main>
   <footer>Sales AI System</footer>
-  <script>\n${renderClientViewRulesScript()}\n${renderClientApiScript()}\n${renderNavigationBadgesScript()}\n${clientScript}\n  </script>
+  <script>\n${renderClientViewRulesScript()}\n${renderClientApiScript()}\n${renderClientContactsScript()}\n${renderNavigationBadgesScript()}\n${clientScript}\n  </script>
 </body>
 </html>`;
 }
