@@ -14,6 +14,7 @@ import { RecordMailReplyUseCase } from './application/record-mail-reply.usecase'
 import { GenerateMailDraftUseCase } from '../ai/application/generate-mail-draft.usecase';
 import { DEFAULT_CHECKLIST_ITEMS } from './mail-checklist.defaults';
 import { resolveMailRecipient } from './infrastructure/contact-recipient.resolver';
+import { assertLeadContactEligible } from './infrastructure/contact-eligibility.reader';
 import {
   CreateMailDraftDto,
   CreateMailReplyDto,
@@ -124,13 +125,28 @@ export class MailService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        `mail-draft:${lead.id}`
+      );
       const recipient = await resolveMailRecipient(tx, lead.companyId);
+      const destination = await assertLeadContactEligible(tx, lead, recipient, { lock: true });
+      const concurrentMail = await tx.outreachEmail.findFirst({
+        where: { leadId: lead.id },
+        select: { id: true }
+      });
+      if (concurrentMail) {
+        throw new ConflictException('この営業対象には既存メールがあります。履歴からメールを選択して編集・レビューしてください。');
+      }
       const email = await tx.outreachEmail.create({
         data: {
           leadId: lead.id,
           companyId: lead.companyId,
           contactId: recipient?.id,
           toEmail: recipient?.email,
+          destinationType: destination?.type,
+          destinationValue: destination?.value,
+          destinationKey: destination?.key,
           templateKey: dto.templateKey,
           subject: `${projectPlatformLabel(lead.project)}でのプロジェクトを拝見しご連絡いたしました`,
           body: manualInstruction,

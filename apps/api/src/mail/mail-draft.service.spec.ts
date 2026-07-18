@@ -5,20 +5,35 @@ describe('MailService draft creation', () => {
   const lead = {
     id: 'lead_1',
     companyId: 'company_1',
+    contactEmail: null,
+    contactFormUrl: null,
+    siteMessageUrl: null,
+    sendMethod: 'email',
+    company: { isBlocked: false, inquiryUrl: null },
     project: { platform: { name: 'CAMPFIRE' } }
   };
 
   const createService = () => {
     const tx = {
       outreachEmail: {
-        create: jest.fn().mockResolvedValue({ id: 'mail_manual', leadId: lead.id, body: '手動で作成した本文', status: 'draft' })
+        create: jest.fn().mockResolvedValue({ id: 'mail_manual', leadId: lead.id, body: '手動で作成した本文', status: 'draft' }),
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([])
       },
       salesLead: {
         update: jest.fn().mockResolvedValue({ id: lead.id, status: 'drafted' })
       },
       contactPerson: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'contact_1', email: 'primary@example.com' })
-      }
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'contact_1',
+          email: 'primary@example.com',
+          inquiryUrl: null,
+          deletedAt: null,
+          isUnsubscribed: false
+        }),
+        count: jest.fn().mockResolvedValue(1)
+      },
+      $executeRawUnsafe: jest.fn().mockResolvedValue(1)
     };
     const prisma = {
       salesLead: {
@@ -66,6 +81,9 @@ describe('MailService draft creation', () => {
           body: '手動で作成した本文',
           contactId: 'contact_1',
           toEmail: 'primary@example.com',
+          destinationType: 'email',
+          destinationValue: 'primary@example.com',
+          destinationKey: 'email:primary@example.com',
           status: 'draft'
         })
       })

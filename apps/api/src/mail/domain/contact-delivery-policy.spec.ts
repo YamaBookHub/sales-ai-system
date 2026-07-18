@@ -1,5 +1,10 @@
 import { ConflictException } from '@nestjs/common';
-import { assertMailDeliveryAllowed } from './contact-delivery-policy';
+import {
+  assertMailDeliveryAllowed,
+  buildDeliveryDestinationKeys,
+  normalizeContactUrl,
+  resolvePrimaryDeliveryDestination
+} from './contact-delivery-policy';
 
 describe('assertMailDeliveryAllowed', () => {
   const allowed = { company: { isBlocked: false }, contact: null };
@@ -42,5 +47,60 @@ describe('assertMailDeliveryAllowed', () => {
       contact: { isUnsubscribed: false, deletedAt: null, email: ' Contact@Example.COM ' },
       mailToEmail: 'contact@example.com'
     })).not.toThrow();
+  });
+
+  it.each([
+    ['same normalized email', {
+      destination: { sendMethod: 'email', email: ' SALES@Example.COM ' },
+      priorDeliveries: [{ status: 'sent', destination: { sendMethod: 'email', email: 'sales@example.com' } }]
+    }],
+    ['same normalized contact form URL', {
+      destination: { sendMethod: 'contact_form', inquiryUrl: 'https://example.com/contact/#form' },
+      priorDeliveries: [{
+        status: 'approved',
+        destination: { sendMethod: 'contact_form', inquiryUrl: 'https://EXAMPLE.com/contact' }
+      }]
+    }],
+    ['same site message destination still being prepared', {
+      destination: { sendMethod: 'site_message', siteMessageUrl: 'https://example.com/profile/1' },
+      priorDeliveries: [{
+        status: 'draft',
+        destination: { sendMethod: 'site_message', siteMessageUrl: 'https://example.com/profile/1/' }
+      }]
+    }]
+  ])('rejects duplicate outreach for the %s', (_label, duplicate) => {
+    expect(() => assertMailDeliveryAllowed({ ...allowed, ...duplicate } as any)).toThrow(ConflictException);
+  });
+
+  it('does not confuse different delivery channels or destinations', () => {
+    expect(() => assertMailDeliveryAllowed({
+      ...allowed,
+      destination: { sendMethod: 'email', email: 'sales@example.com' },
+      priorDeliveries: [{
+        status: 'sent',
+        destination: { sendMethod: 'contact_form', inquiryUrl: 'https://example.com/contact' }
+      }]
+    })).not.toThrow();
+  });
+
+  it('normalizes URL fragments, host case, and trailing slash', () => {
+    expect(normalizeContactUrl('https://EXAMPLE.com/contact/#form'))
+      .toBe('https://example.com/contact');
+  });
+
+  it('selects one auditable destination for persistence', () => {
+    expect(resolvePrimaryDeliveryDestination({
+      email: ' SALES@Example.COM ',
+      inquiryUrl: 'https://example.com/contact/'
+    })).toEqual({
+      type: 'email',
+      value: 'sales@example.com',
+      key: 'email:sales@example.com'
+    });
+    expect(buildDeliveryDestinationKeys({
+      sendMethod: 'contact_form',
+      email: 'sales@example.com',
+      inquiryUrl: 'https://example.com/contact/'
+    })).toEqual(['contact_form:https://example.com/contact']);
   });
 });

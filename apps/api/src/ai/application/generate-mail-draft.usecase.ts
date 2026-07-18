@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { GenerateMailDto } from '../ai.dto';
 import { buildLocalMailDraft, buildLocalMailInput } from '../domain/local-mail-draft';
 import { resolveMailRecipient } from '../../mail/infrastructure/contact-recipient.resolver';
+import { assertLeadContactEligible } from '../../mail/infrastructure/contact-eligibility.reader';
 
 @Injectable()
 export class GenerateMailDraftUseCase {
@@ -36,13 +37,28 @@ export class GenerateMailDraftUseCase {
     const draft = buildLocalMailDraft(aiInput);
 
     const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        `mail-draft:${lead.id}`
+      );
       const recipient = await resolveMailRecipient(tx, lead.companyId);
+      const destination = await assertLeadContactEligible(tx, lead, recipient, { lock: true });
+      const concurrentMail = await tx.outreachEmail.findFirst({
+        where: { leadId: lead.id },
+        select: { id: true }
+      });
+      if (concurrentMail) {
+        throw new ConflictException('この営業対象には既存メールがあります。履歴からメールを選択して編集・レビューしてください。');
+      }
       const email = await tx.outreachEmail.create({
         data: {
           leadId: lead.id,
           companyId: lead.companyId,
           contactId: recipient?.id,
           toEmail: recipient?.email,
+          destinationType: destination?.type,
+          destinationValue: destination?.value,
+          destinationKey: destination?.key,
           templateKey: dto.templateKey,
           subject: draft.subject,
           body: draft.body,

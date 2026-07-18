@@ -303,6 +303,9 @@ model OutreachEmail {
   body           String
   bodyHtml       String?
   toEmail        String?
+  destinationType  String?
+  destinationValue String?
+  destinationKey   String?
   ccEmails       String[]    @default([])
   bccEmails      String[]    @default([])
   gmailMessageId String?
@@ -330,6 +333,7 @@ model OutreachEmail {
   @@index([status])
   @@index([leadId])
   @@index([companyId])
+  @@index([destinationKey, status])
   @@index([gmailThreadId])
   @@index([scheduledAt])
 }

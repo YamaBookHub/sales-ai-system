@@ -37,7 +37,9 @@
 - `ContactPerson.isUnsubscribed`、`unsubscribedAt` を更新する配信停止APIがある。
 - `Company.isBlocked` を更新するblock APIがある。
 - 返信一覧では配信停止・block・拒否返信を停止判断として表示・フィルタする。
-- ただし現行の `send-queued` 共通guardはstatus、checklist、sender設定を検査するもので、会社blockとcontact配信停止をclaim前に拒否する処理は未実装である。実送信を有効化する前に補完が必要である。
+- 下書き、レビュー、承認、queue、手動送信記録、実送信claimで、会社blockとcontact配信停止を共通検査する。
+- メール、問い合わせURL、サイト内送信URLを正規化した送信先キーで比較し、作業中または送信済みの別メールがある場合は重複接触を拒否する。
+- 判定と状態更新は送信先単位のadvisory lockを含む同一transactionで行う。
 
 ## 3. 認証・権限の実装状況
 
@@ -66,8 +68,8 @@
 
 - JWT/sessionまたはGoogleユーザーOAuthによる認証
 - RBACとcurrent userを利用した全API保護
-- block・配信停止を含む送信前共通guard
+- 認証userと拒否操作を結びつける完全なAuditLog
 - worker、Redis、scheduler、DLQ、rate limit、外部providerの真の冪等性
 - 重要操作の完全なAuditLog、監視、secret rotation、CSRF/CORS等の本番hardening
 
-本番で実送信を有効化する場合は、少なくとも認証・RBAC、送信前共通guard、監査、rate limit、provider障害時の運用手順を別途完了させる。
+本番で実送信を有効化する場合は、少なくとも認証・RBAC、完全な操作監査、rate limit、provider障害時の運用手順を別途完了させる。

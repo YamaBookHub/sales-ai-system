@@ -8,7 +8,11 @@ describe('GenerateMailDraftUseCase', () => {
     reason: 'SNSで商品の魅力が伝わりやすい',
     brandAnalysisMemo: null,
     snsAnalysisMemo: null,
-    company: { name: 'テスト株式会社' },
+    contactEmail: null,
+    contactFormUrl: null,
+    siteMessageUrl: null,
+    sendMethod: 'email',
+    company: { name: 'テスト株式会社', isBlocked: false, inquiryUrl: null },
     project: {
       title: '真空保存できる米びつ',
       platform: { name: 'CAMPFIRE', type: 'campfire' },
@@ -23,7 +27,9 @@ describe('GenerateMailDraftUseCase', () => {
   const createPrisma = () => {
     const tx = {
       outreachEmail: {
-        create: jest.fn().mockResolvedValue({ id: 'mail_1', leadId: lead.id, status: 'draft' })
+        create: jest.fn().mockResolvedValue({ id: 'mail_1', leadId: lead.id, status: 'draft' }),
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([])
       },
       salesLead: {
         update: jest.fn().mockResolvedValue({ id: lead.id, status: 'drafted' })
@@ -32,8 +38,16 @@ describe('GenerateMailDraftUseCase', () => {
         create: jest.fn().mockResolvedValue({ id: 'generation_1' })
       },
       contactPerson: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'contact_1', email: 'primary@example.com' })
-      }
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'contact_1',
+          email: 'primary@example.com',
+          inquiryUrl: null,
+          deletedAt: null,
+          isUnsubscribed: false
+        }),
+        count: jest.fn().mockResolvedValue(1)
+      },
+      $executeRawUnsafe: jest.fn().mockResolvedValue(1)
     };
     const prisma = {
       salesLead: {
@@ -68,7 +82,13 @@ describe('GenerateMailDraftUseCase', () => {
       })
     );
     expect(tx.outreachEmail.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ contactId: 'contact_1', toEmail: 'primary@example.com' })
+      data: expect.objectContaining({
+        contactId: 'contact_1',
+        toEmail: 'primary@example.com',
+        destinationType: 'email',
+        destinationValue: 'primary@example.com',
+        destinationKey: 'email:primary@example.com'
+      })
     }));
     expect(tx.salesLead.update).toHaveBeenCalledWith({
       where: { id: lead.id },
@@ -124,5 +144,44 @@ describe('GenerateMailDraftUseCase', () => {
         })
       })
     );
+  });
+
+  it('does not create mail or advance the lead for a blocked company', async () => {
+    const { prisma, tx } = createPrisma();
+    prisma.salesLead.findUnique.mockResolvedValue({
+      ...lead,
+      company: { ...lead.company, isBlocked: true }
+    });
+    const useCase = new GenerateMailDraftUseCase(prisma as any);
+
+    await expect(useCase.execute(lead.id, { templateKey: 'normal' }))
+      .rejects.toThrow('この企業は送信禁止');
+
+    expect(tx.outreachEmail.create).not.toHaveBeenCalled();
+    expect(tx.salesLead.update).not.toHaveBeenCalled();
+    expect(tx.aiGeneration.create).not.toHaveBeenCalled();
+  });
+
+  it('does not create mail or advance the lead when the same recipient has active outreach', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.outreachEmail.findMany.mockResolvedValue([{
+      status: 'sent',
+      sentAt: new Date('2026-07-17T00:00:00.000Z'),
+      toEmail: 'PRIMARY@EXAMPLE.COM',
+      destinationType: 'email',
+      destinationValue: 'primary@example.com',
+      destinationKey: 'email:primary@example.com',
+      contact: null,
+      company: { inquiryUrl: null },
+      lead: { sendMethod: 'email', contactEmail: null, contactFormUrl: null, siteMessageUrl: null }
+    }]);
+    const useCase = new GenerateMailDraftUseCase(prisma as any);
+
+    await expect(useCase.execute(lead.id, { templateKey: 'normal' }))
+      .rejects.toThrow('重複接触');
+
+    expect(tx.outreachEmail.create).not.toHaveBeenCalled();
+    expect(tx.salesLead.update).not.toHaveBeenCalled();
+    expect(tx.aiGeneration.create).not.toHaveBeenCalled();
   });
 });

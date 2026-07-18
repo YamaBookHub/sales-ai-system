@@ -17,7 +17,13 @@ describe('resolveMailRecipient', () => {
         email: { not: null }
       },
       orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
-      select: { id: true, email: true }
+      select: {
+        id: true,
+        email: true,
+        inquiryUrl: true,
+        deletedAt: true,
+        isUnsubscribed: true
+      }
     });
   });
 

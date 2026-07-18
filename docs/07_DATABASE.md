@@ -200,6 +200,9 @@ Relation: `SalesLead`。Index: `leadId`, `totalScore`。
 | `body` | `String` |
 | `bodyHtml` | `String?` |
 | `toEmail` | `String?` |
+| `destinationType` | `String?` |
+| `destinationValue` | `String?` |
+| `destinationKey` | `String?` |
 | `ccEmails` | `String[] @default([])` |
 | `bccEmails` | `String[] @default([])` |
 | `gmailMessageId` | `String?` |
@@ -214,7 +217,7 @@ Relation: `SalesLead`。Index: `leadId`, `totalScore`。
 | `updatedAt` | `DateTime @updatedAt` |
 
 Relation: `SalesLead?`, `Company`, `ContactPerson?`, 承認者の `User?`, `EmailEvent[]`, `EmailReply[]`, `TrackedLink[]`, `MailAttachment[]`, `AiGeneration[]`, `MailChecklistItem[]`。
-Index: `status`, `leadId`, `companyId`, `gmailThreadId`, `scheduledAt`。
+Index: `status`, `leadId`, `companyId`, `[destinationKey, status]`, `gmailThreadId`, `scheduledAt`。
 
 ### 3.9 `MailTemplate`
 
@@ -381,18 +384,18 @@ Relation: `User?`。Index: `[entityType, entityId]`, `action`, `createdAt`。
 
 ### 4.1 実装済み
 
-- 上記enum/modelと、対応するmigration 6件が存在する。
+- 上記enum/modelと、対応するmigration 7件が存在する。
 - CAMPFIRE/Makuakeのproject取得・正規化・import、Company/Lead保存、重複URLと `[companyId, projectId]` の制約を利用した重複防止がある。
 - Leadのscore計算、Task、AI分析・メール下書き・返信分類、MailTemplate、MailChecklistItem、TrackedLink/LinkClickがAPIから利用できる。
 - `EmailEvent` はメール状態遷移、送信claim、追跡イベントの履歴に使われる。`AuditLog` はproject importやseedなど一部の操作で記録される。
 - AI生成メールは `draft` として保存し、実送信は人間のreview/承認/checklistを通過したメールに限定する。
+- `Company.isBlocked`、`ContactPerson.isUnsubscribed`、正規化送信先、既存送信履歴をまとめて検査する共通guardを、下書き・レビュー・手動送信記録・実送信へ適用済み。
 
 ### 4.2 未実装または未完了
 
 - `UserRole`、`User.isActive`、`AuditLog.userId` はDBにあるが、ログイン、current user、認証guard、JWT/session、GoogleユーザーOAuth、RBACによるroute保護は未実装。
 - Redis、共有queue、worker、scheduler、DLQ、送信予約の自動実行に対応するmodel/module/scriptはない。
 - `OutreachEmail` のprovider送信はGmail OAuthの最小実装のみ。provider側の真の冪等性、外部APIの一般的retry方針、送信監査の詳細化は未完了。
-- `Company.isBlocked` と `ContactPerson.isUnsubscribed` の保存・配信停止・返信一覧の停止表示は実装済みだが、`send-queued` 前に両方を共通検査する送信guardは未実装。
 - すべての重要操作をcurrent userに紐づけたAuditLogへ記録する仕組みは未実装。
 
 ### 4.3 将来要件
@@ -409,7 +412,7 @@ Relation: `User?`。Index: `[entityType, entityId]`, `action`, `createdAt`。
 
 ## 6. Migrationと運用
 
-現在のmigrationは次の6件である。
+現在のmigrationは次の7件である。
 
 - `20260708000000_init`
 - `20260709000000_mail_checklist`
@@ -417,5 +420,6 @@ Relation: `User?`。Index: `[entityType, entityId]`, `action`, `createdAt`。
 - `20260709002000_lead_sales_management`
 - `20260711000000_project_source_metrics`
 - `20260712000000_mail_templates`
+- `20260718000000_contact_eligibility_destination`
 
 検証は `npm run prisma:validate` を使用する。開発DBへの反映は既存の `npm run prisma:migrate`、client生成は `npm run prisma:generate` を使用する。本番のmigration deploy専用scriptはまだpackage scriptsにないため、未実装のscript名を前提にしない。

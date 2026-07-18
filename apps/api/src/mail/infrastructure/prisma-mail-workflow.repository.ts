@@ -3,7 +3,7 @@ import { EmailEventType, EmailStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DEFAULT_CHECKLIST_ITEMS } from '../mail-checklist.defaults';
 import { leadStatusForEmailStatus } from '../domain/mail-policy';
-import { assertMailDeliveryAllowed, MailDeliverySnapshot } from '../domain/contact-delivery-policy';
+import { assertPersistedMailContactEligible } from './contact-eligibility.reader';
 
 @Injectable()
 export class PrismaMailWorkflowRepository {
@@ -58,17 +58,24 @@ export class PrismaMailWorkflowRepository {
     payload?: Prisma.InputJsonObject
   ) {
     return this.prisma.$transaction(async (tx) => {
-      assertMailDeliveryAllowed(await this.deliverySnapshot(tx, id));
-      return this.transitionInTransaction(tx, id, status, eventType, extra, payload);
+      const destination = await assertPersistedMailContactEligible(tx, id, { lock: true });
+      return this.transitionInTransaction(
+        tx,
+        id,
+        status,
+        eventType,
+        { ...destinationFields(destination), ...extra },
+        payload
+      );
     });
   }
 
   async claimForSending(id: string, idempotencyKey: string) {
     const email = await this.prisma.$transaction(async (tx) => {
-      assertMailDeliveryAllowed(await this.deliverySnapshot(tx, id));
+      const destination = await assertPersistedMailContactEligible(tx, id, { lock: true });
       const updated = await tx.outreachEmail.updateMany({
         where: { id, status: 'queued' },
-        data: { status: 'sending' }
+        data: { status: 'sending', ...destinationFields(destination) }
       });
 
       if (updated.count !== 1) {
@@ -102,7 +109,7 @@ export class PrismaMailWorkflowRepository {
   }
 
   async assertDeliveryAllowed(id: string) {
-    assertMailDeliveryAllowed(await this.deliverySnapshot(this.prisma, id));
+    await assertPersistedMailContactEligible(this.prisma, id);
   }
 
   markSentAfterSend(
@@ -158,6 +165,15 @@ export class PrismaMailWorkflowRepository {
     extra: Record<string, unknown>,
     payload?: Prisma.InputJsonObject
   ) {
+    const current = await tx.outreachEmail.findUnique({
+      where: { id },
+      select: { status: true }
+    });
+    if (!current) throw new NotFoundException('Mail not found');
+    if (current.status === status) {
+      throw new ConflictException('このメールはすでに同じ状態へ更新されています。重複操作は記録しません。');
+    }
+
     const email = await tx.outreachEmail.update({
       where: { id },
       data: {
@@ -178,48 +194,13 @@ export class PrismaMailWorkflowRepository {
     return email;
   }
 
-  private async deliverySnapshot(reader: PrismaService | Prisma.TransactionClient, id: string): Promise<MailDeliverySnapshot> {
-    const email = await reader.outreachEmail.findUnique({
-      where: { id },
-      select: {
-        companyId: true,
-        contactId: true,
-        toEmail: true,
-        company: { select: { isBlocked: true } },
-        contact: { select: { deletedAt: true, isUnsubscribed: true, email: true } }
-      }
-    });
-    if (!email) throw new NotFoundException('Mail not found');
+}
 
-    const legacyMatchedContact = !email.contactId && email.toEmail
-      ? await reader.contactPerson.findFirst({
-        where: {
-          companyId: email.companyId,
-          email: { equals: email.toEmail, mode: 'insensitive' },
-          OR: [{ deletedAt: { not: null } }, { isUnsubscribed: true }]
-        },
-        select: { deletedAt: true, isUnsubscribed: true }
-      })
-      : null;
-
-    const [registeredContactCount, activeContactCount] = !email.contactId
-      ? await Promise.all([
-        reader.contactPerson.count({
-          where: { companyId: email.companyId, deletedAt: null }
-        }),
-        reader.contactPerson.count({
-          where: { companyId: email.companyId, deletedAt: null, isUnsubscribed: false }
-        })
-      ])
-      : [0, 0];
-
-    return {
-      company: email.company,
-      contact: email.contact,
-      legacyMatchedContact,
-      mailToEmail: email.toEmail,
-      registeredContactCount,
-      activeContactCount
-    };
-  }
+function destinationFields(destination: { type: string; value: string; key: string } | null) {
+  if (!destination) return {};
+  return {
+    destinationType: destination.type,
+    destinationValue: destination.value,
+    destinationKey: destination.key
+  };
 }

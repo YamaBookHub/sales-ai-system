@@ -40,7 +40,7 @@ Baseline:
 | 15 | LL-004 | P0 | complete | Terra T3 + Sol audit | LL-003 | 2026-07-17 / 複数連絡先・primary排他・配信停止・メール安全境界、84 suites 287 tests・実DB6 tests成功 | Contact CRUD |
 | 16 | SO-001 | P0 | complete | Luna T2 | LM-001 | 2026-07-16 / mark-sent API・sent event・UI実装済み | 手動送信記録 |
 | 17 | SO-002 | P0 | complete | Terra T3 + Luna audit | SO-001, LL-004 | 2026-07-18 / 8分類・原子更新・重複防止・今日ページング、86 suites 297 tests・実DB8 tests成功 | 返信・次回対応 |
-| 18 | SO-003 | P0 | pending | Sol T4 -> Terra | LL-004, SO-001 | - | 配信拒否・重複接触guard |
+| 18 | SO-003 | P0 | complete | Sol T4 -> Terra | LL-004, SO-001 | 2026-07-18 / 送信先snapshot・共通guard・advisory lock・86 suites 306 tests・実DB12 tests成功 | 配信拒否・重複接触guard |
 | 19 | SO-004 | P0 | pending | Sol T4 | SO-002, SO-003 | - | 商談状態・履歴設計 |
 | 20 | SO-005 | P0 | pending | Terra T3 + Sol audit | SO-004 | - | 商談状態・履歴実装 |
 | 21 | LS-006 | P1 | pending | Terra T3 | LS-005 | - | 逐次候補追加 |
@@ -101,3 +101,4 @@ Baseline:
 | 2026-07-17 | LL-003 | Terra T3 + read-only audit agent | complete | Company・Project・Leadの一括編集、null消去、日程分離、手入力メモ保護、案件なし409、Lead再読込と取得処理のadvisory lock、query付きURL保持、スコア再計算の日程保護を実装。77 suites・252 tests、実DB5 tests、OpenAPI・Prisma・build成功 |
 | 2026-07-17 | LL-004 | Terra T3 + Sol audit agent | complete | 会社単位の複数連絡先CRUD、primary排他、配信停止、営業・メール画面の共通管理UI、宛先解決、古い宛先拒否、レビューから送信直前までの停止guardを実装。84 suites・287 tests、実DB6 tests、OpenAPI・Prisma・build成功 |
 | 2026-07-18 | SO-002 | Terra T3 + Luna audit agent | complete | 返信8分類、Lead・Task・Contact・EmailEventの原子更新、同一返信の同時重複防止、返信一覧のTask期限、今日・期限超過のserver paginationを実装。OpenAPI 71 operations、86 suites 297 tests、実DB4 suites 8 tests、Prisma・build成功 |
+| 2026-07-18 | SO-003 | Sol design audit + Terra implementation | complete | email・問い合わせURL・サイト内URLの正規化snapshot、会社block・配信停止・別Lead重複の共通guard、送信先advisory lockを実装。OpenAPI 71 operations、86 suites 306 tests、実DB5 suites 12 tests、Prisma・build成功 |
