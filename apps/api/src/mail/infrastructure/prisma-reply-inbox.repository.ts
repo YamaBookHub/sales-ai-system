@@ -11,7 +11,7 @@ import {
 } from '../domain/reply-inbox.repository';
 
 const MAX_PAGE_SIZE = 100;
-const REPLY_INBOX_SELECT = {
+const REPLY_INBOX_SELECT = Prisma.validator<Prisma.EmailReplySelect>()({
   id: true,
   emailId: true,
   fromEmail: true,
@@ -38,12 +38,18 @@ const REPLY_INBOX_SELECT = {
           priority: true,
           score: true,
           nextActionAt: true,
+          tasks: {
+            where: { status: { in: ['todo', 'doing'] } },
+            orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
+            take: 1,
+            select: { id: true, title: true, status: true, dueAt: true }
+          },
           project: { select: { id: true, title: true, url: true } }
         }
       }
     }
   }
-} as const;
+});
 
 @Injectable()
 export class PrismaReplyInboxRepository implements ReplyInboxRepository {

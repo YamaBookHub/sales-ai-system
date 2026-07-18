@@ -62,7 +62,8 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('id="todayStats"');
     expect(html).toContain('id="todayRows"');
     expect(html).toContain('lead.nextTask?.dueAt || lead.nextActionAt || lead.nextFollowUpAt');
-    expect(html).toContain('function classifyToday(lead)');
+    expect(html).toContain('/api/leads/today?page=');
+    expect(html).toContain('id="pageLabel"');
     expect(html).toContain('今日の対応はありません');
     expect(html).toContain("location.href = '/leads-view'");
   });

@@ -19,6 +19,7 @@ describe('reply-inbox view model', () => {
       lead: {
         id: 'lead_1', status: 'replied' as const, priority: 'medium' as const, score: 72,
         nextActionAt: new Date('2026-07-13T01:02:03.000Z'),
+        tasks: [{ id: 'task_1', title: '資料・詳細希望へ対応', status: 'todo', dueAt: new Date('2026-07-13T01:02:03.000Z') }],
         project: { id: 'project_1', title: '新商品プロジェクト', url: 'https://example.com/project' }
       }
     }
@@ -34,6 +35,7 @@ describe('reply-inbox view model', () => {
     expect(result.categoryLabel).toBe(label);
     expect(result.receivedAt).toBe('2026-07-12T01:02:03.000Z');
     expect(result.lead.project?.title).toBe('新商品プロジェクト');
+    expect(result.lead.nextTask).toMatchObject({ id: 'task_1', title: '資料・詳細希望へ対応', dueAt: '2026-07-13T01:02:03.000Z' });
   });
 
   it('always elevates unsubscribe and complaint for manager review', () => {
@@ -65,7 +67,7 @@ describe('reply-inbox view model', () => {
     expect(result.confidence).toBe(1);
     expect(result.summary).toBeNull();
     expect(result.flags.managerReviewRequired).toBe(true);
-    expect(result.lead).toMatchObject({ id: null, project: null });
+    expect(result.lead).toMatchObject({ id: null, project: null, nextTask: null });
   });
 
   it('truncates long body text without changing the stored classification', () => {

@@ -413,6 +413,7 @@ Recommended next action:
 ### SO-002 返信・次回対応の完成
 
 - Priority: P0
+- Status: complete
 - Model: Terra / T3 / high
 - Depends on: SO-001, LL-004
 - 目的: 手動登録した返信を分類し、次回対応日とTaskへ確実に反映する。

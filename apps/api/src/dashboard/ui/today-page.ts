@@ -30,14 +30,21 @@ export function renderTodayPage() {
     </section>
     <section data-ui="today-lead-list">
       <div class="section-head"><h2>優先して見る案件</h2><span id="todayCount" class="status muted" aria-live="polite">0件</span></div>
-      <div class="body"><div class="today-list" id="todayRows"><div class="ui-state-loading">今日の対応を読み込み中</div></div></div>
+      <div class="body">
+        <div class="today-list" id="todayRows"><div class="ui-state-loading">今日の対応を読み込み中</div></div>
+        <div class="pagination">
+          <button id="previousButton" type="button" onclick="changePage(-1)" disabled>前へ</button>
+          <span id="pageLabel">1 / 1</span>
+          <button id="nextButton" type="button" onclick="changePage(1)" disabled>次へ</button>
+        </div>
+      </div>
     </section>
   </main>
   <footer>Sales AI System</footer>
   <script>
 ${renderClientApiScript()}
 ${renderNavigationBadgesScript()}
-    const state = { leads: [], mails: [], items: [] };
+    const state = { page: 1, limit: 50, total: 0, items: [], counts: {} };
     const categories = [
       ['overdue', '期限超過', '次対応日を確認'],
       ['due_today', '今日が期限', '今日の対応'],
@@ -55,10 +62,11 @@ ${renderNavigationBadgesScript()}
     async function loadToday() {
       setPageStatus('読み込み中', 'loading');
       try {
-        const [leads, mails] = await Promise.all([api('/api/leads?limit=200'), api('/api/mails?limit=200')]);
-        state.leads = leads.items || [];
-        state.mails = mails.items || [];
-        state.items = state.leads.map((lead) => ({ lead, mail: latestMail(lead.id), category: classifyToday(lead) })).filter((item) => item.category);
+        const payload = await api('/api/leads/today?page=' + state.page + '&limit=' + state.limit);
+        state.items = payload.items || [];
+        state.counts = payload.counts || {};
+        state.total = Number(payload.total) || 0;
+        state.page = Number(payload.page) || state.page;
         renderToday();
         setPageStatus('読み込み完了', 'ok');
       } catch (error) {
@@ -69,34 +77,27 @@ ${renderNavigationBadgesScript()}
 
     function renderToday() {
       document.getElementById('todayDate').textContent = tokyoDateKey(new Date());
-      const counts = Object.fromEntries(categories.map(([key]) => [key, state.items.filter((item) => item.category === key).length]));
+      const counts = state.counts;
       document.getElementById('todayStats').innerHTML = categories.map(([key, label, hint]) => '<button class="today-stat" type="button" data-today-category="' + key + '" data-active="' + Boolean(counts[key]) + '" onclick="openCategory(&quot;' + key + '&quot;)"><strong>' + counts[key] + '</strong><span>' + label + ' / ' + hint + '</span></button>').join('');
       const rows = state.items
-        .sort((left, right) => categoryRank(left.category) - categoryRank(right.category) || String(left.lead.company?.name || left.lead.companyId).localeCompare(String(right.lead.company?.name || right.lead.companyId), 'ja'))
-        .slice(0, 20)
         .map(({ lead, mail, category }) => '<button class="today-row" type="button" data-lead-id="' + escapeAttr(lead.id) + '" onclick="openLead(this.dataset.leadId)"><strong>' + escapeHtml(lead.company?.name || lead.companyId || '会社名未取得') + '</strong><span class="reason">' + escapeHtml(categoryLabel(category)) + '</span><span class="badge">' + escapeHtml(mail?.status ? mailStatusLabel(mail.status) : lead.status || '未判定') + '</span><span class="date meta">' + escapeHtml(formatDate(lead.nextTask?.dueAt || lead.nextActionAt || lead.nextFollowUpAt)) + '</span></button>')
         .join('');
-      document.getElementById('todayCount').textContent = state.items.length + '件';
+      document.getElementById('todayCount').textContent = state.total + '件';
       document.getElementById('todayRows').innerHTML = rows || '<div class="ui-state-empty">今日の対応はありません。営業案件から候補を探してください。</div>';
+      updatePagination();
     }
 
-    function classifyToday(lead) {
-      const mail = latestMail(lead.id);
-      const due = lead.nextTask?.dueAt || lead.nextActionAt || lead.nextFollowUpAt;
-      const dueKey = tokyoDateKey(due);
-      const today = tokyoDateKey(new Date());
-      if (dueKey && dueKey < today) return 'overdue';
-      if (dueKey && dueKey === today) return 'due_today';
-      if (lead.status === 'replied') return 'reply_received';
-      if (mail?.status === 'failed') return 'send_failed';
-      if (mail?.status === 'draft') return 'draft_review';
-      if (mail?.status === 'approved') return 'approval_pending';
-      if (mail?.status === 'queued') return 'send_queue';
-      return null;
+    function updatePagination() {
+      const pages = Math.max(1, Math.ceil(state.total / state.limit));
+      document.getElementById('pageLabel').textContent = state.page + ' / ' + pages;
+      document.getElementById('previousButton').disabled = state.page <= 1;
+      document.getElementById('nextButton').disabled = state.page >= pages;
     }
-
-    function latestMail(leadId) { return state.mails.filter((mail) => mail.leadId === leadId || mail.lead?.id === leadId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]; }
-    function categoryRank(category) { return categories.findIndex(([key]) => key === category); }
+    function changePage(delta) {
+      const pages = Math.max(1, Math.ceil(state.total / state.limit));
+      state.page = Math.min(pages, Math.max(1, state.page + delta));
+      loadToday();
+    }
     function categoryLabel(category) { return categories.find(([key]) => key === category)?.[1] || '今日の対応'; }
     function openCategory(category) { const mailFilter = { draft_review: 'draft', approval_pending: 'approved', send_queue: 'queued', send_failed: 'failed' }[category]; const statusFilter = category === 'reply_received' ? 'replied' : ''; location.href = mailFilter ? '/leads-view?mailFilter=' + encodeURIComponent(mailFilter) : statusFilter ? '/leads-view?statusFilter=' + encodeURIComponent(statusFilter) : '/leads-view'; }
     function openLead(id) { localStorage.setItem('salesAiSystem.selectedLeadId', id); location.href = '/leads-view'; }

@@ -18,6 +18,11 @@ export class LeadsController {
     return ok(await this.leads.list(Number(page), Number(limit), status, priority));
   }
 
+  @Get('today')
+  async listToday(@Query('page') page = '1', @Query('limit') limit = '50') {
+    return ok(await this.leads.listToday(Number(page), Number(limit)));
+  }
+
   @Post()
   async create(@Body() dto: CreateLeadDto) {
     return ok(await this.leads.create(dto));

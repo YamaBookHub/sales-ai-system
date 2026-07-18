@@ -30,6 +30,7 @@ export type ReplyInboxRecord = {
       priority: LeadPriority;
       score: number;
       nextActionAt?: Date | string | null;
+      tasks?: Array<{ id: string; title: string; status: string; dueAt?: Date | string | null }>;
       project?: { id: string; title: string; url: string } | null;
     } | null;
   };
@@ -59,6 +60,7 @@ export type ReplyInboxItem = {
     priority: LeadPriority | null;
     score: number | null;
     nextActionAt: string | null;
+    nextTask: { id: string; title: string; status: string; dueAt: string | null } | null;
     project: { id: string; title: string; url: string } | null;
   };
   flags: { managerReviewRequired: boolean; stopFollowup: boolean; hasReply: true };
@@ -111,6 +113,14 @@ export function buildReplyInboxViewModel(record: ReplyInboxRecord): ReplyInboxIt
       priority: lead?.priority || null,
       score: lead?.score ?? null,
       nextActionAt: toNullableIso(lead?.nextActionAt),
+      nextTask: lead?.tasks?.[0]
+        ? {
+            id: lead.tasks[0].id,
+            title: lead.tasks[0].title,
+            status: lead.tasks[0].status,
+            dueAt: toNullableIso(lead.tasks[0].dueAt)
+          }
+        : null,
       project: lead?.project ? { id: lead.project.id, title: lead.project.title, url: lead.project.url } : null
     },
     flags: { managerReviewRequired, stopFollowup, hasReply: true }

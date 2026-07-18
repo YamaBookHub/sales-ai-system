@@ -116,7 +116,11 @@ ${renderNavigationBadgesScript()}
         const contact = item.contact && (item.contact.name || item.contact.email) ? (item.contact.name || item.contact.email) : (item.fromEmail || '送信元不明');
         const action = item.lead && item.lead.id ? '<button type="button" data-lead-id="' + escapeHtml(item.lead.id) + '" onclick="openLead(this.dataset.leadId)">案件を開く</button>' : '<span class="meta">担当未設定</span>';
         const rowClass = flags.managerReviewRequired ? ' class="manager-review"' : '';
-        return '<tr' + rowClass + '><td><span class="company">' + escapeHtml(item.company && item.company.name) + '</span><span class="project">' + escapeHtml(project) + '</span><span class="meta">' + escapeHtml(contact) + '</span></td><td>' + badges + '<span class="meta">確信度 ' + escapeHtml(Math.round((Number(item.confidence) || 0) * 100)) + '%</span></td><td><strong>' + escapeHtml(item.summary || item.mail && item.mail.subject || '返信') + '</strong><span class="preview">' + escapeHtml(item.bodyText || '本文なし') + '</span></td><td class="next-action">' + escapeHtml(item.nextAction || '返信内容を確認し、次対応を判断する。') + '</td><td>' + escapeHtml(formatDate(item.receivedAt)) + '<span class="meta">' + escapeHtml(item.fromEmail || '') + '</span></td><td>' + action + '</td></tr>';
+        const dueAt = item.lead && item.lead.nextTask && item.lead.nextTask.dueAt || item.lead && item.lead.nextActionAt;
+        const taskTitle = item.lead && item.lead.nextTask && item.lead.nextTask.title;
+        const due = dueLabel(dueAt);
+        const nextAction = '<span>' + escapeHtml(item.nextAction || '返信内容を確認し、次対応を判断する。') + '</span>' + (taskTitle ? '<span class="meta">タスク: ' + escapeHtml(taskTitle) + '</span>' : '') + (due ? '<span class="meta">' + escapeHtml(due) + '</span>' : '');
+        return '<tr' + rowClass + '><td><span class="company">' + escapeHtml(item.company && item.company.name) + '</span><span class="project">' + escapeHtml(project) + '</span><span class="meta">' + escapeHtml(contact) + '</span></td><td>' + badges + '<span class="meta">確信度 ' + escapeHtml(Math.round((Number(item.confidence) || 0) * 100)) + '%</span></td><td><strong>' + escapeHtml(item.summary || item.mail && item.mail.subject || '返信') + '</strong><span class="preview">' + escapeHtml(item.bodyText || '本文なし') + '</span></td><td class="next-action">' + nextAction + '</td><td>' + escapeHtml(formatDate(item.receivedAt)) + '<span class="meta">' + escapeHtml(item.fromEmail || '') + '</span></td><td>' + action + '</td></tr>';
       }).join('');
       list.innerHTML = '<table><thead><tr><th>会社・案件</th><th>分類</th><th>返信</th><th>次の対応</th><th>受信日時</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
       updatePagination();
@@ -125,6 +129,22 @@ ${renderNavigationBadgesScript()}
     function formatDate(value) {
       const date = new Date(value);
       return Number.isNaN(date.getTime()) ? '日時不明' : date.toLocaleString('ja-JP', { timeZone:'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    }
+
+    function dueLabel(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      const due = tokyoDateKey(date);
+      const today = tokyoDateKey(new Date());
+      const prefix = due < today ? '期限超過: ' : due === today ? '今日が期限: ' : '期限: ';
+      return prefix + date.toLocaleString('ja-JP', { timeZone:'Asia/Tokyo', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    }
+
+    function tokyoDateKey(value) {
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone:'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(value);
+      const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+      return values.year + '-' + values.month + '-' + values.day;
     }
 
     function updatePagination() {

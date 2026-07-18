@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { normalizeImportedCompanyName, projectImportLockKeys } from '../projects/domain/project-import-policy';
 import { applyLeadPolicy } from './domain/lead-policy';
 import { ACTIVE_TASK_STATUSES, TaskRecord, toTaskView } from './domain/task';
+import { classifyTodaySales, TodaySalesCategory, tokyoDateKey } from './domain/today-sales';
 import { CreateLeadDto, UpdateLeadDto } from './leads.dto';
 import { ScoreLeadUseCase } from './application/score-lead.usecase';
 
@@ -40,6 +41,69 @@ export class LeadsService {
     ]);
 
     return { items: items.map((lead) => withTaskSummary(lead)), page, limit, total };
+  }
+
+  async listToday(page = 1, limit = 50, now = new Date()) {
+    const normalizedPage = Math.max(1, Math.floor(Number(page) || 1));
+    const normalizedLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 50)));
+    const endOfToday = tokyoEndOfDay(now);
+    const candidates = await this.prisma.salesLead.findMany({
+      where: {
+        OR: [
+          { nextActionAt: { lte: endOfToday } },
+          { nextFollowUpAt: { lte: endOfToday } },
+          { tasks: { some: { status: { in: ACTIVE_TASK_STATUSES }, dueAt: { lte: endOfToday } } } },
+          { status: 'replied' },
+          { mails: { some: { status: { in: ['draft', 'approved', 'queued', 'failed'] } } } }
+        ]
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        company: true,
+        project: { include: { platform: true } },
+        scores: { orderBy: { createdAt: 'desc' }, take: 1 },
+        tasks: {
+          where: { status: { in: ACTIVE_TASK_STATUSES } },
+          orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
+          take: 1,
+          include: { assignee: { select: { id: true, name: true, email: true } } }
+        },
+        _count: { select: { tasks: { where: { status: { in: ACTIVE_TASK_STATUSES } } } } },
+        mails: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: { _count: { select: { replies: true } } }
+        }
+      }
+    });
+
+    const actionable = candidates
+      .map((record) => {
+        const summarized = withTaskSummary(record);
+        const { mails, ...lead } = summarized;
+        const mail = mails[0] || null;
+        const category = classifyTodaySales({
+          nextActionAt: lead.nextTask?.dueAt || lead.nextActionAt,
+          nextFollowUpAt: lead.nextFollowUpAt,
+          mailStatus: mail?.status,
+          hasReply: lead.status === 'replied' || Boolean(mail?._count.replies)
+        }, now);
+        return category ? { lead, mail, category } : null;
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .sort((left, right) => todayCategoryRank(left.category) - todayCategoryRank(right.category)
+        || todayDueAt(left).localeCompare(todayDueAt(right))
+        || left.lead.company.name.localeCompare(right.lead.company.name, 'ja'));
+
+    const counts = Object.fromEntries(TODAY_CATEGORIES.map((category) => [category, actionable.filter((item) => item.category === category).length]));
+    const start = (normalizedPage - 1) * normalizedLimit;
+    return {
+      items: actionable.slice(start, start + normalizedLimit),
+      counts,
+      page: normalizedPage,
+      limit: normalizedLimit,
+      total: actionable.length
+    };
   }
 
   create(dto: CreateLeadDto) {
@@ -294,6 +358,23 @@ function withTaskSummary<T extends { tasks?: TaskRecord[]; _count?: { tasks: num
   const activeTaskCount = lead._count?.tasks || 0;
   const { tasks: _tasks, _count: _count, ...rest } = lead;
   return { ...rest, nextTask, activeTaskCount };
+}
+
+const TODAY_CATEGORIES: TodaySalesCategory[] = [
+  'overdue', 'due_today', 'draft_review', 'approval_pending', 'send_queue', 'reply_received', 'send_failed'
+];
+
+function todayCategoryRank(category: TodaySalesCategory) {
+  return TODAY_CATEGORIES.indexOf(category);
+}
+
+function todayDueAt(item: { lead: { nextTask?: { dueAt?: string | null } | null; nextActionAt?: Date | null; nextFollowUpAt?: Date | null } }) {
+  const value = item.lead.nextTask?.dueAt || item.lead.nextActionAt || item.lead.nextFollowUpAt;
+  return value ? new Date(value).toISOString() : '9999-12-31T23:59:59.999Z';
+}
+
+function tokyoEndOfDay(now: Date) {
+  return new Date(`${tokyoDateKey(now)}T23:59:59.999+09:00`);
 }
 
 

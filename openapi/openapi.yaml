@@ -386,6 +386,18 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
+  /api/leads/today:
+    get:
+      summary: List today's actionable sales leads
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated today and overdue work with category counts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
   /api/leads/{id}:
     get:
       summary: Get a sales lead

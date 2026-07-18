@@ -13,6 +13,7 @@ import { mailSenderProvider } from './infrastructure/mail-sender.config';
 import { PrismaMailWorkflowRepository } from './infrastructure/prisma-mail-workflow.repository';
 import { PrismaReplyInboxRepository } from './infrastructure/prisma-reply-inbox.repository';
 import { ListReplyInboxUseCase } from './application/list-reply-inbox.usecase';
+import { RecordMailReplyUseCase } from './application/record-mail-reply.usecase';
 import { MailController } from './mail.controller';
 import { MailService } from './mail.service';
 import { ReplyInboxController } from './reply-inbox.controller';
@@ -25,6 +26,7 @@ import { ReplyInboxController } from './reply-inbox.controller';
     PrismaMailWorkflowRepository,
     PrismaReplyInboxRepository,
     ListReplyInboxUseCase,
+    RecordMailReplyUseCase,
     CheckMailDraftConsistencyUseCase,
     RequestMailReviewUseCase,
     RequestMailReReviewUseCase,

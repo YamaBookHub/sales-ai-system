@@ -44,7 +44,8 @@ describe('MailService draft creation', () => {
       {} as any,
       {} as any,
       {} as any,
-      generateMailDraft as any
+      generateMailDraft as any,
+      {} as any
     );
 
     return { service, prisma, tx, generateMailDraft, generatedEmail };

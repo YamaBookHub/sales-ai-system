@@ -1,28 +1,19 @@
 import { MailService } from './mail.service';
 
 describe('MailService reply recording', () => {
-  it('marks the linked contact unsubscribed for an unsubscribe reply', async () => {
-    const email = { id: 'mail_1', leadId: 'lead_1', contactId: 'contact_1' };
-    const tx = {
-      emailReply: { create: jest.fn().mockResolvedValue({ id: 'reply_1' }) },
-      emailEvent: { create: jest.fn().mockResolvedValue({ id: 'event_1' }) },
-      contactPerson: { update: jest.fn().mockResolvedValue({ id: 'contact_1' }) },
-      salesLead: { update: jest.fn().mockResolvedValue({ id: 'lead_1' }) }
-    };
-    const prisma = {
-      outreachEmail: { findUnique: jest.fn().mockResolvedValue(email) },
-      $transaction: jest.fn((callback) => callback(tx))
-    };
-    const service = new MailService(prisma as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+  it('delegates reply recording to the transactional use case', async () => {
+    const result = { reply: { id: 'reply_1' }, classification: { category: 'unsubscribe' }, task: null };
+    const recordMailReply = { execute: jest.fn().mockResolvedValue(result) };
+    const service = new MailService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, recordMailReply as any);
 
-    await service.recordReply(email.id, {
+    await expect(service.recordReply('mail_1', {
       fromEmail: 'contact@example.com',
       body: '今後の配信を停止してください。'
-    });
+    })).resolves.toBe(result);
 
-    expect(tx.contactPerson.update).toHaveBeenCalledWith({
-      where: { id: 'contact_1' },
-      data: { isUnsubscribed: true, unsubscribedAt: expect.any(Date), isPrimary: false }
+    expect(recordMailReply.execute).toHaveBeenCalledWith('mail_1', {
+      fromEmail: 'contact@example.com',
+      body: '今後の配信を停止してください。'
     });
   });
 });

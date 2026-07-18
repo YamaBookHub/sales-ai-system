@@ -14,7 +14,18 @@ export function classifyReplyText(body: string, now = new Date()): ReplyClassifi
   const lower = text.toLowerCase();
   const tomorrow = daysFrom(now, 1);
 
-  if (/配信停止|停止|不要|unsubscribe|今後.*不要/.test(lower)) {
+  if (/クレーム|苦情|迷惑|不快|二度と|法的|通報/.test(lower)) {
+    return {
+      category: 'complaint',
+      confidence: 0.9,
+      summary: 'クレームまたは強い不満を含む返信です。',
+      nextAction: '内容を確認し、責任者へ共有して対応方針を決める。',
+      leadStatus: 'replied',
+      nextActionAt: now
+    };
+  }
+
+  if (/配信停止|メール.*停止|連絡.*停止|unsubscribe|今後.*(?:連絡|メール).*不要/.test(lower)) {
     return {
       category: 'unsubscribe',
       confidence: 0.9,
@@ -31,7 +42,28 @@ export function classifyReplyText(body: string, now = new Date()): ReplyClassifi
       summary: '面談または日程調整につながる返信です。',
       nextAction: '日程候補または調整リンクを送る。',
       leadStatus: 'meeting_candidate',
-      nextActionAt: tomorrow
+      nextActionAt: now
+    };
+  }
+
+  if (/興味ありません|不要です|結構です|お断り|見送|予算.*ない|時期.*違/.test(lower)) {
+    return {
+      category: 'not_interested',
+      confidence: 0.82,
+      summary: '現時点では見送りまたは不要の返信です。',
+      nextAction: '無理に追わず、必要なら時期を空けて再確認する。',
+      leadStatus: 'no_response'
+    };
+  }
+
+  if (/興味あります|関心があります|ぜひ|前向き|検討したい|話を聞きたい/.test(lower)) {
+    return {
+      category: 'interested',
+      confidence: 0.82,
+      summary: '提案への興味または前向きな反応がある返信です。',
+      nextAction: '相手の関心事項を確認し、次の案内を送る。',
+      leadStatus: 'replied',
+      nextActionAt: now
     };
   }
 
@@ -43,16 +75,6 @@ export function classifyReplyText(body: string, now = new Date()): ReplyClassifi
       nextAction: '質問に回答し、必要なら資料や説明を送る。',
       leadStatus: 'replied',
       nextActionAt: tomorrow
-    };
-  }
-
-  if (/興味ありません|不要です|結構です|お断り|予算.*ない|時期.*違/.test(lower)) {
-    return {
-      category: 'not_interested',
-      confidence: 0.82,
-      summary: '現時点では見送りまたは不要の返信です。',
-      nextAction: '無理に追わず、必要なら時期を空けて再確認する。',
-      leadStatus: 'no_response'
     };
   }
 
@@ -73,7 +95,7 @@ export function classifyReplyText(body: string, now = new Date()): ReplyClassifi
     summary: text.slice(0, 120) || '返信内容を確認してください。',
     nextAction: '返信内容を確認し、次対応を判断する。',
     leadStatus: 'replied',
-    nextActionAt: tomorrow
+    nextActionAt: now
   };
 }
 

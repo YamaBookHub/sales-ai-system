@@ -20,6 +20,7 @@ describe('MailService templates', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
       {} as any
     );
 
