@@ -1,7 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { LeadPriority, LeadStatus } from '@prisma/client';
 import { ok } from '../common/api-response';
-import { CreateLeadDto, UpdateLeadDto } from './leads.dto';
+import { CreateLeadDto, ListLeadsQueryDto, UpdateLeadDto } from './leads.dto';
 import { LeadsService } from './leads.service';
 
 @Controller('leads')
@@ -9,13 +8,8 @@ export class LeadsController {
   constructor(private readonly leads: LeadsService) {}
 
   @Get()
-  async list(
-    @Query('page') page = '1',
-    @Query('limit') limit = '20',
-    @Query('status') status?: LeadStatus,
-    @Query('priority') priority?: LeadPriority
-  ) {
-    return ok(await this.leads.list(Number(page), Number(limit), status, priority));
+  async list(@Query() query: ListLeadsQueryDto) {
+    return ok(await this.leads.list(query.page, query.limit, query.status, query.priority, query));
   }
 
   @Get('today')

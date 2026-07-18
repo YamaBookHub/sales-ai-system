@@ -2,7 +2,7 @@ import { renderLeadsPageDocument } from './leads-page-static';
 
 export function renderLeadsPage() {
     return renderLeadsPageDocument(`    const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
-    const state = { leads: [], mails: [], aiGenerations: [], tasks: [], assignees: [], companyContacts: [], contactsCompanyId: null, selectedContactId: null, contactsLoading: false, selectedLeadId: null, editingTaskId: null, listPage: 1, pageSize: 20, leadFilterSignature: '', summaryFilter: 'all', sort: { table: 'lead', key: '', direction: 'asc' }, opportunitiesByLeadId: {}, opportunity: null, opportunityHistory: [], opportunityLoading: false, opportunityError: '', opportunityNotice: null, opportunityRequestId: 0 };
+    const state = { leads: [], mails: [], aiGenerations: [], tasks: [], assignees: [], companyContacts: [], contactsCompanyId: null, selectedContactId: null, contactsLoading: false, selectedLeadId: null, selectedLeadRecord: null, editingTaskId: null, listPage: 1, pageSize: 20, leadListMeta: { page: 1, limit: 20, total: 0, summary: { total: 0, noContact: 0, draft: 0, review: 0, queued: 0 } }, leadListRequestId: 0, leadFilterTimerId: null, summaryFilter: 'all', sort: { table: 'lead', key: 'createdAt', direction: 'desc' }, opportunitiesByLeadId: {}, opportunity: null, opportunityHistory: [], opportunityLoading: false, opportunityError: '', opportunityNotice: null, opportunityRequestId: 0 };
 
     async function api(path, options = {}) {
       return window.SalesAiApi.request(path, options, { includeOperatorEmail: true });
@@ -10,16 +10,14 @@ export function renderLeadsPage() {
 
     async function loadAll() {
       setPageStatus('読み込み中', 'loading');
+      const requestId = ++state.leadListRequestId;
       try {
-        const [leads, mails] = await Promise.all([
-          api('/api/leads?limit=200'),
-          api('/api/mails?limit=200')
-        ]);
-        state.leads = leads.items || [];
-        state.mails = mails.items || [];
-        restoreSelectedLead();
         applyUrlFilters();
-        populateSourceFilterOptions('sourceFilter');
+        const leads = await api(buildLeadListPath());
+        if (requestId !== state.leadListRequestId) return;
+        applyLeadListResponse(leads);
+        await restoreSelectedLead();
+        if (requestId !== state.leadListRequestId) return;
         render();
         void loadCompanyContacts();
         void loadTaskAssignees();
@@ -29,6 +27,83 @@ export function renderLeadsPage() {
       } catch (error) {
         setPageStatus('読み込みに失敗しました: ' + error.message + '。更新を押して再試行してください。', 'error');
       }
+    }
+
+    function buildLeadListPath() {
+      const params = new URLSearchParams({
+        page: String(state.listPage),
+        limit: String(state.pageSize),
+        sort: state.sort.key || 'createdAt',
+        sortDirection: state.sort.direction || 'desc'
+      });
+      const directFilters = {
+        keyword: value('keyword'),
+        source: value('sourceFilter'),
+        status: value('statusFilter'),
+        priority: value('priorityFilter'),
+        contactState: value('contactFilter'),
+        mailStatus: value('mailFilter'),
+        nextAction: value('nextActionFilter')
+      };
+      if (state.summaryFilter === 'noContact') directFilters.contactState = 'none';
+      if (state.summaryFilter === 'draft') directFilters.mailStatus = 'draft';
+      if (state.summaryFilter === 'review') directFilters.mailStatus = 'in_review';
+      if (state.summaryFilter === 'queued') directFilters.mailStatus = 'queued';
+      Object.entries(directFilters).forEach(([key, filterValue]) => {
+        if (filterValue && filterValue !== 'any') params.set(key, filterValue);
+      });
+      return '/api/leads?' + params.toString();
+    }
+
+    function applyLeadListResponse(response) {
+      state.leads = response.items || [];
+      state.leadListMeta = {
+        page: Number(response.page || state.listPage),
+        limit: Number(response.limit || state.pageSize),
+        total: Number(response.total || 0),
+        summary: response.summary || state.leadListMeta.summary
+      };
+      state.listPage = state.leadListMeta.page;
+      const selectedOnPage = state.leads.find((lead) => lead.id === state.selectedLeadId);
+      if (selectedOnPage) state.selectedLeadRecord = selectedOnPage;
+    }
+
+    async function loadLeadPage(options = {}) {
+      const requestId = ++state.leadListRequestId;
+      if (!options.silent) setPageStatus('営業案件を読み込み中', 'loading');
+      try {
+        const response = await api(buildLeadListPath());
+        if (requestId !== state.leadListRequestId) return;
+        applyLeadListResponse(response);
+        render();
+        setPageStatus(state.leadListMeta.total ? '読み込み完了' : '条件に合う営業案件は0件です', state.leadListMeta.total ? 'ok' : 'empty');
+      } catch (error) {
+        if (requestId !== state.leadListRequestId) return;
+        setPageStatus('読み込みに失敗しました: ' + error.message, 'error');
+      }
+    }
+
+    function scheduleLeadListReload(debounce = true) {
+      if (state.leadFilterTimerId) clearTimeout(state.leadFilterTimerId);
+      state.leadListRequestId += 1;
+      state.summaryFilter = 'all';
+      state.listPage = 1;
+      const run = () => {
+        state.leadFilterTimerId = null;
+        void loadLeadPage();
+      };
+      if (debounce) state.leadFilterTimerId = setTimeout(run, 300);
+      else run();
+    }
+
+    function setLeadListSortFromControls() {
+      state.sort = {
+        table: 'lead',
+        key: value('leadSortSelect') || 'createdAt',
+        direction: value('leadSortDirection') || 'desc'
+      };
+      state.listPage = 1;
+      void loadLeadPage();
     }
 
     function setPageStatus(message, stateType) {
@@ -50,7 +125,6 @@ export function renderLeadsPage() {
     }
 
     function render() {
-      syncLeadPaginationState();
       renderStats();
       renderRows();
       renderDetail();
@@ -60,19 +134,13 @@ export function renderLeadsPage() {
     }
 
     function renderStats() {
-      const counts = {
-        total: state.leads.length,
-        noContact: state.leads.filter((lead) => !hasContact(lead)).length,
-        draft: state.leads.filter((lead) => latestMail(lead.id)?.status === 'draft').length,
-        review: state.leads.filter((lead) => latestMail(lead.id)?.status === 'in_review').length,
-        queued: state.leads.filter((lead) => latestMail(lead.id)?.status === 'queued').length
-      };
+      const counts = state.leadListMeta.summary || { total: state.leadListMeta.total, noContact: 0, draft: 0, review: 0, queued: 0 };
       document.getElementById('stats').innerHTML =
-        statCard('all', '総案件', counts.total) +
-        statCard('noContact', '連絡先なし', counts.noContact) +
-        statCard('draft', '下書き', counts.draft) +
-        statCard('review', '確認待ち', counts.review) +
-        statCard('queued', '送信待ち', counts.queued);
+        statCard('all', '総案件', Number(counts.total || 0)) +
+        statCard('noContact', '連絡先なし', Number(counts.noContact || 0)) +
+        statCard('draft', '下書き', Number(counts.draft || 0)) +
+        statCard('review', '確認待ち', Number(counts.review || 0)) +
+        statCard('queued', '送信待ち', Number(counts.queued || 0));
       const labels = { all: '全件', noContact: '連絡先なし', draft: '下書き', review: '確認待ち', queued: '送信待ち' };
       document.getElementById('summaryFilterStatus').textContent = '選択中: ' + (labels[state.summaryFilter] || '全件');
       document.getElementById('clearSummaryFilterButton').disabled = state.summaryFilter === 'all';
@@ -85,22 +153,18 @@ export function renderLeadsPage() {
 
     function setSummaryFilter(filter) {
       state.summaryFilter = filter;
-      ['keyword', 'sourceFilter', 'statusFilter', 'priorityFilter', 'contactFilter', 'mailFilter'].forEach((id) => {
+      ['keyword', 'sourceFilter', 'statusFilter', 'priorityFilter', 'contactFilter', 'mailFilter', 'nextActionFilter'].forEach((id) => {
         const element = document.getElementById(id);
-        if (element) element.value = '';
+        if (element) element.value = id === 'nextActionFilter' ? 'any' : '';
       });
-      render();
+      state.listPage = 1;
+      void loadLeadPage();
     }
 
     function renderRows() {
       const listScroll = document.querySelector('[data-ui="lead-list-workspace"] .lead-list-scroll');
       const listScrollTop = listScroll ? listScroll.scrollTop : 0;
-      const allVisibleLeads = filteredLeads();
-      const pageCount = Math.max(1, Math.ceil(allVisibleLeads.length / state.pageSize));
-      state.listPage = Math.min(state.listPage, pageCount);
-      const pageStart = (state.listPage - 1) * state.pageSize;
-      const visibleLeads = allVisibleLeads.slice(pageStart, pageStart + state.pageSize);
-      const rows = visibleLeads.map((lead) => {
+      const rows = state.leads.map((lead) => {
         const mail = latestMail(lead.id);
         const project = lead.project || {};
         const contact = contactSummary(lead);
@@ -120,23 +184,9 @@ export function renderLeadsPage() {
       }).join('');
       document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="10" class="ui-state-empty">条件に合う営業案件がありません</td></tr>';
       if (listScroll) listScroll.scrollTop = listScrollTop;
-      document.getElementById('listCount').textContent = allVisibleLeads.length + '件';
-      renderLeadPagination(allVisibleLeads.length);
-      renderSortMarks('lead', ['company', 'project', 'source', 'status', 'opportunity', 'priority', 'score', 'contact', 'mail', 'attentionReason']);
-    }
-
-    function syncLeadPaginationState() {
-      const signature = leadFilterSignature();
-      if (state.leadFilterSignature !== signature) {
-        state.leadFilterSignature = signature;
-        state.listPage = 1;
-      }
-    }
-
-    function leadFilterSignature() {
-      return ['keyword', 'sourceFilter', 'statusFilter', 'priorityFilter', 'contactFilter', 'mailFilter']
-        .map((id) => value(id)).join('|') + '|' + state.summaryFilter + '|' +
-        state.sort.table + '|' + state.sort.key + '|' + state.sort.direction;
+      document.getElementById('listCount').textContent = state.leadListMeta.total + '件';
+      renderLeadPagination(state.leadListMeta.total);
+      renderSortMarks('lead', ['company', 'project', 'priority', 'score']);
     }
 
     function renderLeadPagination(total) {
@@ -154,13 +204,13 @@ export function renderLeadsPage() {
     }
 
     function changeLeadPage(delta) {
-      const pageCount = Math.max(1, Math.ceil(filteredLeads().length / state.pageSize));
+      const pageCount = Math.max(1, Math.ceil(state.leadListMeta.total / state.pageSize));
       state.listPage = Math.min(pageCount, Math.max(1, state.listPage + delta));
-      render();
+      void loadLeadPage();
     }
 
     function renderDetail() {
-      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      const lead = selectedLead();
       const container = document.getElementById('leadDetail');
       const openButton = document.getElementById('openProjectButton');
       const nextAction = document.getElementById('detailNextAction');
@@ -467,7 +517,7 @@ export function renderLeadsPage() {
     }
 
     async function loadCompanyContacts(successMessage = '') {
-      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      const lead = selectedLead();
       if (!lead) {
         state.companyContacts = [];
         state.contactsCompanyId = null;
@@ -509,7 +559,7 @@ export function renderLeadsPage() {
     }
 
     async function saveCompanyContact() {
-      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      const lead = selectedLead();
       if (!lead) return;
       setInlineStatus('companyContactStatus', '保存中', 'warn');
       const payload = {
@@ -645,7 +695,7 @@ export function renderLeadsPage() {
     function renderTaskWorkspace() {
       const container = document.getElementById('leadTaskWorkspace');
       if (!container) return;
-      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      const lead = selectedLead();
       if (!lead) {
         container.innerHTML = '<div class="ui-state-empty">案件を選択すると次回対応を管理できます</div>';
         return;
@@ -764,6 +814,7 @@ export function renderLeadsPage() {
       ]);
       if (leadId !== state.selectedLeadId) return;
       state.leads = state.leads.map((item) => item.id === leadId ? lead : item);
+      state.selectedLeadRecord = lead;
       state.tasks = Array.isArray(tasks) ? tasks : [];
       render();
     }
@@ -797,40 +848,7 @@ export function renderLeadsPage() {
     }
 
     function filteredLeads() {
-      const keyword = value('keyword').toLowerCase();
-      const status = value('statusFilter');
-      const priority = value('priorityFilter');
-      const contact = value('contactFilter');
-      const mailStatus = value('mailFilter');
-      const sourceFilter = value('sourceFilter');
-      const leads = state.leads.filter((lead) => {
-        const mail = latestMail(lead.id);
-        const project = lead.project || {};
-        const sourceLabel = projectPlatformLabel(project);
-        const haystack = [
-          lead.company?.name,
-          project.title,
-          sourceLabel,
-          project.url,
-          project.description,
-          lead.reason,
-          lead.ownerMemo
-        ].filter(Boolean).join(' ').toLowerCase();
-        if (keyword && !haystack.includes(keyword)) return false;
-        if (status && lead.status !== status) return false;
-        if (priority && lead.priority !== priority) return false;
-        if (contact === 'has' && !hasContact(lead)) return false;
-        if (contact === 'none' && hasContact(lead)) return false;
-        if (mailStatus === 'none' && mail) return false;
-        if (mailStatus && mailStatus !== 'none' && mail?.status !== mailStatus) return false;
-        if (sourceFilter && sourceLabel !== sourceFilter) return false;
-        if (state.summaryFilter === 'noContact' && hasContact(lead)) return false;
-        if (state.summaryFilter === 'draft' && mail?.status !== 'draft') return false;
-        if (state.summaryFilter === 'review' && mail?.status !== 'in_review') return false;
-        if (state.summaryFilter === 'queued' && mail?.status !== 'queued') return false;
-        return true;
-      });
-      return sortItems(leads, state.sort, leadSortValue);
+      return state.leads;
     }
 
     function updateExportPreview() {
@@ -937,7 +955,12 @@ export function renderLeadsPage() {
       } else {
         state.sort = { table, key, direction: defaultSortDirection(key) };
       }
-      render();
+      state.listPage = 1;
+      const sortSelect = document.getElementById('leadSortSelect');
+      const directionSelect = document.getElementById('leadSortDirection');
+      if (sortSelect) sortSelect.value = state.sort.key;
+      if (directionSelect) directionSelect.value = state.sort.direction;
+      void loadLeadPage();
     }
 
     function renderSortMarks(table, keys) {
@@ -984,30 +1007,28 @@ export function renderLeadsPage() {
       return ({ high: 3, medium: 2, low: 1 })[priority] || 0;
     }
 
-    function populateSourceFilterOptions(selectId) {
-      const select = document.getElementById(selectId);
-      if (!select) return;
-      const current = select.value;
-      const labels = Array.from(new Set(state.leads.map((lead) => projectPlatformLabel(lead.project || {})).filter(Boolean))).sort();
-      select.innerHTML = '<option value="">取得元 すべて</option>' +
-        labels.map((label) => '<option value="' + escapeAttr(label) + '">' + escapeHtml(label) + '</option>').join('');
-      if (labels.includes(current)) select.value = current;
-    }
-
     function latestMail(leadId) {
-      const lead = state.leads.find((item) => item.id === leadId);
-      return state.mails
+      const lead = state.leads.find((item) => item.id === leadId) || (state.selectedLeadRecord?.id === leadId ? state.selectedLeadRecord : null);
+      const embeddedMails = Array.isArray(lead?.mails) ? lead.mails : [];
+      const candidates = embeddedMails.concat(state.mails)
         .filter((mail) => {
           if (mail.leadId === leadId || mail.lead?.id === leadId) return true;
           if (lead && mail.companyId === lead.companyId) return true;
           if (lead && mail.company?.id === lead.companyId) return true;
           return false;
-        })
+        });
+      return Array.from(new Map(candidates.map((mail) => [mail.id, mail])).values())
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+    }
+
+    function selectedLead() {
+      return state.leads.find((item) => item.id === state.selectedLeadId) ||
+        (state.selectedLeadRecord?.id === state.selectedLeadId ? state.selectedLeadRecord : null);
     }
 
     function selectLead(id) {
       state.selectedLeadId = id;
+      state.selectedLeadRecord = state.leads.find((lead) => lead.id === id) || state.selectedLeadRecord;
       persistSelectedLead(id);
       state.aiGenerations = [];
       state.opportunity = null;
@@ -1035,15 +1056,26 @@ export function renderLeadsPage() {
       localStorage.setItem(SELECTED_LEAD_STORAGE_KEY, id);
     }
 
-    function restoreSelectedLead() {
+    async function restoreSelectedLead() {
       const savedId = localStorage.getItem(SELECTED_LEAD_STORAGE_KEY);
-      if (savedId && state.leads.some((lead) => lead.id === savedId)) {
-        state.selectedLeadId = savedId;
+      if (!savedId) return;
+      state.selectedLeadId = savedId;
+      const savedOnPage = state.leads.find((lead) => lead.id === savedId);
+      if (savedOnPage) {
+        state.selectedLeadRecord = savedOnPage;
+        return;
+      }
+      try {
+        state.selectedLeadRecord = await api('/api/leads/' + savedId);
+      } catch {
+        state.selectedLeadId = null;
+        state.selectedLeadRecord = null;
+        localStorage.removeItem(SELECTED_LEAD_STORAGE_KEY);
       }
     }
 
     function openProject() {
-      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      const lead = selectedLead();
       const url = lead?.project?.url;
       if (url) window.open(url, '_blank', 'noopener');
     }
@@ -1099,20 +1131,32 @@ export function renderLeadsPage() {
     }
 
     function hasContact(lead) {
-      return Boolean(lead.contactEmail || lead.contactFormUrl || lead.siteMessageUrl);
+      return Boolean(lead.contactEmail || lead.contactFormUrl || lead.siteMessageUrl || activeCompanyContacts(lead).some((contact) => contact.email || contact.inquiryUrl));
     }
 
     function contactSummary(lead) {
       if (lead.contactEmail) return 'メール';
       if (lead.contactFormUrl) return 'フォーム';
       if (lead.siteMessageUrl) return 'サイト内';
+      const companyContact = activeCompanyContacts(lead).find((contact) => contact.email || contact.inquiryUrl);
+      if (companyContact?.email) return 'メール';
+      if (companyContact?.inquiryUrl) return 'フォーム';
       return '未確認';
+    }
+
+    function activeCompanyContacts(lead) {
+      return Array.isArray(lead?.company?.contacts)
+        ? lead.company.contacts.filter((contact) => !contact.deletedAt && !contact.isUnsubscribed)
+        : [];
     }
 
     function suggestSendMethod(lead) {
       if (lead.contactEmail) return 'メール';
       if (lead.contactFormUrl) return '問い合わせフォーム';
       if (lead.siteMessageUrl) return 'サイト内メッセージ';
+      const companyContact = activeCompanyContacts(lead).find((contact) => contact.email || contact.inquiryUrl);
+      if (companyContact?.email) return 'メール';
+      if (companyContact?.inquiryUrl) return '問い合わせフォーム';
       return '';
     }
 
@@ -1122,12 +1166,18 @@ export function renderLeadsPage() {
     }
 
     function contactDetail(lead) {
-      return [
+      const managedContacts = activeCompanyContacts(lead).flatMap((contact) => [
+        contact.email ? 'メール: ' + escapeHtml(contact.email) : '',
+        contact.inquiryUrl ? 'フォーム: ' + renderLink(contact.inquiryUrl) : ''
+      ]);
+      const entries = [
         lead.contactEmail ? 'メール: ' + escapeHtml(lead.contactEmail) : '',
         lead.contactFormUrl ? 'フォーム: ' + renderLink(lead.contactFormUrl) : '',
         lead.siteMessageUrl ? 'サイト内: ' + renderLink(lead.siteMessageUrl) : '',
+        ...managedContacts,
         lead.contactMemo ? 'メモ: ' + escapeHtml(lead.contactMemo) : ''
-      ].filter(Boolean).join('<br>') || '未確認';
+      ].filter(Boolean);
+      return Array.from(new Set(entries)).join('<br>') || '未確認';
     }
 
     function snsDetail(lead) {
@@ -1330,7 +1380,7 @@ export function renderLeadsPage() {
 
     async function saveLeadEdit() {
       if (!state.selectedLeadId) return;
-      const lead = state.leads.find((item) => item.id === state.selectedLeadId);
+      const lead = selectedLead();
       if (!lead) return;
       setInlineStatus('leadEditStatus', '保存中', 'warn');
       try {

@@ -1,5 +1,6 @@
+import 'reflect-metadata';
 import { validate } from 'class-validator';
-import { UpdateLeadDto } from './leads.dto';
+import { ListLeadsQueryDto, UpdateLeadDto } from './leads.dto';
 
 describe('UpdateLeadDto', () => {
   it('accepts null for optional fields so saved values can be cleared', async () => {
@@ -25,6 +26,41 @@ describe('UpdateLeadDto', () => {
       'projectAmount',
       'projectSupporterCount',
       'companyWebsiteUrl'
+    ]));
+  });
+});
+
+describe('ListLeadsQueryDto', () => {
+  it('accepts the documented list filters and sort controls', async () => {
+    const dto = Object.assign(new ListLeadsQueryDto(), {
+      page: 2,
+      limit: 100,
+      source: 'campfire',
+      status: 'qualified',
+      priority: 'high',
+      contactState: 'has',
+      mailStatus: 'in_review',
+      nextAction: 'overdue',
+      sort: 'supporters',
+      sortDirection: 'desc'
+    });
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rejects unsupported filter values and limits above 100', async () => {
+    const dto = Object.assign(new ListLeadsQueryDto(), {
+      limit: 101,
+      contactState: 'unknown',
+      mailStatus: 'unknown',
+      nextAction: 'later',
+      sort: 'mail',
+      sortDirection: 'sideways'
+    });
+
+    const errors = await validate(dto);
+    expect(errors.map((error) => error.property)).toEqual(expect.arrayContaining([
+      'limit', 'contactState', 'mailStatus', 'nextAction', 'sort', 'sortDirection'
     ]));
   });
 });

@@ -184,6 +184,12 @@ describe('LeadsService detail editing', () => {
       brandAnalysisMemo: lead.brandAnalysisMemo,
       snsAnalysisMemo: lead.snsAnalysisMemo
     });
+    expect(prisma.salesLead.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({
+        company: expect.objectContaining({ include: expect.objectContaining({ contacts: expect.any(Object) }) }),
+        mails: expect.objectContaining({ take: 1 })
+      })
+    }));
   });
 
   it('does not write the lead after a project update fails', async () => {

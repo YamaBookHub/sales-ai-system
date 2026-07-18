@@ -1,5 +1,68 @@
-import { LeadPriority, LeadStatus, PlatformType, ProjectStatus } from '@prisma/client';
-import { IsDateString, IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, IsUrl, IsUUID, Min } from 'class-validator';
+import { EmailStatus, LeadPriority, LeadStatus, PlatformType, ProjectStatus } from '@prisma/client';
+import { Type } from 'class-transformer';
+import { IsDateString, IsEmail, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUrl, IsUUID, Max, MaxLength, Min } from 'class-validator';
+
+export const LEAD_CONTACT_STATES = ['has', 'none'] as const;
+export const LEAD_NEXT_ACTION_FILTERS = ['any', 'scheduled', 'overdue', 'none'] as const;
+export const LEAD_LIST_SORTS = ['company', 'project', 'amount', 'supporters', 'daysLeft', 'score', 'priority', 'createdAt'] as const;
+export const SORT_DIRECTIONS = ['asc', 'desc'] as const;
+
+export type LeadContactState = (typeof LEAD_CONTACT_STATES)[number];
+export type LeadNextActionFilter = (typeof LEAD_NEXT_ACTION_FILTERS)[number];
+export type LeadListSort = (typeof LEAD_LIST_SORTS)[number];
+export type SortDirection = (typeof SORT_DIRECTIONS)[number];
+
+export class ListLeadsQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  keyword?: string;
+
+  @IsOptional()
+  @IsEnum(PlatformType)
+  source?: PlatformType;
+
+  @IsOptional()
+  @IsEnum(LeadStatus)
+  status?: LeadStatus;
+
+  @IsOptional()
+  @IsEnum(LeadPriority)
+  priority?: LeadPriority;
+
+  @IsOptional()
+  @IsIn(LEAD_CONTACT_STATES)
+  contactState?: LeadContactState;
+
+  @IsOptional()
+  @IsIn(['none', ...Object.values(EmailStatus)])
+  mailStatus?: EmailStatus | 'none';
+
+  @IsOptional()
+  @IsIn(LEAD_NEXT_ACTION_FILTERS)
+  nextAction?: LeadNextActionFilter;
+
+  @IsOptional()
+  @IsIn(LEAD_LIST_SORTS)
+  sort?: LeadListSort;
+
+  @IsOptional()
+  @IsIn(SORT_DIRECTIONS)
+  sortDirection?: SortDirection;
+}
 
 export class CreateLeadDto {
   @IsUUID()

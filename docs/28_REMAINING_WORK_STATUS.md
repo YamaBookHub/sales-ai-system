@@ -12,12 +12,12 @@
 Baseline:
 
 - Snapshot date: 2026-07-18
-- Base HEAD before LS-006: `372d07b`
-- Unit/contract tests: 88 suites / 337 tests passed
+- Base HEAD before LL-001: `ddaa778`
+- Unit/contract tests: 89 suites / 351 tests passed
 - Build: passed
 - Prisma validate: passed
-- Integration: dedicated `sales_ai_system_test` DBで6 suites / 21 tests passed
-- Browser: not run in this audit
+- Integration: dedicated `sales_ai_system_test` DBで6 suites / 23 tests passed
+- Browser: ユーザー指示により未実行（port 3000を使用しない）
 
 ## Active roadmap
 
@@ -44,7 +44,7 @@ Baseline:
 | 19 | SO-004 | P0 | complete | Sol T4 | SO-002, SO-003 | 2026-07-18 / Opportunity分離・状態・DB・API・権限・移行・rollback契約 | 商談状態・履歴設計 |
 | 20 | SO-005 | P0 | complete | Terra T3 + Sol audit | SO-004 | 2026-07-18 / 8段階・履歴・排他・冪等・自動進行・UI、87 suites 331 tests・実DB21 tests・移行58/58件成功 | 商談状態・履歴実装 |
 | 21 | LS-006 | P1 | complete | Terra T3 + Sol audit | LS-005 | 2026-07-18 / 両provider逐次通知・Makuake確定値4件並列・URL重複排除・10件上限・停止/旧応答guard、88 suites 337 tests・verify成功 | 逐次候補追加 |
-| 22 | LL-001 | P1 | pending | Terra T3 | LR-001, LR-004 | - | server pagination/filter |
+| 22 | LL-001 | P1 | complete | Terra T3 + Sol audit | LR-001, LR-004 | 2026-07-18 / DB側pagination・filter・sort、最新メールCTE、実DB201件到達、選択維持、89 suites 351 tests・実DB23 tests・verify成功 | server pagination/filter |
 | 23 | LL-002 | P1 | pending | Luna T2 | LL-001 | - | 全件CSV/TSV |
 | 24 | LM-004 | P1 | pending | Sol T4 -> Terra | LM-003, LL-003 | - | 構造化分析値 |
 | 25 | LM-005 | P1 | pending | Terra T3 | LM-003 | - | AI予算guard |
@@ -107,3 +107,5 @@ Baseline:
 | 2026-07-18 | SO-005 | Terra workers + Sol audit + main | complete | 8段階、append-only履歴、version競合、入力指紋付きoperationKey冪等、削除済みLead遮断、終端確認、メール送信・返信からの自動進行を実装。OpenAPI 77 operations、87 suites 331 tests、実DB6 suites 21 tests、Prisma・build成功。開発DBはLead 58件・Opportunity 58件・欠損0件 |
 | 2026-07-18 | LS-006 | Terra worker + Sol audit + main | start | CAMPFIRE・Makuakeの取得済み候補をprovider完了前に検索jobへ追加する実装を開始 |
 | 2026-07-18 | LS-006 | Terra worker + Sol audit + main | complete | 両providerの逐次通知、Makuake詳細確定値の4件並列追加、正規化URL重複排除、順序安定、指定件数上限、停止後拒否、旧検索応答guardを実装。OpenAPI 77 operations、88 suites 337 tests、Prisma・build成功 |
+| 2026-07-18 | LL-001 | Terra workers + Sol audit + main | start | 営業リストの全件メモリ取得を廃止し、server pagination・filter・sortと選択維持の実装を開始 |
+| 2026-07-18 | LL-001 | Terra workers + Sol audit + main | complete | 最新メールをPostgreSQL CTEで判定し、同一snapshotで集計・IDページング・当該ページのみhydrate。取得元・状態・優先度・連絡先・最新メール・次対応filter、8種sort、実DB201件の全ページ到達、ページ変更後の選択維持を実装。OpenAPI 77 operations、89 suites 351 tests、実DB6 suites 23 tests、Prisma・build成功。ブラウザはユーザー指示により未実行 |

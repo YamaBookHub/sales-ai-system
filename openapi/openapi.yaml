@@ -360,19 +360,51 @@ paths:
       summary: List sales leads
       parameters:
         - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/LeadLimit'
+        - name: keyword
+          in: query
+          description: Case-insensitive match against company name, project title, URL, description, lead reason, or owner memo.
+          schema: { type: string, maxLength: 200 }
+        - name: source
+          in: query
+          description: Project platform type. It does not use the internal SalesLead source label.
+          schema: { $ref: '#/components/schemas/PlatformType' }
         - name: status
           in: query
           schema: { $ref: '#/components/schemas/LeadStatus' }
         - name: priority
           in: query
           schema: { $ref: '#/components/schemas/LeadPriority' }
+        - name: contactState
+          in: query
+          description: "`has` requires a legacy lead contact value or an active company contact with email or inquiry URL. Deleted and unsubscribed company contacts are ignored; `none` has neither."
+          schema: { type: string, enum: [has, none] }
+        - name: mailStatus
+          in: query
+          description: Status of the latest mail for the lead, ordered by createdAt then id descending. `none` selects leads without any mail.
+          schema: { type: string, enum: [none, draft, in_review, rejected, approved, queued, sending, sent, failed, cancelled] }
+        - name: nextAction
+          in: query
+          description: "`any` applies no next-action filter. `scheduled` has a next-action date, follow-up date, or active task. `overdue` has one due at or before the server time. `none` has none of those values."
+          schema: { type: string, enum: [any, scheduled, overdue, none] }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [company, project, amount, supporters, daysLeft, score, priority, createdAt], default: createdAt }
+        - name: sortDirection
+          in: query
+          description: Defaults to `desc` for `createdAt` and `asc` for other sort fields.
+          schema: { type: string, enum: [asc, desc] }
       responses:
         '200':
-          description: Lead list
+          description: Lead list. `data.summary` is calculated after source, status, priority, and nextAction filters, before contactState and mailStatus summary selections.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ApiResponse' }
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/LeadListData' }
     post:
       summary: Create a sales lead
       requestBody:
@@ -1073,6 +1105,10 @@ components:
       name: limit
       in: query
       schema: { type: integer, minimum: 1, default: 20 }
+    LeadLimit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
     OpportunityLimit:
       name: limit
       in: query
@@ -1150,6 +1186,28 @@ components:
           nullable: true
           allOf:
             - $ref: '#/components/schemas/ErrorResponse'
+    LeadListData:
+      type: object
+      required: [items, page, limit, total, summary]
+      properties:
+        items:
+          type: array
+          description: Each lead retains its existing fields, includes its newest mail with only id, leadId, companyId, status, and createdAt, and includes active `company.contacts` with only id, email, inquiryUrl, isPrimary, isUnsubscribed, and deletedAt.
+          items:
+            type: object
+            additionalProperties: true
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+        summary:
+          type: object
+          required: [total, noContact, draft, review, queued]
+          properties:
+            total: { type: integer, minimum: 0 }
+            noContact: { type: integer, minimum: 0 }
+            draft: { type: integer, minimum: 0 }
+            review: { type: integer, minimum: 0 }
+            queued: { type: integer, minimum: 0 }
     ErrorResponse:
       type: object
       required: [code, message]

@@ -1,11 +1,18 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { LeadPriority, LeadStatus, PlatformType } from '@prisma/client';
+import { EmailStatus, LeadPriority, LeadStatus, PlatformType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizeImportedCompanyName, projectImportLockKeys } from '../projects/domain/project-import-policy';
 import { applyLeadPolicy } from './domain/lead-policy';
 import { ACTIVE_TASK_STATUSES, TaskRecord, toTaskView } from './domain/task';
 import { classifyTodaySales, TodaySalesCategory, tokyoDateKey } from './domain/today-sales';
-import { CreateLeadDto, UpdateLeadDto } from './leads.dto';
+import {
+  CreateLeadDto,
+  LeadContactState,
+  LeadListSort,
+  LeadNextActionFilter,
+  SortDirection,
+  UpdateLeadDto
+} from './leads.dto';
 import { ScoreLeadUseCase } from './application/score-lead.usecase';
 import { ensureOpportunityForLead } from './infrastructure/prisma-opportunity.repository';
 
@@ -16,33 +23,51 @@ export class LeadsService {
     private readonly scoreLeadUseCase: ScoreLeadUseCase
   ) {}
 
-  async list(page = 1, limit = 20, status?: LeadStatus, priority?: LeadPriority) {
-    const skip = (page - 1) * limit;
-    const where = { ...(status ? { status } : {}), ...(priority ? { priority } : {}) };
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.salesLead.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          company: true,
-          project: { include: { platform: true } },
-          opportunity: true,
-          scores: { orderBy: { createdAt: 'desc' }, take: 1 },
-          tasks: {
-            where: { status: { in: ACTIVE_TASK_STATUSES } },
-            orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
-            take: 1,
-            include: { assignee: { select: { id: true, name: true, email: true } } }
-          },
-          _count: { select: { tasks: { where: { status: { in: ACTIVE_TASK_STATUSES } } } } }
-        }
-      }),
-      this.prisma.salesLead.count({ where })
-    ]);
+  async list(
+    page = 1,
+    limit = 20,
+    status?: LeadStatus,
+    priority?: LeadPriority,
+    filters: LeadListFilters = {}
+  ) {
+    const normalizedPage = Math.max(1, Math.floor(Number(page) || 1));
+    const normalizedLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 20)));
+    const input = { ...filters, status: status ?? filters.status, priority: priority ?? filters.priority };
+    const now = new Date();
+    const query = buildLeadListQuery(input, now, normalizedPage, normalizedLimit);
 
-    return { items: items.map((lead) => withTaskSummary(lead)), page, limit, total };
+    // The list IDs, aggregate badges, and hydrated newest mail must come from one
+    // PostgreSQL snapshot. This avoids both historical-mail false matches and races
+    // where a mail changes after a filter has been evaluated.
+    return this.prisma.$transaction(async (tx) => {
+      const [stats] = await tx.$queryRaw<LeadListStats[]>(query.stats);
+      const pageRows = await tx.$queryRaw<LeadListIdRow[]>(query.pageIds);
+      const pageIds = pageRows.map((row) => row.id);
+      const items = pageIds.length
+        ? await tx.salesLead.findMany({
+            where: { id: { in: pageIds } },
+            include: leadListInclude
+          })
+        : [];
+      const itemsById = new Map(items.map((lead) => [lead.id, lead]));
+
+      return {
+        items: pageIds.flatMap((id) => {
+          const lead = itemsById.get(id);
+          return lead ? [withTaskSummary(lead)] : [];
+        }),
+        page: normalizedPage,
+        limit: normalizedLimit,
+        total: toCount(stats?.total),
+        summary: {
+          total: toCount(stats?.summaryTotal),
+          noContact: toCount(stats?.noContact),
+          draft: toCount(stats?.draft),
+          review: toCount(stats?.review),
+          queued: toCount(stats?.queued)
+        }
+      };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   }
 
   async listToday(page = 1, limit = 50, now = new Date()) {
@@ -147,7 +172,22 @@ export class LeadsService {
     const lead = await this.prisma.salesLead.findUnique({
       where: { id },
       include: {
-        company: true,
+        company: {
+          include: {
+            contacts: {
+              where: { deletedAt: null, isUnsubscribed: false },
+              orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+              select: {
+                id: true,
+                email: true,
+                inquiryUrl: true,
+                isPrimary: true,
+                isUnsubscribed: true,
+                deletedAt: true
+              }
+            }
+          }
+        },
         project: { include: { platform: true } },
         opportunity: true,
         scores: { orderBy: { createdAt: 'desc' }, take: 1 },
@@ -156,6 +196,11 @@ export class LeadsService {
           orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
           take: 1,
           include: { assignee: { select: { id: true, name: true, email: true } } }
+        },
+        mails: {
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: { id: true, leadId: true, companyId: true, status: true, createdAt: true }
         },
         _count: { select: { tasks: { where: { status: { in: ACTIVE_TASK_STATUSES } } } } }
       }
@@ -324,6 +369,236 @@ export class LeadsService {
   async score(id: string) {
     return this.scoreLeadUseCase.execute(id);
   }
+}
+
+type LeadListFilters = {
+  keyword?: string;
+  source?: PlatformType;
+  status?: LeadStatus;
+  priority?: LeadPriority;
+  contactState?: LeadContactState;
+  mailStatus?: EmailStatus | 'none';
+  nextAction?: LeadNextActionFilter;
+  sort?: LeadListSort;
+  sortDirection?: SortDirection;
+};
+
+type LeadListStats = {
+  total: bigint | number;
+  summaryTotal: bigint | number;
+  noContact: bigint | number;
+  draft: bigint | number;
+  review: bigint | number;
+  queued: bigint | number;
+};
+
+type LeadListIdRow = { id: string };
+
+type LeadListQuery = { stats: Prisma.Sql; pageIds: Prisma.Sql };
+
+const leadListInclude = {
+  company: {
+    include: {
+      contacts: {
+        where: { deletedAt: null, isUnsubscribed: false },
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+        select: {
+          id: true,
+          email: true,
+          inquiryUrl: true,
+          isPrimary: true,
+          isUnsubscribed: true,
+          deletedAt: true
+        }
+      }
+    }
+  },
+  project: { include: { platform: true } },
+  opportunity: true,
+  scores: { orderBy: { createdAt: 'desc' }, take: 1 },
+  tasks: {
+    where: { status: { in: ACTIVE_TASK_STATUSES } },
+    orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
+    take: 1,
+    include: { assignee: { select: { id: true, name: true, email: true } } }
+  },
+  mails: {
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 1,
+    select: { id: true, leadId: true, companyId: true, status: true, createdAt: true }
+  },
+  _count: { select: { tasks: { where: { status: { in: ACTIVE_TASK_STATUSES } } } } }
+} satisfies Prisma.SalesLeadInclude;
+
+function buildLeadListQuery(
+  input: LeadListFilters,
+  now: Date,
+  page: number,
+  limit: number
+): LeadListQuery {
+  const ctes = leadListCtes(input, now);
+  const orderBy = leadListOrderBy(input.sort, input.sortDirection);
+  const offset = (page - 1) * limit;
+
+  return {
+    stats: Prisma.sql`
+      WITH ${ctes}
+      SELECT
+        (SELECT COUNT(*) FROM filtered_leads) AS "total",
+        (SELECT COUNT(*) FROM summary_leads) AS "summaryTotal",
+        (SELECT COUNT(*) FROM summary_leads WHERE NOT "hasContact") AS "noContact",
+        (SELECT COUNT(*) FROM summary_leads WHERE "latestMailStatus" = 'draft'::"EmailStatus") AS "draft",
+        (SELECT COUNT(*) FROM summary_leads WHERE "latestMailStatus" = 'in_review'::"EmailStatus") AS "review",
+        (SELECT COUNT(*) FROM summary_leads WHERE "latestMailStatus" = 'queued'::"EmailStatus") AS "queued"
+    `,
+    pageIds: Prisma.sql`
+      WITH ${ctes}
+      SELECT "id"
+      FROM filtered_leads
+      ORDER BY ${orderBy}
+      LIMIT ${limit} OFFSET ${offset}
+    `
+  };
+}
+
+function leadListCtes(input: LeadListFilters, now: Date): Prisma.Sql {
+  const baseConditions = leadListBaseConditions(input, now);
+  const resultConditions = leadListResultConditions(input);
+  const baseWhere = baseConditions.length ? Prisma.join(baseConditions, ' AND ') : Prisma.sql`TRUE`;
+  const resultWhere = resultConditions.length ? Prisma.join(resultConditions, ' AND ') : Prisma.sql`TRUE`;
+
+  return Prisma.sql`
+    latest_mails AS (
+      SELECT DISTINCT ON (mail."leadId") mail."leadId", mail."status"
+      FROM "OutreachEmail" AS mail
+      WHERE mail."leadId" IS NOT NULL
+      ORDER BY mail."leadId", mail."createdAt" DESC, mail."id" DESC
+    ),
+    summary_leads AS (
+      SELECT
+        lead."id",
+        company."name" AS "companyName",
+        project."title" AS "projectTitle",
+        project."amount" AS "amount",
+        project."supporterCount" AS "supporterCount",
+        project."daysLeft" AS "daysLeft",
+        lead."score",
+        lead."priority",
+        lead."createdAt",
+        latest_mails."status" AS "latestMailStatus",
+        (
+          lead."contactEmail" IS NOT NULL
+          OR lead."contactFormUrl" IS NOT NULL
+          OR lead."siteMessageUrl" IS NOT NULL
+          OR EXISTS (
+            SELECT 1
+            FROM "ContactPerson" AS contact
+            WHERE contact."companyId" = lead."companyId"
+              AND contact."deletedAt" IS NULL
+              AND contact."isUnsubscribed" = FALSE
+              AND (contact."email" IS NOT NULL OR contact."inquiryUrl" IS NOT NULL)
+          )
+        ) AS "hasContact"
+      FROM "SalesLead" AS lead
+      INNER JOIN "Company" AS company ON company."id" = lead."companyId"
+      LEFT JOIN "CrowdfundingProject" AS project ON project."id" = lead."projectId"
+      LEFT JOIN "CrowdfundingPlatform" AS platform ON platform."id" = project."platformId"
+      LEFT JOIN latest_mails ON latest_mails."leadId" = lead."id"
+      WHERE ${baseWhere}
+    ),
+    filtered_leads AS (
+      SELECT *
+      FROM summary_leads
+      WHERE ${resultWhere}
+    )
+  `;
+}
+
+function leadListBaseConditions(input: LeadListFilters, now: Date): Prisma.Sql[] {
+  const conditions: Prisma.Sql[] = [];
+  if (input.keyword?.trim()) {
+    const keyword = `%${input.keyword.trim()}%`;
+    conditions.push(Prisma.sql`(
+      company."name" ILIKE ${keyword}
+      OR COALESCE(project."title", '') ILIKE ${keyword}
+      OR COALESCE(project."url", '') ILIKE ${keyword}
+      OR COALESCE(project."description", '') ILIKE ${keyword}
+      OR COALESCE(lead."reason", '') ILIKE ${keyword}
+      OR COALESCE(lead."ownerMemo", '') ILIKE ${keyword}
+    )`);
+  }
+  if (input.source) conditions.push(Prisma.sql`platform."type" = ${input.source}::"PlatformType"`);
+  if (input.status) conditions.push(Prisma.sql`lead."status" = ${input.status}::"LeadStatus"`);
+  if (input.priority) conditions.push(Prisma.sql`lead."priority" = ${input.priority}::"LeadPriority"`);
+  if (input.nextAction && input.nextAction !== 'any') conditions.push(nextActionSql(input.nextAction, now));
+  return conditions;
+}
+
+function leadListResultConditions(input: LeadListFilters): Prisma.Sql[] {
+  const conditions: Prisma.Sql[] = [];
+  if (input.contactState === 'has') conditions.push(Prisma.sql`"hasContact"`);
+  if (input.contactState === 'none') conditions.push(Prisma.sql`NOT "hasContact"`);
+  if (input.mailStatus === 'none') conditions.push(Prisma.sql`"latestMailStatus" IS NULL`);
+  if (input.mailStatus && input.mailStatus !== 'none') {
+    conditions.push(Prisma.sql`"latestMailStatus" = ${input.mailStatus}::"EmailStatus"`);
+  }
+  return conditions;
+}
+
+function nextActionSql(nextAction: Exclude<LeadNextActionFilter, 'any'>, now: Date): Prisma.Sql {
+  const hasActiveTask = Prisma.sql`EXISTS (
+    SELECT 1 FROM "Task" AS task
+    WHERE task."leadId" = lead."id"
+      AND task."status" IN ('todo'::"TaskStatus", 'doing'::"TaskStatus")
+  )`;
+  if (nextAction === 'scheduled') {
+    return Prisma.sql`(lead."nextActionAt" IS NOT NULL OR lead."nextFollowUpAt" IS NOT NULL OR ${hasActiveTask})`;
+  }
+  if (nextAction === 'overdue') {
+    return Prisma.sql`(
+      lead."nextActionAt" <= ${now}
+      OR lead."nextFollowUpAt" <= ${now}
+      OR EXISTS (
+        SELECT 1 FROM "Task" AS task
+        WHERE task."leadId" = lead."id"
+          AND task."status" IN ('todo'::"TaskStatus", 'doing'::"TaskStatus")
+          AND task."dueAt" <= ${now}
+      )
+    )`;
+  }
+  return Prisma.sql`(lead."nextActionAt" IS NULL AND lead."nextFollowUpAt" IS NULL AND NOT ${hasActiveTask})`;
+}
+
+function leadListOrderBy(sort: LeadListSort | undefined, sortDirection: SortDirection | undefined): Prisma.Sql {
+  const safeSort: LeadListSort = [
+    'company', 'project', 'amount', 'supporters', 'daysLeft', 'score', 'priority', 'createdAt'
+  ].includes(sort as LeadListSort)
+    ? sort as LeadListSort
+    : 'createdAt';
+  const direction = sortDirection === 'asc' || sortDirection === 'desc'
+    ? sortDirection
+    : safeSort === 'createdAt' ? 'desc' : 'asc';
+  const field = {
+    company: Prisma.sql`"companyName"`,
+    project: Prisma.sql`"projectTitle"`,
+    amount: Prisma.sql`"amount"`,
+    supporters: Prisma.sql`"supporterCount"`,
+    daysLeft: Prisma.sql`"daysLeft"`,
+    score: Prisma.sql`"score"`,
+    priority: Prisma.sql`CASE "priority"
+      WHEN 'low'::"LeadPriority" THEN 1
+      WHEN 'medium'::"LeadPriority" THEN 2
+      WHEN 'high'::"LeadPriority" THEN 3
+      ELSE 0
+    END`,
+    createdAt: Prisma.sql`"createdAt"`
+  } satisfies Record<LeadListSort, Prisma.Sql>;
+  const orderDirection = direction === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`;
+  return Prisma.sql`${field[safeSort]} ${orderDirection} NULLS LAST, "id" ${orderDirection}`;
+}
+
+function toCount(value: bigint | number | undefined) {
+  return value === undefined ? 0 : Number(value);
 }
 
 function compactData<T extends Record<string, unknown>>(data: T): Partial<T> {

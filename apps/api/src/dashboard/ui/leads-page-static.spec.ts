@@ -43,4 +43,23 @@ describe('Lead page static HTML', () => {
     expect(html).toContain("'/api/contacts/' + state.selectedContactId + '/archive'");
     expect(html).not.toContain("nextFollowUpAt: dateTimeValue('leadNextActionAtEdit')");
   });
+
+  it('keeps the selected lead detail when the server page changes', () => {
+    const html = renderLeadsPage();
+    const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] || '';
+    const clientStart = script.indexOf("const SELECTED_LEAD_STORAGE_KEY");
+    const clientEnd = script.lastIndexOf('loadAll();');
+    const clientScript = script.slice(clientStart, clientEnd);
+    const runtime = new Function(clientScript + '; return { state, applyLeadListResponse, selectedLead };')() as {
+      state: { selectedLeadId: string | null };
+      applyLeadListResponse: (response: unknown) => void;
+      selectedLead: () => { id: string } | null;
+    };
+
+    runtime.state.selectedLeadId = 'lead-selected';
+    runtime.applyLeadListResponse({ items: [{ id: 'lead-selected' }], page: 1, limit: 20, total: 201, summary: {} });
+    runtime.applyLeadListResponse({ items: [{ id: 'lead-on-page-2' }], page: 2, limit: 20, total: 201, summary: {} });
+
+    expect(runtime.selectedLead()).toEqual({ id: 'lead-selected' });
+  });
 });

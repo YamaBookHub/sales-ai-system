@@ -75,14 +75,14 @@ export function renderLeadsPageDocument(clientScript: string): string {
               <tr>
                 <th class="sortable" onclick="toggleSort('lead','company')" style="width:16%">会社<span id="leadSort-company" class="sort-mark"></span></th>
                 <th class="sortable" onclick="toggleSort('lead','project')">案件<span id="leadSort-project" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','source')" style="width:92px">取得元<span id="leadSort-source" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','status')" style="width:90px">状態<span id="leadSort-status" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','opportunity')" style="width:90px">商談<span id="leadSort-opportunity" class="sort-mark"></span></th>
+                <th style="width:92px">取得元<span id="leadSort-source" class="sort-mark"></span></th>
+                <th style="width:90px">状態<span id="leadSort-status" class="sort-mark"></span></th>
+                <th style="width:90px">商談<span id="leadSort-opportunity" class="sort-mark"></span></th>
                 <th class="sortable" onclick="toggleSort('lead','priority')" style="width:70px">優先度<span id="leadSort-priority" class="sort-mark"></span></th>
                 <th class="sortable" onclick="toggleSort('lead','score')" style="width:70px">点数<span id="leadSort-score" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','contact')" style="width:130px">連絡/手段<span id="leadSort-contact" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','mail')" style="width:110px">最新メール<span id="leadSort-mail" class="sort-mark"></span></th>
-                <th class="sortable" onclick="toggleSort('lead','attentionReason')" style="width:180px">今対応する理由<span id="leadSort-attentionReason" class="sort-mark"></span></th>
+                <th style="width:130px">連絡/手段<span id="leadSort-contact" class="sort-mark"></span></th>
+                <th style="width:110px">最新メール<span id="leadSort-mail" class="sort-mark"></span></th>
+                <th style="width:180px">今対応する理由<span id="leadSort-attentionReason" class="sort-mark"></span></th>
               </tr>
             </thead>
             <tbody id="leadRows"></tbody>
@@ -124,11 +124,15 @@ export function renderLeadsPageDocument(clientScript: string): string {
         </summary>
         <div class="body">
           <div class="filters">
-            <input id="keyword" placeholder="会社・案件・URL・メモで検索" oninput="render()" />
-            <select id="sourceFilter" onchange="render()">
+            <input id="keyword" placeholder="会社・案件・URL・メモで検索" oninput="scheduleLeadListReload()" />
+            <select id="sourceFilter" onchange="scheduleLeadListReload(false)">
               <option value="">取得元 すべて</option>
+              <option value="campfire">CAMPFIRE</option>
+              <option value="makuake">Makuake</option>
+              <option value="green_funding">GREEN FUNDING</option>
+              <option value="other">その他</option>
             </select>
-            <select id="statusFilter" onchange="render()">
+            <select id="statusFilter" onchange="scheduleLeadListReload(false)">
               <option value="">状態 すべて</option>
               <option value="discovered">発見</option>
               <option value="qualified">候補</option>
@@ -140,27 +144,52 @@ export function renderLeadsPageDocument(clientScript: string): string {
               <option value="replied">返信あり</option>
               <option value="meeting_candidate">商談候補</option>
               <option value="rejected">対象外</option>
+              <option value="no_response">返信なし</option>
+              <option value="archived">アーカイブ</option>
             </select>
-            <select id="priorityFilter" onchange="render()">
+            <select id="priorityFilter" onchange="scheduleLeadListReload(false)">
               <option value="">優先度 すべて</option>
               <option value="high">高</option>
               <option value="medium">中</option>
               <option value="low">低</option>
             </select>
-            <select id="contactFilter" onchange="render()">
+            <select id="contactFilter" onchange="scheduleLeadListReload(false)">
               <option value="">連絡先 すべて</option>
               <option value="has">連絡先あり</option>
               <option value="none">連絡先なし</option>
             </select>
-            <select id="mailFilter" onchange="render()">
+            <select id="mailFilter" onchange="scheduleLeadListReload(false)">
               <option value="">メール すべて</option>
               <option value="none">未生成</option>
               <option value="draft">下書き</option>
               <option value="in_review">確認待ち</option>
+                <option value="rejected">棄却</option>
                 <option value="approved">承認済み</option>
                 <option value="queued">送信待ち</option>
+                <option value="sending">送信中</option>
                 <option value="sent">送信済み</option>
                 <option value="failed">送信失敗</option>
+                <option value="cancelled">キャンセル</option>
+            </select>
+            <select id="nextActionFilter" onchange="scheduleLeadListReload(false)">
+              <option value="any">次回対応 すべて</option>
+              <option value="scheduled">次回対応あり</option>
+              <option value="overdue">期限超過</option>
+              <option value="none">次回対応なし</option>
+            </select>
+            <select id="leadSortSelect" onchange="setLeadListSortFromControls()">
+              <option value="createdAt">並び順: 登録日</option>
+              <option value="company">会社名</option>
+              <option value="project">案件名</option>
+              <option value="amount">支援額</option>
+              <option value="supporters">支援者数</option>
+              <option value="daysLeft">残り日数</option>
+              <option value="score">点数</option>
+              <option value="priority">優先度</option>
+            </select>
+            <select id="leadSortDirection" onchange="setLeadListSortFromControls()">
+              <option value="desc">降順</option>
+              <option value="asc">昇順</option>
             </select>
           </div>
         </div>
