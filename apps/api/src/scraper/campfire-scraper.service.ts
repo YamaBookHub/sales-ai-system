@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import { bindAbortToResource, OperationAbortedError } from '../common/abortable-resource';
 import { normalizeEndingSoonDays } from '../projects/domain/project-import-policy';
-import { ProjectSearchDiagnostics, ProjectSearchOptions } from '../projects/domain/project-source-provider';
+import { ProjectSearchDiagnostics, ProjectSearchOptions, ProjectSourceSearchResult } from '../projects/domain/project-source-provider';
 import { RawProjectPageSnapshot } from '../projects/infrastructure/parsers/parser.types';
 import { parseCampfireDetail } from '../projects/infrastructure/parsers/campfire/campfire-detail.parser';
 import { parseCampfireListing } from '../projects/infrastructure/parsers/campfire/campfire-listing.parser';
@@ -122,6 +122,7 @@ export class CampfireScraperService {
     const cacheKey = buildSearchCacheKey(input);
     const cached = readSearchCache(cacheKey);
     if (cached) {
+      await notifyObservedSearchItems(options, cached.items);
       return { items: cached.items, total: cached.items.length, diagnostics: cached.diagnostics };
     }
 
@@ -142,8 +143,12 @@ export class CampfireScraperService {
       const resultLimit = normalizeSearchLimit(input.limit);
       const excludedUrls = buildExcludedUrlSet(input.excludeUrls);
       const collection = hasProfileProjectFilter(input)
-        ? await collectSearchResultsMatchingProfileRange(page, input, resultLimit, excludedUrls, lifecycle.throwIfAborted)
-        : await collectSearchResults(page, resultLimit, excludedUrls, input, lifecycle.throwIfAborted);
+        ? await collectSearchResultsMatchingProfileRange(page, input, resultLimit, excludedUrls, lifecycle.throwIfAborted, (items) =>
+            notifyObservedSearchItems(options, sortSearchResults(items, input).slice(0, resultLimit))
+          )
+        : await collectSearchResults(page, resultLimit, excludedUrls, input, lifecycle.throwIfAborted, (items) =>
+            notifyObservedSearchItems(options, sortSearchResults(items, input).slice(0, resultLimit))
+          );
       const sortedItems = sortSearchResults(collection.items, input).slice(0, resultLimit);
       writeSearchCache(cacheKey, sortedItems, collection.diagnostics);
       return { items: sortedItems, total: sortedItems.length, diagnostics: collection.diagnostics };
@@ -269,7 +274,8 @@ async function collectSearchResults(
   limit: number,
   excludedUrls = new Set<string>(),
   input: CampfireSearchInput = {},
-  throwIfAborted: () => void = () => undefined
+  throwIfAborted: () => void = () => undefined,
+  onItems?: (items: CampfireSearchResult[]) => Promise<void>
 ) {
   let items: CampfireSearchResult[] = [];
   let unchangedCount = 0;
@@ -280,12 +286,14 @@ async function collectSearchResults(
     throwIfAborted();
     const beforeCount = items.length;
     items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input, tracker);
+    await onItems?.(items);
 
     if (items.length >= limit) break;
 
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => undefined);
     await page.waitForTimeout(500);
     items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input, tracker);
+    await onItems?.(items);
 
     if (items.length >= limit) break;
 
@@ -293,6 +301,7 @@ async function collectSearchResults(
     if (clickedMore) {
       await page.waitForTimeout(700);
       items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input, tracker);
+      await onItems?.(items);
     }
 
     unchangedCount = items.length === beforeCount ? unchangedCount + 1 : 0;
@@ -311,7 +320,8 @@ async function collectSearchResultsMatchingProfileRange(
   input: CampfireSearchInput,
   limit: number,
   excludedUrls = new Set<string>(),
-  throwIfAborted: () => void = () => undefined
+  throwIfAborted: () => void = () => undefined,
+  onItems?: (items: CampfireSearchResult[]) => Promise<void>
 ) {
   let items: CampfireSearchResult[] = [];
   let matched: CampfireSearchResult[] = [];
@@ -325,6 +335,7 @@ async function collectSearchResultsMatchingProfileRange(
     const beforeCount = items.length;
     items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input, tracker);
     matched = await collectProfileMatchesFromCandidates(page.context(), items, input, checkedUrls, matched, limit, throwIfAborted);
+    await onItems?.(matched);
 
     if (matched.length >= limit || items.length >= maxCandidates) break;
 
@@ -332,6 +343,7 @@ async function collectSearchResultsMatchingProfileRange(
     await page.waitForTimeout(350);
     items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input, tracker);
     matched = await collectProfileMatchesFromCandidates(page.context(), items, input, checkedUrls, matched, limit, throwIfAborted);
+    await onItems?.(matched);
 
     if (matched.length >= limit || items.length >= maxCandidates) break;
 
@@ -340,6 +352,7 @@ async function collectSearchResultsMatchingProfileRange(
       await page.waitForTimeout(700);
       items = mergeSearchResults(items, extractSearchResults(await page.content()), excludedUrls, input, tracker);
       matched = await collectProfileMatchesFromCandidates(page.context(), items, input, checkedUrls, matched, limit, throwIfAborted);
+      await onItems?.(matched);
     }
 
     unchangedCount = items.length === beforeCount ? unchangedCount + 1 : 0;
@@ -359,6 +372,12 @@ async function collectSearchResultsMatchingProfileRange(
       scanComplete
     }
   };
+}
+
+async function notifyObservedSearchItems(options: ProjectSearchOptions, items: ProjectSourceSearchResult['items']) {
+  if (options.signal?.aborted) throw new OperationAbortedError();
+  const accepted = await options.onItems?.(items);
+  if (accepted === false) throw new OperationAbortedError();
 }
 
 async function collectProfileMatchesFromCandidates(

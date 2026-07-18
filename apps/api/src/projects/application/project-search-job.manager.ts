@@ -3,10 +3,11 @@ import { randomUUID } from 'crypto';
 import {
   countImportableSearchItems,
   mergeSearchItems,
+  normalizeSearchUrl,
   normalizeResultLimit,
   progressiveSearchLimits
 } from '../domain/project-import-policy';
-import { ProjectSearchDiagnostics, ProjectSearchOptions, ProjectSourceProvider } from '../domain/project-source-provider';
+import { ProjectSearchDiagnostics, ProjectSearchResult, ProjectSearchOptions, ProjectSourceProvider } from '../domain/project-source-provider';
 import {
   decideProjectSearchCompletion,
   ProjectSearchCompletionReason,
@@ -21,7 +22,7 @@ type SearchJob = {
   source: ProjectSourceProvider['source'];
   desiredLimit: number;
   searchedLimit: number;
-  items: Awaited<ReturnType<ProjectSourceProvider['search']>>['items'];
+  items: ProjectSearchResult[];
   importableCount: number;
   diagnostics?: ProjectSearchDiagnostics;
   completionReason?: ProjectSearchCompletionReason;
@@ -112,14 +113,14 @@ export class ProjectSearchJobManager {
         const result = await searchWithProvider(
           provider,
           { ...dto, limit, excludeUrls },
-          { signal: job.abortController.signal }
+          {
+            signal: job.abortController.signal,
+            onItems: (items) => this.addObservedItems(job, items, existingUrls)
+          }
         );
         if (job.status !== 'running' || job.abortController.signal.aborted) return;
         job.diagnostics = result.diagnostics;
-        job.items = mergeSearchItems(job.items, result.items);
-        job.importableCount = countImportableSearchItems(job.items, existingUrls);
-        job.message = `候補 ${job.items.length}件 / 取込可能 ${job.importableCount}件`;
-        job.updatedAt = new Date().toISOString();
+        this.addObservedItems(job, result.items, existingUrls);
         if (job.importableCount >= job.desiredLimit) break;
       }
       if (!job.cancelled) {
@@ -152,6 +153,19 @@ export class ProjectSearchJobManager {
       });
       job.updatedAt = new Date().toISOString();
     }
+  }
+
+  private addObservedItems(job: SearchJob, items: ProjectSearchResult[], existingUrls: Set<string>) {
+    if (job.status !== 'running' || job.cancelled || job.abortController.signal.aborted) return false;
+    if (!items.length) return true;
+
+    // mergeSearchItems preserves the first observed order while refreshing duplicate rows.
+    const importableItems = items.filter((item) => !existingUrls.has(normalizeSearchUrl(item.url)));
+    job.items = mergeSearchItems(job.items, importableItems).slice(0, job.desiredLimit);
+    job.importableCount = countImportableSearchItems(job.items, existingUrls);
+    job.message = `候補 ${job.items.length}件 / 取込可能 ${job.importableCount}件`;
+    job.updatedAt = new Date().toISOString();
+    return true;
   }
 
   private publicSearchJob(job: SearchJob) {

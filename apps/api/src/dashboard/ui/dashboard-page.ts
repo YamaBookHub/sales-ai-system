@@ -99,6 +99,7 @@ ${renderNavigationBadgesScript()}
       campfireSearchPollTimerId: null,
       campfireSearchStartedAt: null,
       campfireSearchJobId: null,
+      campfireSearchSequence: 0,
       currentSourcePlatform: null,
       leadSort: { key: '', direction: 'asc' },
       candidateSort: { key: '', direction: 'asc' },
@@ -511,6 +512,11 @@ ${renderNavigationBadgesScript()}
       const profileProjectRange = source === 'campfire' ? rangeFieldValue('campfireSearchProfileProjectRange') : { min: null, max: null };
       const hasProfileProjectSearch = profileProjectRange.min !== null || profileProjectRange.max !== null;
       const desiredLimit = numberFieldValue('campfireFetchLimit') || 10;
+      const searchSequence = ++state.campfireSearchSequence;
+      const previousJobId = state.campfireSearchJobId;
+      if (previousJobId) {
+        void api('/api/projects/search-jobs/' + previousJobId + '/cancel', { method: 'POST' }).catch(() => undefined);
+      }
       stopCampfireSearchPoll();
       state.campfireSearchJobId = null;
       state.campfireCandidates = [];
@@ -533,10 +539,15 @@ ${renderNavigationBadgesScript()}
             endingSoonDays: searchStatus === 'endingSoon' ? (numberFieldValue('campfireEndingSoonDays') || 14) : undefined
           }))
         });
+        if (searchSequence !== state.campfireSearchSequence) {
+          void api('/api/projects/search-jobs/' + job.id + '/cancel', { method: 'POST' }).catch(() => undefined);
+          return;
+        }
         state.campfireSearchJobId = job.id;
-        applySearchJob(job);
+        applySearchJob(job, job.id);
         pollCampfireSearchJob();
       } catch (error) {
+        if (searchSequence !== state.campfireSearchSequence) return;
         const elapsed = currentSearchElapsedText();
         stopCampfireSearchTimer();
         stopCampfireSearchPoll();
@@ -547,10 +558,12 @@ ${renderNavigationBadgesScript()}
     }
 
     async function pollCampfireSearchJob() {
-      if (!state.campfireSearchJobId) return;
+      const jobId = state.campfireSearchJobId;
+      if (!jobId) return;
       try {
-        const job = await api('/api/projects/search-jobs/' + state.campfireSearchJobId);
-        applySearchJob(job);
+        const job = await api('/api/projects/search-jobs/' + jobId);
+        if (state.campfireSearchJobId !== jobId) return;
+        applySearchJob(job, jobId);
         if (job.status === 'running') {
           state.campfireSearchPollTimerId = window.setTimeout(pollCampfireSearchJob, 1200);
           return;
@@ -560,6 +573,7 @@ ${renderNavigationBadgesScript()}
         document.getElementById('stopSearchButton').disabled = true;
         setStatus('campfireSearchStatusText', job.message + ' / ' + currentSearchElapsedText(), job.status === 'failed' ? 'error' : 'ok');
       } catch (error) {
+        if (state.campfireSearchJobId !== jobId) return;
         stopCampfireSearchTimer();
         stopCampfireSearchPoll();
         document.getElementById('stopSearchButton').disabled = true;
@@ -567,8 +581,10 @@ ${renderNavigationBadgesScript()}
       }
     }
 
-    function applySearchJob(job) {
+    function applySearchJob(job, expectedJobId = job.id) {
+      if (expectedJobId && state.campfireSearchJobId !== expectedJobId) return;
       state.campfireCandidates = mergeCandidates(state.campfireCandidates, job.items || []);
+      if (job.status !== 'running' && state.campfireSearchJobId === expectedJobId) state.campfireSearchJobId = null;
       syncCandidateImportStatuses();
       renderCampfireCandidates();
       const importableCount = state.campfireCandidates.filter((item) => isCandidateImportable(item)).length;
@@ -584,17 +600,22 @@ ${renderNavigationBadgesScript()}
     }
 
     async function cancelCampfireSearch() {
-      if (!state.campfireSearchJobId) return;
+      const jobId = state.campfireSearchJobId;
+      if (!jobId) return;
       document.getElementById('stopSearchButton').disabled = true;
       setStatus('campfireSearchStatusText', '検索停止中', 'warn');
       try {
-        const job = await api('/api/projects/search-jobs/' + state.campfireSearchJobId + '/cancel', { method: 'POST' });
-        applySearchJob(job);
+        const job = await api('/api/projects/search-jobs/' + jobId + '/cancel', { method: 'POST' });
+        if (state.campfireSearchJobId !== jobId) return;
+        applySearchJob(job, jobId);
       } catch (error) {
+        if (state.campfireSearchJobId !== jobId) return;
         setStatus('campfireSearchStatusText', error.message, 'error');
       } finally {
-        stopCampfireSearchTimer();
-        stopCampfireSearchPoll();
+        if (!state.campfireSearchJobId || state.campfireSearchJobId === jobId) {
+          stopCampfireSearchTimer();
+          stopCampfireSearchPoll();
+        }
       }
     }
 
@@ -641,7 +662,12 @@ ${renderNavigationBadgesScript()}
       stopCampfireSearchTimer();
       stopCampfireSearchPoll();
       state.campfireSearchStartedAt = null;
+      const activeJobId = state.campfireSearchJobId;
+      if (activeJobId) {
+        void api('/api/projects/search-jobs/' + activeJobId + '/cancel', { method: 'POST' }).catch(() => undefined);
+      }
       state.campfireSearchJobId = null;
+      state.campfireSearchSequence += 1;
       document.getElementById('stopSearchButton').disabled = true;
       renderCampfireCandidates();
       setStatus('campfireSearchStatusText', '', '');

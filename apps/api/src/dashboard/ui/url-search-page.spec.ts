@@ -22,5 +22,13 @@ describe('URL search static HTML', () => {
     expect(urlSearchHtml).toContain('募集中のみでは終了日数の条件は使いません');
     expect(urlSearchHtml).toContain("setStatus('campfireSearchStatusText', job.message");
     expect(urlSearchHtml).toContain(": job.message;");
+    expect(urlSearchHtml).toContain('state.campfireCandidates = mergeCandidates(state.campfireCandidates, job.items || [])');
+    expect(urlSearchHtml).toContain('const searchSequence = ++state.campfireSearchSequence');
+    expect(urlSearchHtml).toContain("void api('/api/projects/search-jobs/' + previousJobId + '/cancel'");
+    expect(urlSearchHtml).toContain('if (searchSequence !== state.campfireSearchSequence) {');
+    expect(urlSearchHtml).toContain('if (state.campfireSearchJobId !== jobId) return');
+    expect(urlSearchHtml).toContain('function applySearchJob(job, expectedJobId = job.id)');
+    expect(urlSearchHtml).toContain("void api('/api/projects/search-jobs/' + activeJobId + '/cancel'");
+    expect(urlSearchHtml).toContain('見つかった候補から順にここへ追加されます');
   });
 });

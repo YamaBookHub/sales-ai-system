@@ -28,8 +28,15 @@ export type ProjectSourceSearchResult = {
   diagnostics?: ProjectSearchDiagnostics;
 };
 
+export type ProjectSearchItemListener = (items: ProjectSearchResult[]) => boolean | void | Promise<boolean | void>;
+
 export type ProjectSearchOptions = {
   signal?: AbortSignal;
+  /**
+   * Reports candidates as they are observed. Returning false asks the provider
+   * to stop emitting because the owning search job is no longer active.
+   */
+  onItems?: ProjectSearchItemListener;
 };
 
 export type NormalizedImportedProject = {

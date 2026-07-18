@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import { bindAbortToResource, OperationAbortedError } from '../../common/abortable-resource';
 import { runWithConcurrency } from '../../common/concurrency';
-import { NormalizedImportedProject, ProjectSearchOptions, ProjectSourceProvider } from '../domain/project-source-provider';
+import { NormalizedImportedProject, ProjectSearchOptions, ProjectSourceProvider, ProjectSourceSearchResult } from '../domain/project-source-provider';
 import { SearchCampfireProjectsDto } from '../projects.dto';
 import { parseMakuakeDetail } from './parsers/makuake/makuake-detail.parser';
 import { isActiveMakuakeListing, parseMakuakeListing } from './parsers/makuake/makuake-listing.parser';
@@ -53,9 +53,22 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
       const candidatePoolSize = searchCandidatePoolSize(input);
       const sourceCandidates = uniqueBy(rawItems, (item) => normalizeUrlForUnique(item.url));
       const keywordMatches = sourceCandidates.filter((item) => matchesKeyword(item, input.keyword));
-      const candidates = sortSearchResults(keywordMatches, input).slice(0, candidatePoolSize);
-      const enrichedItems = await enrichSearchResults(activeContext, candidates, lifecycle.throwIfAborted);
       const excluded = new Set((input.excludeUrls || []).map((url) => normalizeUrlForUnique(url)));
+      const candidates = sortSearchResults(keywordMatches, input).slice(0, candidatePoolSize);
+      const enrichedItems = await enrichSearchResults(
+        activeContext,
+        candidates,
+        lifecycle.throwIfAborted,
+        async (observedItems) => {
+          const conditionMatches = sortSearchResults(observedItems, input).filter((item) => matchesNumericFilters(item, input));
+          await notifyObservedSearchItems(
+            options,
+            conditionMatches
+              .filter((item) => !excluded.has(normalizeUrlForUnique(item.url)))
+              .slice(0, normalizeLimit(input.limit))
+          );
+        }
+      );
       const conditionMatches = sortSearchResults(enrichedItems, input).filter((item) => matchesNumericFilters(item, input));
       const excludedCount = conditionMatches.filter((item) => excluded.has(normalizeUrlForUnique(item.url))).length;
       const items = conditionMatches
@@ -142,6 +155,12 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
   }
 }
 
+async function notifyObservedSearchItems(options: ProjectSearchOptions, items: ProjectSourceSearchResult['items']) {
+  if (options.signal?.aborted) throw new OperationAbortedError();
+  const accepted = await options.onItems?.(items);
+  if (accepted === false) throw new OperationAbortedError();
+}
+
 type MakuakeSearchResult = {
   title: string;
   url: string;
@@ -220,38 +239,50 @@ async function collectSearchResultsFromPage(page: Page, throwIfAborted: () => vo
   return { items: uniqueBy(items, (item) => normalizeUrlForUnique(item.url)), scanComplete: true };
 }
 
-async function enrichSearchResults(context: BrowserContext, items: MakuakeSearchResult[], throwIfAborted: () => void = () => undefined) {
-  return runWithConcurrency(items, 4, async (item) => {
+async function enrichSearchResults(
+  context: BrowserContext,
+  items: MakuakeSearchResult[],
+  throwIfAborted: () => void = () => undefined,
+  onItems?: (items: MakuakeSearchResult[]) => Promise<void>
+) {
+  const enrichedItems: MakuakeSearchResult[] = [];
+  for (let index = 0; index < items.length; index += 4) {
     throwIfAborted();
-    if (item.amount > 0 && item.supporterCount > 0 && item.category && item.location) return item;
-    const page = await context.newPage();
-    try {
-      await page.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 25000 });
-      await page.waitForTimeout(500);
-      const text = await readVisibleText(page);
-      const parsed = parseMakuakeDetail({
-        source: 'makuake',
-        kind: 'detail',
-        url: item.url,
-        html: '',
-        visibleText: text
-      }).value;
-      const metrics = normalizeParsedMetrics(parsed);
-      return {
-        ...item,
-        amount: item.amount || metrics.amount,
-        supporterCount: item.supporterCount || metrics.supporterCount,
-        daysLeft: item.daysLeft ?? metrics.daysLeft,
-        category: item.category || parsed.category,
-        location: item.location || parsed.location
-      };
-    } catch {
+    const batch = await runWithConcurrency(items.slice(index, index + 4), 4, async (item) => {
       throwIfAborted();
-      return item;
-    } finally {
-      await page.close().catch(() => undefined);
-    }
-  });
+      if (item.amount > 0 && item.supporterCount > 0 && item.category && item.location) return item;
+      const page = await context.newPage();
+      try {
+        await page.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 25000 });
+        await page.waitForTimeout(500);
+        const text = await readVisibleText(page);
+        const parsed = parseMakuakeDetail({
+          source: 'makuake',
+          kind: 'detail',
+          url: item.url,
+          html: '',
+          visibleText: text
+        }).value;
+        const metrics = normalizeParsedMetrics(parsed);
+        return {
+          ...item,
+          amount: item.amount || metrics.amount,
+          supporterCount: item.supporterCount || metrics.supporterCount,
+          daysLeft: item.daysLeft ?? metrics.daysLeft,
+          category: item.category || parsed.category,
+          location: item.location || parsed.location
+        };
+      } catch {
+        throwIfAborted();
+        return item;
+      } finally {
+        await page.close().catch(() => undefined);
+      }
+    });
+    enrichedItems.push(...batch);
+    await onItems?.(enrichedItems);
+  }
+  return enrichedItems;
 }
 
 function extractSearchResults(html: string): MakuakeSearchResult[] {

@@ -158,4 +158,78 @@ describe('ProjectSearchJobManager', () => {
       itemCount: 0
     });
   });
+
+  it.each(['campfire', 'makuake'] as const)('adds %s candidates before the provider completes', async (source) => {
+    const manager = createManager();
+    let finishSearch!: (value: any) => void;
+    const search = jest.fn(async (_provider, _dto, options) => {
+      expect(options.onItems?.([{ url: `https://${source}.example/projects/first` }])).not.toBe(false);
+      return new Promise((resolve) => {
+        finishSearch = resolve;
+      });
+    });
+    const started = manager.start({ source, baseUrl: `https://${source}.example` } as any, { limit: 10 }, search as any);
+
+    for (let attempt = 0; attempt < 10 && !finishSearch; attempt += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    expect(manager.get(started.id)).toMatchObject({ status: 'running', itemCount: 1 });
+
+    finishSearch({
+      items: Array.from({ length: 10 }, (_, index) => ({ url: `https://${source}.example/projects/${index}` })),
+      diagnostics
+    });
+    const completed = await waitForTerminal(manager, started.id);
+    expect(completed).toMatchObject({ status: 'completed', itemCount: 10, importableCount: 10 });
+    expect(completed.items[0].url).toBe(`https://${source}.example/projects/first`);
+  });
+
+  it('keeps existing URLs out and never exposes more than the requested count', async () => {
+    const manager = createManager(['https://camp-fire.jp/projects/existing']);
+    const items = [
+      { url: 'https://camp-fire.jp/projects/existing?tracking=1' },
+      ...Array.from({ length: 12 }, (_, index) => ({ url: `https://camp-fire.jp/projects/new-${index}` }))
+    ];
+    const search = jest.fn(async (_provider, _dto, options) => {
+      await options.onItems(items.slice(0, 6));
+      return { items, diagnostics };
+    });
+    const started = manager.start(provider, { limit: 10 }, search as any);
+
+    const completed = await waitForTerminal(manager, started.id);
+    expect(completed).toMatchObject({ status: 'completed', itemCount: 10, importableCount: 10 });
+    expect(completed.items.map((item) => item.url)).not.toContain('https://camp-fire.jp/projects/existing?tracking=1');
+    expect(completed.items.map((item) => item.url)).toEqual(
+      Array.from({ length: 10 }, (_, index) => `https://camp-fire.jp/projects/new-${index}`)
+    );
+  });
+
+  it('normalizes duplicate URLs, preserves first observed order, and rejects late callbacks after cancellation', async () => {
+    const manager = createManager();
+    let emitItems!: (items: Array<{ url: string; title?: string }>) => boolean | void | Promise<boolean | void>;
+    const search = jest.fn((_provider, _dto, options) => {
+      emitItems = options.onItems;
+      emitItems([
+        { url: 'https://camp-fire.jp/projects/first?tracking=1', title: '最初' },
+        { url: 'https://camp-fire.jp/projects/second', title: '二番目' }
+      ]);
+      return new Promise(() => undefined);
+    });
+    const started = manager.start(provider, { limit: 10 }, search as any);
+    for (let attempt = 0; attempt < 10 && !emitItems; attempt += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    await emitItems([{ url: 'https://camp-fire.jp/projects/first', title: '更新済み' }]);
+    const observed = manager.get(started.id);
+    expect(observed.items.map((item) => item.url)).toEqual([
+      'https://camp-fire.jp/projects/first',
+      'https://camp-fire.jp/projects/second'
+    ]);
+    expect(observed.items[0].title).toBe('更新済み');
+
+    manager.cancel(started.id);
+    expect(await emitItems([{ url: 'https://camp-fire.jp/projects/late' }])).toBe(false);
+    expect(manager.get(started.id).items.map((item) => item.url)).not.toContain('https://camp-fire.jp/projects/late');
+  });
 });

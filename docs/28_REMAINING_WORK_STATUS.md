@@ -12,8 +12,8 @@
 Baseline:
 
 - Snapshot date: 2026-07-18
-- HEAD: `e9c75d6` + SO-005 working tree
-- Unit/contract tests: 87 suites / 331 tests passed
+- Base HEAD before LS-006: `372d07b`
+- Unit/contract tests: 88 suites / 337 tests passed
 - Build: passed
 - Prisma validate: passed
 - Integration: dedicated `sales_ai_system_test` DBで6 suites / 21 tests passed
@@ -43,7 +43,7 @@ Baseline:
 | 18 | SO-003 | P0 | complete | Sol T4 -> Terra | LL-004, SO-001 | 2026-07-18 / 送信先snapshot・共通guard・advisory lock・86 suites 306 tests・実DB12 tests成功 | 配信拒否・重複接触guard |
 | 19 | SO-004 | P0 | complete | Sol T4 | SO-002, SO-003 | 2026-07-18 / Opportunity分離・状態・DB・API・権限・移行・rollback契約 | 商談状態・履歴設計 |
 | 20 | SO-005 | P0 | complete | Terra T3 + Sol audit | SO-004 | 2026-07-18 / 8段階・履歴・排他・冪等・自動進行・UI、87 suites 331 tests・実DB21 tests・移行58/58件成功 | 商談状態・履歴実装 |
-| 21 | LS-006 | P1 | pending | Terra T3 | LS-005 | - | 逐次候補追加 |
+| 21 | LS-006 | P1 | complete | Terra T3 + Sol audit | LS-005 | 2026-07-18 / 両provider逐次通知・Makuake確定値4件並列・URL重複排除・10件上限・停止/旧応答guard、88 suites 337 tests・verify成功 | 逐次候補追加 |
 | 22 | LL-001 | P1 | pending | Terra T3 | LR-001, LR-004 | - | server pagination/filter |
 | 23 | LL-002 | P1 | pending | Luna T2 | LL-001 | - | 全件CSV/TSV |
 | 24 | LM-004 | P1 | pending | Sol T4 -> Terra | LM-003, LL-003 | - | 構造化分析値 |
@@ -105,3 +105,5 @@ Baseline:
 | 2026-07-18 | SO-004 | main + Terra/Sol read-only audit agents | complete | LeadStatus拡張を採用せず、SalesLead 1:1 Opportunityを商談正本とする契約を決定。状態遷移、履歴、担当、金額、確度、予定日、失注理由、API、権限、集計、排他、既存Lead移行、rollback、SO-005検証条件を文書化 |
 | 2026-07-18 | SO-005 | Terra workers + Sol audit + main | start | OpportunityのDB・API・業務連携・営業画面を並行実装し、既存Lead移行と競合制御の検証を開始 |
 | 2026-07-18 | SO-005 | Terra workers + Sol audit + main | complete | 8段階、append-only履歴、version競合、入力指紋付きoperationKey冪等、削除済みLead遮断、終端確認、メール送信・返信からの自動進行を実装。OpenAPI 77 operations、87 suites 331 tests、実DB6 suites 21 tests、Prisma・build成功。開発DBはLead 58件・Opportunity 58件・欠損0件 |
+| 2026-07-18 | LS-006 | Terra worker + Sol audit + main | start | CAMPFIRE・Makuakeの取得済み候補をprovider完了前に検索jobへ追加する実装を開始 |
+| 2026-07-18 | LS-006 | Terra worker + Sol audit + main | complete | 両providerの逐次通知、Makuake詳細確定値の4件並列追加、正規化URL重複排除、順序安定、指定件数上限、停止後拒否、旧検索応答guardを実装。OpenAPI 77 operations、88 suites 337 tests、Prisma・build成功 |
