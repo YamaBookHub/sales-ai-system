@@ -57,6 +57,31 @@
 
 Create/Updateの入力項目は現行DTOを正とする。Lead詳細・一覧には実装により会社、案件、score履歴、`nextTask`、`activeTaskCount` 等が含まれることがある。
 
+### Opportunity API
+
+Opportunityは、SalesLeadの候補・メール作業状態とは分離した商談パイプラインの正本である。レスポンスは既存APIと同じ `{ data, meta, error }` wrapperを使用する。`leadId` はUUIDとして検証される。
+
+| Method | Path | Query | Body |
+|---|---|---|---|
+| GET | `/api/opportunities` | `page`, `limit`, `stage`, `ownerId`, `source`, `expectedCloseFrom`, `expectedCloseTo` | - |
+| GET | `/api/leads/{leadId}/opportunity` | - | - |
+| PATCH | `/api/leads/{leadId}/opportunity` | - | `UpdateOpportunityDto` |
+| POST | `/api/leads/{leadId}/opportunity/transitions` | - | `TransitionOpportunityDto` |
+| POST | `/api/leads/{leadId}/opportunity/reopen` | - | `ReopenOpportunityDto` |
+| GET | `/api/leads/{leadId}/opportunity/history` | `page`, `limit` | - |
+
+`GET /api/opportunities` はサーバー側ページングを行う。既定値は `page=1`、`limit=20`、limitの上限は100で、Lead、会社、案件、取得元、直近の未完了Taskを含む一覧を返す。`source` は `campfire`、`makuake`、`green_funding`、`other` のいずれかである。
+
+`GET /api/leads/{leadId}/opportunity` は商談の現在値と直近10件の状態履歴を返す。履歴を全件取得する場合はhistory routeを使用する。
+
+`UpdateOpportunityDto` は `expectedVersion` が必須で、`ownerId`、`probability`（0〜100）、`expectedAmount`（0以上）、`meetingScheduledAt`、`expectedCloseDate` を任意で更新する。更新時はversionを比較し、成功時に1増やす。競合時は409を返す。
+
+`TransitionOpportunityDto` は `expectedVersion`、UUIDの `operationKey`、`toStage` が必須。`reason`、`probability`、`expectedAmount`、予定日、`wonAmount`、`lossReason`、`lossReasonDetail` を任意で指定する。`won` はwonAmount、`lost` はlossReasonが必須で、lossReasonが`other`の場合はlossReasonDetailも必須。operationKeyは同じ操作の再送を冪等化し、異なる商談・状態で再利用した場合は409を返す。
+
+`ReopenOpportunityDto` は終端状態（`lost` / `excluded`）を、明示した `toStage`（`uncontacted`〜`proposal`）へ戻す操作である。`expectedVersion`、UUIDの `operationKey`、`reason`、`toStage` が必須。`won` の通常再開は許可しない。
+
+状態は `uncontacted` → `contacted` → `replied` → `meeting` → `proposal` → `won` または `lost` とし、営業対象外は `excluded` とする。通常操作による後方遷移・終端状態からの変更は拒否する。各遷移は`OpportunityStageHistory`へ追記され、`source`、`sourceId`、`operationKey`、変更後version、snapshotを保存する。送信済みメール・返信の記録からの自動連動は前方遷移だけを行い、提案・受注・失注を巻き戻さない。
+
 ### 次回対応Task API
 
 | Method | Path | Query | Body |

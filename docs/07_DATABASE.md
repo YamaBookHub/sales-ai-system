@@ -23,6 +23,9 @@
 | `TaskStatus` | `todo`, `doing`, `done`, `cancelled` |
 | `AiGenerationType` | `lead_scoring`, `email_draft`, `subject_generation`, `reply_classification`, `project_summary`, `next_action` |
 | `AttachmentType` | `proposal_pdf`, `lp_url`, `video_url`, `case_study_url`, `other` |
+| `OpportunityStage` | `uncontacted`, `contacted`, `replied`, `meeting`, `proposal`, `won`, `lost`, `excluded` |
+| `OpportunityLossReason` | `no_interest`, `no_budget`, `timing`, `no_response`, `competitor`, `service_mismatch`, `contact_unavailable`, `duplicate`, `other` |
+| `OpportunityChangeSource` | `manual`, `system`, `migration` |
 
 値は大文字へ変換せず、上表のlowercase値をPrisma ClientとAPIで使用する。
 
@@ -167,7 +170,63 @@ Index: `platformId`, `companyId`, `status`, `[amount, supporterCount]`, `endDate
 Relation: `Company`, `CrowdfundingProject?`, `OutreachEmail[]`, `Task[]`, `LeadScore[]`, `AiGeneration[]`。
 Unique: `[companyId, projectId]`。Index: `[status, priority]`, `score`, `nextActionAt`。
 
-### 3.7 `LeadScore`
+### 3.7 `Opportunity`
+
+`Opportunity`は非削除の`SalesLead`と1対1で対応し、商談の現在段階・担当・確度・金額・予定日・受注／失注情報を保持する。候補発見、メール下書き、送信、返信分類は引き続き`SalesLead`、`OutreachEmail`、`EmailReply`を正本とする。
+
+| フィールド | 型 / default |
+|---|---|
+| `id` | `String @id @default(uuid()) @db.Uuid` |
+| `leadId` | `String @unique @db.Uuid` |
+| `ownerId` | `String? @db.Uuid` |
+| `stage` | `OpportunityStage @default(uncontacted)` |
+| `probability` | `Int @default(0)`（0〜100） |
+| `expectedAmount` | `Int?`（円、0以上） |
+| `wonAmount` | `Int?`（円、0以上） |
+| `meetingScheduledAt` | `DateTime?` |
+| `expectedCloseDate` | `DateTime?` |
+| `wonAt` | `DateTime?` |
+| `lostAt` | `DateTime?` |
+| `lossReason` | `OpportunityLossReason?` |
+| `lossReasonDetail` | `String?` |
+| `stageChangedAt` | `DateTime @default(now())` |
+| `version` | `Int @default(1)` |
+| `createdAt` / `updatedAt` | `DateTime` |
+
+Relation: `SalesLead`, optional owner `User`, `OpportunityStageHistory[]`。Index: `[stage, updatedAt]`, `[ownerId, stage]`, `expectedCloseDate`。DB CHECK制約とdomain policyの両方で確度・金額を検証する。
+
+### 3.8 `OpportunityStageHistory`
+
+状態変更の追記専用履歴。更新・削除APIは提供しない。
+
+| フィールド | 型 / default |
+|---|---|
+| `id` | `String @id @default(uuid()) @db.Uuid` |
+| `opportunityId` | `String @db.Uuid` |
+| `fromStage` | `OpportunityStage?` |
+| `toStage` | `OpportunityStage` |
+| `changedById` | `String? @db.Uuid` |
+| `source` | `OpportunityChangeSource @default(manual)` |
+| `sourceId` | `String?` |
+| `reason` | `String?` |
+| `operationKey` | `String? @unique` |
+| `versionAfter` | `Int` |
+| `snapshot` | `Json?` |
+| `createdAt` | `DateTime @default(now())` |
+
+Relation: `Opportunity`、変更者 `User`。Index: `[opportunityId, createdAt]`、`[toStage, createdAt]`、`[changedById, createdAt]`。`operationKey`で再送を冪等化し、`snapshot`には遷移時点の担当・確度・金額・予定日・失注理由を保存する。
+
+### Opportunityの整合性ルール
+
+- `SalesLead`と`Opportunity`は責務を分離し、商談集計は`Opportunity.stage`を使用する。
+- `leadId`は一意で、1つのSalesLeadにOpportunityは最大1件。
+- `expectedVersion`が現在versionと一致する場合だけ更新し、成功ごとにversionを増やす。競合は409。
+- 通常状態遷移は前方のみ。`lost` / `excluded`は再開API、`won`は通常再開不可。
+- `won`にはwonAmount、`lost`にはlossReasonが必須。`other`では詳細も必須。
+- `won` / `lost` / `excluded`への遷移時はSalesLeadのnextActionAt・nextFollowUpAtを消し、未完了Taskをcancelledへ更新する。
+- SalesLeadの削除時はOpportunityと履歴をCASCADE削除する。担当User削除時はowner／changedByをNULLにする。
+
+### 3.9 `LeadScore`
 
 | フィールド | 型 / default |
 |---|---|
@@ -185,7 +244,7 @@ Unique: `[companyId, projectId]`。Index: `[status, priority]`, `score`, `nextAc
 
 Relation: `SalesLead`。Index: `leadId`, `totalScore`。
 
-### 3.8 `OutreachEmail`
+### 3.10 `OutreachEmail`
 
 | フィールド | 型 / default |
 |---|---|
@@ -219,7 +278,7 @@ Relation: `SalesLead`。Index: `leadId`, `totalScore`。
 Relation: `SalesLead?`, `Company`, `ContactPerson?`, 承認者の `User?`, `EmailEvent[]`, `EmailReply[]`, `TrackedLink[]`, `MailAttachment[]`, `AiGeneration[]`, `MailChecklistItem[]`。
 Index: `status`, `leadId`, `companyId`, `[destinationKey, status]`, `gmailThreadId`, `scheduledAt`。
 
-### 3.9 `MailTemplate`
+### 3.11 `MailTemplate`
 
 | フィールド | 型 / default |
 |---|---|
@@ -236,7 +295,7 @@ Index: `status`, `leadId`, `companyId`, `[destinationKey, status]`, `gmailThread
 
 Index: `[channel, isActive]`。
 
-### 3.10 `MailChecklistItem`
+### 3.12 `MailChecklistItem`
 
 | フィールド | 型 / default |
 |---|---|
@@ -251,7 +310,7 @@ Index: `[channel, isActive]`。
 
 Relation: `OutreachEmail`。Unique: `[emailId, key]`。Index: `emailId`, `checked`。
 
-### 3.11 `EmailEvent`
+### 3.13 `EmailEvent`
 
 | フィールド | 型 / default |
 |---|---|
@@ -265,7 +324,7 @@ Relation: `OutreachEmail`。Unique: `[emailId, key]`。Index: `emailId`, `checke
 
 Relation: `OutreachEmail`。Index: `[emailId, type]`, `createdAt`。
 
-### 3.12 `EmailReply`
+### 3.14 `EmailReply`
 
 | フィールド | 型 / default |
 |---|---|
@@ -284,7 +343,7 @@ Relation: `OutreachEmail`。Index: `[emailId, type]`, `createdAt`。
 
 Relation: `OutreachEmail`。Index: `emailId`, `category`, `receivedAt`。
 
-### 3.13 `TrackedLink`
+### 3.15 `TrackedLink`
 
 | フィールド | 型 / default |
 |---|---|
@@ -297,7 +356,7 @@ Relation: `OutreachEmail`。Index: `emailId`, `category`, `receivedAt`。
 
 Relation: `OutreachEmail`, `LinkClick[]`。Index: `emailId`。
 
-### 3.14 `LinkClick`
+### 3.16 `LinkClick`
 
 | フィールド | 型 / default |
 |---|---|
@@ -310,7 +369,7 @@ Relation: `OutreachEmail`, `LinkClick[]`。Index: `emailId`。
 
 Relation: `TrackedLink`。Index: `linkId`, `clickedAt`。
 
-### 3.15 `MailAttachment`
+### 3.17 `MailAttachment`
 
 | フィールド | 型 / default |
 |---|---|
@@ -325,7 +384,7 @@ Relation: `TrackedLink`。Index: `linkId`, `clickedAt`。
 
 Relation: `OutreachEmail`。Index: `emailId`, `type`。
 
-### 3.16 `AiGeneration`
+### 3.18 `AiGeneration`
 
 | フィールド | 型 / default |
 |---|---|

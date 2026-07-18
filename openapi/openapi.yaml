@@ -386,6 +386,114 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
+  /api/opportunities:
+    get:
+      summary: List opportunities
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/OpportunityLimit'
+        - name: stage
+          in: query
+          schema: { $ref: '#/components/schemas/OpportunityStage' }
+        - name: ownerId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: source
+          in: query
+          schema: { $ref: '#/components/schemas/PlatformType' }
+        - name: expectedCloseFrom
+          in: query
+          schema: { type: string, format: date-time }
+        - name: expectedCloseTo
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Paginated opportunity list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+  /api/leads/{leadId}/opportunity:
+    get:
+      summary: Get the opportunity for a lead
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      responses:
+        '200':
+          description: Opportunity with recent history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '404':
+          description: Lead not found
+    patch:
+      summary: Update opportunity details with optimistic locking
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateOpportunityRequest' }
+      responses:
+        '200':
+          description: Updated opportunity
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '409':
+          description: Version conflict
+  /api/leads/{leadId}/opportunity/transitions:
+    post:
+      summary: Transition an opportunity
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransitionOpportunityRequest' }
+      responses:
+        '201':
+          description: Transitioned opportunity
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          description: Invalid stage fields
+        '409':
+          description: Invalid transition or version conflict
+  /api/leads/{leadId}/opportunity/reopen:
+    post:
+      summary: Reopen a lost or excluded opportunity
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReopenOpportunityRequest' }
+      responses:
+        '201':
+          description: Reopened opportunity
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '409':
+          description: Reopen conflict
+  /api/leads/{leadId}/opportunity/history:
+    get:
+      summary: List opportunity stage history
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/OpportunityLimit'
+      responses:
+        '200':
+          description: Paginated append-only history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
   /api/leads/today:
     get:
       summary: List today's actionable sales leads
@@ -959,6 +1067,10 @@ components:
       name: limit
       in: query
       schema: { type: integer, minimum: 1, default: 20 }
+    OpportunityLimit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
     ReplyLimit:
       name: limit
       in: query
@@ -1065,6 +1177,85 @@ components:
     TaskStatus:
       type: string
       enum: [todo, doing, done, cancelled]
+    OpportunityStage:
+      type: string
+      enum: [uncontacted, contacted, replied, meeting, proposal, won, lost, excluded]
+    OpportunityLossReason:
+      type: string
+      enum: [no_interest, no_budget, timing, no_response, competitor, service_mismatch, contact_unavailable, duplicate, other]
+    OpportunityChangeSource:
+      type: string
+      enum: [manual, system, migration]
+    UpdateOpportunityRequest:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        ownerId: { type: string, format: uuid, nullable: true }
+        probability: { type: integer, minimum: 0, maximum: 100 }
+        expectedAmount: { type: integer, minimum: 0, nullable: true }
+        meetingScheduledAt: { type: string, format: date-time, nullable: true }
+        expectedCloseDate: { type: string, format: date-time, nullable: true }
+    TransitionOpportunityRequest:
+      type: object
+      required: [expectedVersion, operationKey, toStage]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        operationKey: { type: string, format: uuid }
+        toStage: { $ref: '#/components/schemas/OpportunityStage' }
+        reason: { type: string, maxLength: 2000 }
+        probability: { type: integer, minimum: 0, maximum: 100 }
+        expectedAmount: { type: integer, minimum: 0 }
+        meetingScheduledAt: { type: string, format: date-time, nullable: true }
+        expectedCloseDate: { type: string, format: date-time, nullable: true }
+        wonAmount: { type: integer, minimum: 0 }
+        lossReason: { $ref: '#/components/schemas/OpportunityLossReason' }
+        lossReasonDetail: { type: string, maxLength: 2000 }
+    ReopenOpportunityRequest:
+      type: object
+      required: [expectedVersion, operationKey, toStage, reason]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        operationKey: { type: string, format: uuid }
+        toStage: { $ref: '#/components/schemas/OpportunityStage' }
+        reason: { type: string, maxLength: 2000 }
+    Opportunity:
+      type: object
+      required: [id, leadId, stage, probability, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        leadId: { type: string, format: uuid }
+        ownerId: { type: string, format: uuid, nullable: true }
+        stage: { $ref: '#/components/schemas/OpportunityStage' }
+        probability: { type: integer, minimum: 0, maximum: 100 }
+        expectedAmount: { type: integer, minimum: 0, nullable: true }
+        wonAmount: { type: integer, minimum: 0, nullable: true }
+        meetingScheduledAt: { type: string, format: date-time, nullable: true }
+        expectedCloseDate: { type: string, format: date-time, nullable: true }
+        wonAt: { type: string, format: date-time, nullable: true }
+        lostAt: { type: string, format: date-time, nullable: true }
+        lossReason: { $ref: '#/components/schemas/OpportunityLossReason' }
+        lossReasonDetail: { type: string, nullable: true }
+        stageChangedAt: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    OpportunityStageHistory:
+      type: object
+      required: [id, opportunityId, toStage, source, versionAfter, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        opportunityId: { type: string, format: uuid }
+        fromStage: { $ref: '#/components/schemas/OpportunityStage' }
+        toStage: { $ref: '#/components/schemas/OpportunityStage' }
+        changedById: { type: string, format: uuid, nullable: true }
+        source: { $ref: '#/components/schemas/OpportunityChangeSource' }
+        sourceId: { type: string, nullable: true }
+        reason: { type: string, nullable: true }
+        operationKey: { type: string, nullable: true }
+        versionAfter: { type: integer, minimum: 1 }
+        snapshot: { type: object, nullable: true, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
     CreateCompanyRequest:
       type: object
       required: [name]
