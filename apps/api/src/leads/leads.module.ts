@@ -10,9 +10,19 @@ import { TASK_REPOSITORY } from './domain/task.repository';
 import { LeadsController } from './leads.controller';
 import { LeadsService } from './leads.service';
 import { TasksController } from './tasks.controller';
+import {
+  GetOpportunityUseCase,
+  ListOpportunitiesUseCase,
+  ListOpportunityHistoryUseCase,
+  ReopenOpportunityUseCase,
+  TransitionOpportunityUseCase,
+  UpdateOpportunityUseCase
+} from './application/opportunity.usecases';
+import { PrismaOpportunityRepository } from './infrastructure/prisma-opportunity.repository';
+import { OpportunitiesController } from './opportunities.controller';
 
 @Module({
-  controllers: [LeadsController, TasksController],
+  controllers: [LeadsController, TasksController, OpportunitiesController],
   providers: [
     LeadsService,
     ScoreLeadUseCase,
@@ -22,8 +32,15 @@ import { TasksController } from './tasks.controller';
     ListLeadTasksUseCase,
     CreateLeadTaskUseCase,
     UpdateTaskUseCase,
-    ListTaskAssigneesUseCase
+    ListTaskAssigneesUseCase,
+    PrismaOpportunityRepository,
+    ListOpportunitiesUseCase,
+    GetOpportunityUseCase,
+    UpdateOpportunityUseCase,
+    TransitionOpportunityUseCase,
+    ReopenOpportunityUseCase,
+    ListOpportunityHistoryUseCase
   ],
-  exports: [LeadsService]
+  exports: [LeadsService, PrismaOpportunityRepository]
 })
 export class LeadsModule {}

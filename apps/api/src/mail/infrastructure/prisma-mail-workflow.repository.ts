@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { DEFAULT_CHECKLIST_ITEMS } from '../mail-checklist.defaults';
 import { leadStatusForEmailStatus } from '../domain/mail-policy';
 import { assertPersistedMailContactEligible } from './contact-eligibility.reader';
+import { progressOpportunityInTransaction } from '../../leads/infrastructure/prisma-opportunity.repository';
 
 @Injectable()
 export class PrismaMailWorkflowRepository {
@@ -188,6 +189,15 @@ export class PrismaMailWorkflowRepository {
       await tx.salesLead.update({
         where: { id: email.leadId },
         data: { status: leadStatus }
+      });
+    }
+
+    if (status === 'sent' && email.leadId) {
+      await progressOpportunityInTransaction(tx, {
+        leadId: email.leadId,
+        toStage: 'contacted',
+        sourceId: id,
+        operationKey: `mail-sent:${id}`
       });
     }
 

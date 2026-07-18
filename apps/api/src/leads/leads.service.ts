@@ -7,6 +7,7 @@ import { ACTIVE_TASK_STATUSES, TaskRecord, toTaskView } from './domain/task';
 import { classifyTodaySales, TodaySalesCategory, tokyoDateKey } from './domain/today-sales';
 import { CreateLeadDto, UpdateLeadDto } from './leads.dto';
 import { ScoreLeadUseCase } from './application/score-lead.usecase';
+import { ensureOpportunityForLead } from './infrastructure/prisma-opportunity.repository';
 
 @Injectable()
 export class LeadsService {
@@ -27,6 +28,7 @@ export class LeadsService {
         include: {
           company: true,
           project: { include: { platform: true } },
+          opportunity: true,
           scores: { orderBy: { createdAt: 'desc' }, take: 1 },
           tasks: {
             where: { status: { in: ACTIVE_TASK_STATUSES } },
@@ -61,6 +63,7 @@ export class LeadsService {
       include: {
         company: true,
         project: { include: { platform: true } },
+        opportunity: true,
         scores: { orderBy: { createdAt: 'desc' }, take: 1 },
         tasks: {
           where: { status: { in: ACTIVE_TASK_STATUSES } },
@@ -126,13 +129,17 @@ export class LeadsService {
       snsAnalysisMemo: dto.snsAnalysisMemo
     });
 
-    return this.prisma.salesLead.create({
-      data: {
-        companyId: dto.companyId,
-        projectId: dto.projectId,
-        ...leadData,
-        ...applyLeadPolicy(leadData)
-      }
+    return this.prisma.$transaction(async (tx) => {
+      const lead = await tx.salesLead.create({
+        data: {
+          companyId: dto.companyId,
+          projectId: dto.projectId,
+          ...leadData,
+          ...applyLeadPolicy(leadData)
+        }
+      });
+      await ensureOpportunityForLead(tx, lead.id);
+      return lead;
     });
   }
 
@@ -142,6 +149,7 @@ export class LeadsService {
       include: {
         company: true,
         project: { include: { platform: true } },
+        opportunity: true,
         scores: { orderBy: { createdAt: 'desc' }, take: 1 },
         tasks: {
           where: { status: { in: ACTIVE_TASK_STATUSES } },

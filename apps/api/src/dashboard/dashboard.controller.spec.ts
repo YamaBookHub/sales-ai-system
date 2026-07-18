@@ -126,6 +126,8 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('今対応する理由');
     expect(html).toContain('data-ui="lead-attention-reason"');
     expect(html).toContain('data-ui="lead-detail-panel"');
+    expect(html).toContain('data-ui="opportunity-workspace"');
+    expect(html).toContain('leadSort-opportunity');
     expect(html).toContain('data-ui="lead-task-workspace"');
     expect(html).toContain('id="taskTitle"');
     expect(html).toContain('id="taskDueAt"');

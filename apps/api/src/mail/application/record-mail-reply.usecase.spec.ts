@@ -20,7 +20,19 @@ describe('RecordMailReplyUseCase', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 })
       },
       salesLead: { update: jest.fn().mockResolvedValue({ id: 'lead_1' }) },
-      task: { create: jest.fn().mockResolvedValue({ id: 'task_1' }) }
+      task: { create: jest.fn().mockResolvedValue({ id: 'task_1' }) },
+      opportunity: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'opportunity_1', leadId: 'lead_1', stage: 'contacted', probability: 10, version: 1
+        }),
+        update: jest.fn().mockResolvedValue({
+          id: 'opportunity_1', leadId: 'lead_1', stage: 'meeting', probability: 50, version: 2
+        })
+      },
+      opportunityStageHistory: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'history_1' })
+      }
     };
     const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
     return { useCase: new RecordMailReplyUseCase(prisma as any), prisma, tx };
@@ -66,6 +78,19 @@ describe('RecordMailReplyUseCase', () => {
         emailId: 'mail_1',
         type: 'replied',
         payload: expect.objectContaining({ category: 'meeting_request', taskId: 'task_1' })
+      })
+    });
+    expect(tx.opportunity.update).toHaveBeenCalledWith({
+      where: { id: 'opportunity_1' },
+      data: expect.objectContaining({ stage: 'meeting', probability: 50 })
+    });
+    expect(tx.opportunityStageHistory.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        opportunityId: 'opportunity_1',
+        fromStage: 'contacted',
+        toStage: 'meeting',
+        sourceId: 'reply_1',
+        operationKey: 'mail-reply:reply_1'
       })
     });
     expect(result).toMatchObject({

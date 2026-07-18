@@ -98,6 +98,11 @@ describe('contact eligibility integration', () => {
     expect(await prisma.emailEvent.count({
       where: { emailId: generated.email.id, type: 'sent' }
     })).toBe(1);
+    expect(await prisma.opportunity.findUnique({ where: { leadId: fixture.leadIds[0] } }))
+      .toMatchObject({ stage: 'contacted', probability: 10, version: 2 });
+    expect(await prisma.opportunityStageHistory.count({
+      where: { opportunity: { leadId: fixture.leadIds[0] }, operationKey: `mail-sent:${generated.email.id}` }
+    })).toBe(1);
   });
 
   async function createFixture(label: string) {

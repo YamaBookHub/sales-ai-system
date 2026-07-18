@@ -116,6 +116,19 @@ describe('PrismaProjectImportRepository', () => {
         }),
         upsert: jest.fn().mockResolvedValue({ id: 'lead-1' })
       },
+      opportunity: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({
+          id: 'opportunity-1',
+          leadId: 'lead-1',
+          stage: 'uncontacted',
+          probability: 0,
+          version: 1
+        })
+      },
+      opportunityStageHistory: {
+        create: jest.fn().mockResolvedValue({ id: 'history-1' })
+      },
       auditLog: {
         create: jest.fn()
       }
@@ -128,9 +141,10 @@ describe('PrismaProjectImportRepository', () => {
     const result = await repository.persistImportedProject(imported, { bulk: true, userId: 'user-1' });
 
     expect(result.lead.id).toBe('lead-1');
-    expect(tx.$executeRawUnsafe).toHaveBeenCalledTimes(2);
+    expect(tx.$executeRawUnsafe).toHaveBeenCalledTimes(3);
     expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(1, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'project-import:company:テスト食品株式会社');
     expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(2, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'project-import:project:https://camp-fire.jp/projects/test/view');
+    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(3, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'opportunity:lead-1');
     expect(tx.company.update).toHaveBeenCalledWith({
       where: { id: 'company-1' },
       data: expect.objectContaining({

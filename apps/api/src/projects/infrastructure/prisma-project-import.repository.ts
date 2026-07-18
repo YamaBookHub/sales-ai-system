@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ensureOpportunityForLead } from '../../leads/infrastructure/prisma-opportunity.repository';
 import { ProjectActor } from '../domain/project-actor';
 import {
   normalizeImportedCompanyName,
@@ -175,6 +176,8 @@ export class PrismaProjectImportRepository {
           brandAnalysisMemo: imported.lead.brandAnalysisMemo
         }
       });
+
+      await ensureOpportunityForLead(tx, lead.id);
 
       await tx.auditLog.create({
         data: {

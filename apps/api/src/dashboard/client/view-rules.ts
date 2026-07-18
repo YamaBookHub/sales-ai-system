@@ -49,6 +49,33 @@ export function labelMailStatus(status: unknown): string {
   } as Record<string, string>)[String(status)] || String(status || '未設定');
 }
 
+export function labelOpportunityStage(stage: unknown): string {
+  return ({
+    uncontacted: '未接触',
+    contacted: '送信済み',
+    replied: '返信あり',
+    meeting: '商談',
+    proposal: '提案',
+    won: '受注',
+    lost: '失注',
+    excluded: '対象外'
+  } as Record<string, string>)[String(stage)] || '未取得';
+}
+
+export function labelOpportunityLossReason(reason: unknown): string {
+  return ({
+    no_interest: '関心なし',
+    no_budget: '予算なし',
+    timing: '時期が合わない',
+    no_response: '返信途絶',
+    competitor: '他社採用',
+    service_mismatch: '支援内容が合わない',
+    contact_unavailable: '有効な連絡先なし',
+    duplicate: '重複案件・重複接触',
+    other: 'その他'
+  } as Record<string, string>)[String(reason)] || '未設定';
+}
+
 export function compareValues(left: unknown, right: unknown): number {
   const leftEmpty = left === null || left === undefined || left === '';
   const rightEmpty = right === null || right === undefined || right === '';
@@ -92,6 +119,8 @@ export function renderClientViewRulesScript(): string {
     labelLeadStatus,
     labelPriority,
     labelMailStatus,
+    labelOpportunityStage,
+    labelOpportunityLossReason,
     compareValues,
     sortItems,
     nextActionLabel,

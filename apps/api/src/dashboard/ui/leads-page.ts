@@ -2,7 +2,7 @@ import { renderLeadsPageDocument } from './leads-page-static';
 
 export function renderLeadsPage() {
     return renderLeadsPageDocument(`    const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
-    const state = { leads: [], mails: [], aiGenerations: [], tasks: [], assignees: [], companyContacts: [], contactsCompanyId: null, selectedContactId: null, contactsLoading: false, selectedLeadId: null, editingTaskId: null, listPage: 1, pageSize: 20, leadFilterSignature: '', summaryFilter: 'all', sort: { table: 'lead', key: '', direction: 'asc' } };
+    const state = { leads: [], mails: [], aiGenerations: [], tasks: [], assignees: [], companyContacts: [], contactsCompanyId: null, selectedContactId: null, contactsLoading: false, selectedLeadId: null, editingTaskId: null, listPage: 1, pageSize: 20, leadFilterSignature: '', summaryFilter: 'all', sort: { table: 'lead', key: '', direction: 'asc' }, opportunitiesByLeadId: {}, opportunity: null, opportunityHistory: [], opportunityLoading: false, opportunityError: '', opportunityNotice: null, opportunityRequestId: 0 };
 
     async function api(path, options = {}) {
       return window.SalesAiApi.request(path, options, { includeOperatorEmail: true });
@@ -24,6 +24,7 @@ export function renderLeadsPage() {
         void loadCompanyContacts();
         void loadTaskAssignees();
         void loadLeadTasks();
+        void loadSelectedOpportunity();
         setPageStatus(state.leads.length ? '読み込み完了' : '営業案件は0件です', state.leads.length ? 'ok' : 'empty');
       } catch (error) {
         setPageStatus('読み込みに失敗しました: ' + error.message + '。更新を押して再試行してください。', 'error');
@@ -109,6 +110,7 @@ export function renderLeadsPage() {
           '<td><div class="clip">' + escapeHtml(project.title || '案件名なし') + '</div><div class="muted clip">' + escapeHtml(project.url || '') + '</div></td>' +
           '<td><span class="badge">' + escapeHtml(projectPlatformLabel(project)) + '</span></td>' +
           '<td><span class="badge">' + escapeHtml(labelLeadStatus(lead.status)) + '</span></td>' +
+          '<td><span class="badge ' + opportunityBadgeClass(opportunityForLead(lead)?.stage) + '">' + escapeHtml(labelOpportunityStage(opportunityForLead(lead)?.stage)) + '</span></td>' +
           '<td>' + escapeHtml(labelPriority(lead.priority)) + '</td>' +
           '<td>' + escapeHtml(Number(lead.score || 0)) + '</td>' +
           '<td><span class="badge ' + (contact === '未確認' ? 'danger' : 'ok') + '">' + escapeHtml(contact) + '</span><div class="muted clip">' + escapeHtml(sendMethod || '手段未定') + '</div></td>' +
@@ -116,11 +118,11 @@ export function renderLeadsPage() {
           '<td data-ui="lead-attention-reason"><div class="attention-reason">' + escapeHtml(attentionReason(lead, mail)) + '</div><div class="muted">' + escapeHtml(nextActionDateLabel(lead)) + '</div></td>' +
         '</tr>';
       }).join('');
-      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="9" class="ui-state-empty">条件に合う営業案件がありません</td></tr>';
+      document.getElementById('leadRows').innerHTML = rows || '<tr><td colspan="10" class="ui-state-empty">条件に合う営業案件がありません</td></tr>';
       if (listScroll) listScroll.scrollTop = listScrollTop;
       document.getElementById('listCount').textContent = allVisibleLeads.length + '件';
       renderLeadPagination(allVisibleLeads.length);
-      renderSortMarks('lead', ['company', 'project', 'source', 'status', 'priority', 'score', 'contact', 'mail', 'attentionReason']);
+      renderSortMarks('lead', ['company', 'project', 'source', 'status', 'opportunity', 'priority', 'score', 'contact', 'mail', 'attentionReason']);
     }
 
     function syncLeadPaginationState() {
@@ -193,6 +195,7 @@ export function renderLeadsPage() {
           detailItem('最新メール', mail ? labelMailStatus(mail.status) : '未生成') +
           detailItem('送信手段', lead.sendMethod || suggestSendMethod(lead)) +
           detailItem('次対応日', nextActionDateLabel(lead)) +
+          detailItem('商談状況', labelOpportunityStage(opportunityForLead(lead)?.stage)) +
         '</div>' +
         rowBlock('案件名', project.title || '未取得') +
         rowBlock('URL', project.url ? renderLink(project.url) : '未取得', true) +
@@ -202,6 +205,7 @@ export function renderLeadsPage() {
         rowBlock('ブランド/SNS', snsDetail(lead), true) +
         rowBlock('次にやること', nextActionLabel(lead, mail)) +
         rowBlock('最新メール件名', mail?.subject || '未生成') +
+        renderOpportunityWorkspace(lead) +
         renderCompanyContactManager(lead) +
         renderLeadEditPanel(lead);
     }
@@ -215,6 +219,251 @@ export function renderLeadsPage() {
           loading: state.contactsLoading || !matchesSelectedCompany
         }) +
       '</div></div>';
+    }
+
+    function opportunityForLead(lead) {
+      return state.opportunitiesByLeadId[lead?.id] ||
+        (state.opportunity?.leadId === lead?.id ? state.opportunity : null) ||
+        lead?.opportunity || null;
+    }
+
+    async function loadSelectedOpportunity() {
+      const leadId = state.selectedLeadId;
+      const requestId = ++state.opportunityRequestId;
+      state.opportunity = null;
+      state.opportunityHistory = [];
+      state.opportunityError = '';
+      state.opportunityLoading = Boolean(leadId);
+      if (leadId) renderDetail();
+      if (!leadId) return;
+      try {
+        const [opportunity, history] = await Promise.all([
+          api('/api/leads/' + leadId + '/opportunity'),
+          api('/api/leads/' + leadId + '/opportunity/history?limit=50')
+        ]);
+        if (requestId !== state.opportunityRequestId || leadId !== state.selectedLeadId) return;
+        state.opportunity = opportunity;
+        state.opportunitiesByLeadId[leadId] = opportunity;
+        state.opportunityHistory = history.items || opportunity.history || [];
+      } catch (error) {
+        if (requestId !== state.opportunityRequestId || leadId !== state.selectedLeadId) return;
+        state.opportunityError = error.message || '商談情報を読み込めませんでした。';
+      } finally {
+        if (requestId !== state.opportunityRequestId || leadId !== state.selectedLeadId) return;
+        state.opportunityLoading = false;
+        renderRows();
+        renderDetail();
+      }
+    }
+
+    function renderOpportunityWorkspace(lead) {
+      const opportunity = opportunityForLead(lead);
+      if (state.opportunityLoading && state.selectedLeadId === lead.id) {
+        return '<section class="row opportunity-workspace" data-ui="opportunity-workspace"><label>商談状況</label><div class="detail-text ui-state-loading">商談情報を読み込み中</div></section>';
+      }
+      if (!opportunity) {
+        const message = state.opportunityError || '商談情報を読み込めませんでした。';
+        return '<section class="row opportunity-workspace" data-ui="opportunity-workspace"><label>商談状況</label><div class="detail-text"><span class="status error">' + escapeHtml(message) + '</span><button type="button" onclick="loadSelectedOpportunity()">再読み込み</button></div></section>';
+      }
+      const terminal = ['won', 'lost', 'excluded'].includes(opportunity.stage);
+      const transitionOptions = opportunityNextStages(opportunity.stage);
+      const ownerOptions = opportunityOwnerOptions(opportunity);
+      return '<section class="row opportunity-workspace" data-ui="opportunity-workspace">' +
+        '<label>商談状況</label>' +
+        '<div class="detail-text">' +
+          '<div class="detail-grid">' +
+            detailItem('段階', labelOpportunityStage(opportunity.stage)) +
+            detailItem('担当者', opportunityOwnerLabel(opportunity.owner)) +
+            detailItem('確度', Number(opportunity.probability || 0) + '%') +
+            detailItem('見込額', opportunity.expectedAmount === null || opportunity.expectedAmount === undefined ? '未入力' : formatCurrency(opportunity.expectedAmount)) +
+            detailItem('受注額', opportunity.wonAmount === null || opportunity.wonAmount === undefined ? '未入力' : formatCurrency(opportunity.wonAmount)) +
+            detailItem('商談予定', formatOpportunityDate(opportunity.meetingScheduledAt)) +
+            detailItem('受注見込日', formatOpportunityDate(opportunity.expectedCloseDate)) +
+            detailItem('バージョン', Number(opportunity.version || 0)) +
+          '</div>' +
+          (opportunity.lossReason ? rowBlock('失注理由', labelOpportunityLossReason(opportunity.lossReason) + (opportunity.lossReasonDetail ? ' / ' + opportunity.lossReasonDetail : '')) : '') +
+          '<div class="form-grid">' +
+            '<div class="row"><label for="opportunityOwnerEdit">担当者</label><select id="opportunityOwnerEdit">' + ownerOptions + '</select></div>' +
+            inputField('opportunityProbabilityEdit', '確度（%）', opportunity.probability, '', 'number') +
+            inputField('opportunityExpectedAmountEdit', '見込額（円）', opportunity.expectedAmount ?? '', '', 'number') +
+            inputField('opportunityMeetingScheduledAtEdit', '商談予定日時', toDateTimeLocal(opportunity.meetingScheduledAt), '', 'datetime-local') +
+            inputField('opportunityExpectedCloseDateEdit', '受注見込日', toDateTimeLocal(opportunity.expectedCloseDate), '', 'datetime-local') +
+          '</div>' +
+          '<div class="toolbar"><button type="button" onclick="saveOpportunityDetails()">商談情報を保存</button><span id="opportunityStatus" class="status ' + escapeAttr(state.opportunityNotice?.type || 'muted') + '">' + escapeHtml(state.opportunityNotice?.message || '') + '</span></div>' +
+          (terminal ? renderOpportunityReopenForm(opportunity) : renderOpportunityTransitionForm(opportunity, transitionOptions)) +
+          renderOpportunityHistory() +
+        '</div>' +
+      '</section>';
+    }
+
+    function renderOpportunityTransitionForm(opportunity, options) {
+      if (!options.length) return '<div class="notice">この商談段階から進められる次の段階はありません。</div>';
+      return '<div class="row"><label>次の商談段階</label><div class="detail-text">' +
+        '<div class="form-grid">' +
+          '<div class="row"><label for="opportunityTransitionStage">遷移先</label><select id="opportunityTransitionStage">' + options.map((stage) => '<option value="' + escapeAttr(stage) + '">' + escapeHtml(labelOpportunityStage(stage)) + '</option>').join('') + '</select></div>' +
+          inputField('opportunityTransitionProbability', '遷移後の確度（任意）', '', '', 'number') +
+          inputField('opportunityTransitionExpectedAmount', '遷移後の見込額（任意）', '', '', 'number') +
+          inputField('opportunityTransitionWonAmount', '受注額（受注時は必須）', '', '', 'number') +
+          '<div class="row"><label for="opportunityTransitionLossReason">失注理由（失注時は必須）</label><select id="opportunityTransitionLossReason">' + opportunityLossReasonOptions() + '</select></div>' +
+          inputField('opportunityTransitionLossReasonDetail', '失注理由の補足（その他の場合は必須）') +
+          inputField('opportunityTransitionMeetingScheduledAt', '商談予定日時（任意）', '', '', 'datetime-local') +
+          inputField('opportunityTransitionExpectedCloseDate', '受注見込日（任意）', '', '', 'datetime-local') +
+        '</div>' +
+        '<div class="row"><label for="opportunityTransitionReason">理由・補足</label><textarea id="opportunityTransitionReason" maxlength="2000" placeholder="例: 初回提案書を送付"></textarea></div>' +
+        '<div class="toolbar"><button type="button" class="primary" onclick="transitionOpportunity()">段階を更新</button></div>' +
+      '</div></div>';
+    }
+
+    function renderOpportunityReopenForm(opportunity) {
+      return '<div class="row"><label>商談を再開</label><div class="detail-text">' +
+        '<div class="form-grid"><div class="row"><label for="opportunityReopenStage">再開先</label><select id="opportunityReopenStage">' +
+          ['uncontacted', 'contacted', 'replied', 'meeting', 'proposal'].map((stage) => '<option value="' + stage + '">' + labelOpportunityStage(stage) + '</option>').join('') +
+        '</select></div></div>' +
+        '<div class="row"><label for="opportunityReopenReason">再開理由</label><textarea id="opportunityReopenReason" maxlength="2000" placeholder="再開する理由を入力"></textarea></div>' +
+        '<div class="toolbar"><button type="button" onclick="reopenOpportunity()">再開する</button></div>' +
+      '</div></div>';
+    }
+
+    function renderOpportunityHistory() {
+      const items = state.opportunityHistory || [];
+      const rows = items.map((item) => '<tr><td>' + escapeHtml(formatDate(item.createdAt)) + '</td><td>' +
+        escapeHtml(item.fromStage ? labelOpportunityStage(item.fromStage) + ' → ' + labelOpportunityStage(item.toStage) : labelOpportunityStage(item.toStage)) +
+        '</td><td>' + escapeHtml(item.changedBy?.name || item.changedBy?.email || (item.source === 'system' ? 'システム' : '手動')) + '</td><td>' + escapeHtml(item.reason || '—') + '</td></tr>').join('');
+      return '<div class="row"><label>商談履歴</label><div class="detail-text table-scroll"><table><thead><tr><th>日時</th><th>変更</th><th>実行者</th><th>理由</th></tr></thead><tbody>' +
+        (rows || '<tr><td colspan="4" class="muted">履歴はまだありません</td></tr>') +
+      '</tbody></table></div></div>';
+    }
+
+    function opportunityNextStages(stage) {
+      return ({
+        uncontacted: ['contacted', 'excluded'],
+        contacted: ['replied', 'meeting', 'proposal', 'lost', 'excluded'],
+        replied: ['meeting', 'proposal', 'lost', 'excluded'],
+        meeting: ['proposal', 'won', 'lost'],
+        proposal: ['won', 'lost']
+      })[stage] || [];
+    }
+
+    function opportunityOwnerOptions(opportunity) {
+      const users = state.assignees.slice();
+      if (opportunity.owner && !users.some((user) => user.id === opportunity.owner.id)) users.unshift(opportunity.owner);
+      return '<option value="">未担当</option>' + users.map((user) => '<option value="' + escapeAttr(user.id) + '"' + (user.id === opportunity.ownerId ? ' selected' : '') + '>' + escapeHtml(opportunityOwnerLabel(user)) + '</option>').join('');
+    }
+
+    function opportunityOwnerLabel(owner) {
+      return owner?.name || owner?.email || '未担当';
+    }
+
+    function opportunityLossReasonOptions() {
+      return '<option value="">選択してください</option>' + [
+        'no_interest', 'no_budget', 'timing', 'no_response', 'competitor', 'service_mismatch', 'contact_unavailable', 'duplicate', 'other'
+      ].map((reason) => '<option value="' + reason + '">' + escapeHtml(labelOpportunityLossReason(reason)) + '</option>').join('');
+    }
+
+    function formatOpportunityDate(value) {
+      return value ? formatDate(value) : '未入力';
+    }
+
+    async function saveOpportunityDetails() {
+      const leadId = state.selectedLeadId;
+      const opportunity = state.opportunity;
+      if (!leadId || !opportunity) return;
+      state.opportunityNotice = { message: '保存中', type: 'warn' };
+      renderDetail();
+      try {
+        await api('/api/leads/' + leadId + '/opportunity', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedVersion: opportunity.version,
+            ownerId: nullableValue('opportunityOwnerEdit'),
+            probability: numberValue('opportunityProbabilityEdit'),
+            expectedAmount: nullableNumberValue('opportunityExpectedAmountEdit'),
+            meetingScheduledAt: nullableDateTimeValue('opportunityMeetingScheduledAtEdit'),
+            expectedCloseDate: nullableDateTimeValue('opportunityExpectedCloseDateEdit')
+          })
+        });
+        state.opportunityNotice = { message: '保存しました', type: 'ok' };
+        await loadSelectedOpportunity();
+      } catch (error) {
+        state.opportunityNotice = { message: error.message, type: 'error' };
+        renderDetail();
+      }
+    }
+
+    async function transitionOpportunity() {
+      const leadId = state.selectedLeadId;
+      const opportunity = state.opportunity;
+      if (!leadId || !opportunity) return;
+      const toStage = value('opportunityTransitionStage');
+      const payload = compactPayload({
+        expectedVersion: opportunity.version,
+        operationKey: newOperationKey(),
+        toStage,
+        reason: nullableValue('opportunityTransitionReason'),
+        probability: optionalNumberValue('opportunityTransitionProbability'),
+        expectedAmount: optionalNumberValue('opportunityTransitionExpectedAmount'),
+        wonAmount: optionalNumberValue('opportunityTransitionWonAmount'),
+        lossReason: nullableValue('opportunityTransitionLossReason'),
+        lossReasonDetail: nullableValue('opportunityTransitionLossReasonDetail'),
+        meetingScheduledAt: nullableDateTimeValue('opportunityTransitionMeetingScheduledAt'),
+        expectedCloseDate: nullableDateTimeValue('opportunityTransitionExpectedCloseDate')
+      });
+      if (toStage !== 'won') delete payload.wonAmount;
+      if (toStage !== 'lost') {
+        delete payload.lossReason;
+        delete payload.lossReasonDetail;
+      }
+      if (['won', 'lost', 'excluded'].includes(toStage)) {
+        if (!payload.reason) {
+          setInlineStatus('opportunityStatus', '受注・失注・対象外へ変更する理由を入力してください', 'warn');
+          return;
+        }
+        const label = labelOpportunityStage(toStage);
+        if (!window.confirm('商談段階を「' + label + '」へ変更します。よろしいですか？')) return;
+      }
+      state.opportunityNotice = { message: '段階を更新中', type: 'warn' };
+      renderDetail();
+      try {
+        await api('/api/leads/' + leadId + '/opportunity/transitions', { method: 'POST', body: JSON.stringify(payload) });
+        state.opportunityNotice = { message: '商談段階を更新しました', type: 'ok' };
+        await loadSelectedOpportunity();
+        void refreshSelectedLead(leadId);
+      } catch (error) {
+        state.opportunityNotice = { message: error.message, type: 'error' };
+        renderDetail();
+      }
+    }
+
+    async function reopenOpportunity() {
+      const leadId = state.selectedLeadId;
+      const opportunity = state.opportunity;
+      if (!leadId || !opportunity) return;
+      const reason = value('opportunityReopenReason');
+      if (!reason) {
+        setInlineStatus('opportunityStatus', '再開理由を入力してください', 'warn');
+        return;
+      }
+      state.opportunityNotice = { message: '再開中', type: 'warn' };
+      renderDetail();
+      try {
+        await api('/api/leads/' + leadId + '/opportunity/reopen', {
+          method: 'POST',
+          body: JSON.stringify({ expectedVersion: opportunity.version, operationKey: newOperationKey(), toStage: value('opportunityReopenStage'), reason })
+        });
+        state.opportunityNotice = { message: '商談を再開しました', type: 'ok' };
+        await loadSelectedOpportunity();
+      } catch (error) {
+        state.opportunityNotice = { message: error.message, type: 'error' };
+        renderDetail();
+      }
+    }
+
+    function newOperationKey() {
+      if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+        const value = Math.floor(Math.random() * 16);
+        return (character === 'x' ? value : ((value & 3) | 8)).toString(16);
+      });
     }
 
     async function loadCompanyContacts(successMessage = '') {
@@ -367,6 +616,7 @@ export function renderLeadsPage() {
         const assignees = await api('/api/task-assignees');
         state.assignees = Array.isArray(assignees) ? assignees : [];
         renderTaskWorkspace();
+        renderDetail();
       } catch (error) {
         state.assignees = [];
         setInlineStatus('taskWorkspaceStatus', '担当候補を読み込めませんでした', 'warn');
@@ -720,6 +970,7 @@ export function renderLeadsPage() {
         project: project.title || '',
         source: projectPlatformLabel(project),
         status: labelLeadStatus(lead.status),
+        opportunity: labelOpportunityStage(opportunityForLead(lead)?.stage),
         priority: priorityRank(lead.priority),
         score: Number(lead.score || 0),
         contact: contactSummary(lead),
@@ -759,6 +1010,10 @@ export function renderLeadsPage() {
       state.selectedLeadId = id;
       persistSelectedLead(id);
       state.aiGenerations = [];
+      state.opportunity = null;
+      state.opportunityHistory = [];
+      state.opportunityError = '';
+      state.opportunityNotice = null;
       renderRows();
       renderDetail();
       renderLeadAnalysis();
@@ -766,6 +1021,7 @@ export function renderLeadsPage() {
       void loadCompanyContacts();
       void loadLeadTasks();
       void loadLeadAnalysis();
+      void loadSelectedOpportunity();
     }
 
     function selectLeadFromKeyboard(event) {
@@ -1292,6 +1548,14 @@ export function renderLeadsPage() {
       return window.SalesAiViewRules.labelMailStatus(status);
     }
 
+    function labelOpportunityStage(stage) {
+      return window.SalesAiViewRules.labelOpportunityStage(stage);
+    }
+
+    function labelOpportunityLossReason(reason) {
+      return window.SalesAiViewRules.labelOpportunityLossReason(reason);
+    }
+
     function labelAiGenerationType(type) {
       return ({
         project_summary: 'AI分析',
@@ -1307,6 +1571,13 @@ export function renderLeadsPage() {
       if (['approved', 'queued', 'sent'].includes(status)) return 'ok';
       if (['rejected', 'failed', 'cancelled'].includes(status)) return 'danger';
       return 'warn';
+    }
+
+    function opportunityBadgeClass(stage) {
+      if (stage === 'won') return 'ok';
+      if (['lost', 'excluded'].includes(stage)) return 'danger';
+      if (['meeting', 'proposal'].includes(stage)) return 'warn';
+      return '';
     }
 
     function escapeHtml(value) {

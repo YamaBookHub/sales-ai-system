@@ -77,6 +77,7 @@ export function renderLeadsPageDocument(clientScript: string): string {
                 <th class="sortable" onclick="toggleSort('lead','project')">案件<span id="leadSort-project" class="sort-mark"></span></th>
                 <th class="sortable" onclick="toggleSort('lead','source')" style="width:92px">取得元<span id="leadSort-source" class="sort-mark"></span></th>
                 <th class="sortable" onclick="toggleSort('lead','status')" style="width:90px">状態<span id="leadSort-status" class="sort-mark"></span></th>
+                <th class="sortable" onclick="toggleSort('lead','opportunity')" style="width:90px">商談<span id="leadSort-opportunity" class="sort-mark"></span></th>
                 <th class="sortable" onclick="toggleSort('lead','priority')" style="width:70px">優先度<span id="leadSort-priority" class="sort-mark"></span></th>
                 <th class="sortable" onclick="toggleSort('lead','score')" style="width:70px">点数<span id="leadSort-score" class="sort-mark"></span></th>
                 <th class="sortable" onclick="toggleSort('lead','contact')" style="width:130px">連絡/手段<span id="leadSort-contact" class="sort-mark"></span></th>

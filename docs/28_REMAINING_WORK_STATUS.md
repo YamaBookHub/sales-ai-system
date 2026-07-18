@@ -11,12 +11,12 @@
 
 Baseline:
 
-- Snapshot date: 2026-07-15
-- HEAD: `6a04a5a`
-- Unit/contract tests: 64 suites / 198 tests passed
+- Snapshot date: 2026-07-18
+- HEAD: `e9c75d6` + SO-005 working tree
+- Unit/contract tests: 87 suites / 331 tests passed
 - Build: passed
 - Prisma validate: passed
-- Integration: dedicated `sales_ai_system_test` DBで1 suite / 1 test passed
+- Integration: dedicated `sales_ai_system_test` DBで6 suites / 21 tests passed
 - Browser: not run in this audit
 
 ## Active roadmap
@@ -42,7 +42,7 @@ Baseline:
 | 17 | SO-002 | P0 | complete | Terra T3 + Luna audit | SO-001, LL-004 | 2026-07-18 / 8分類・原子更新・重複防止・今日ページング、86 suites 297 tests・実DB8 tests成功 | 返信・次回対応 |
 | 18 | SO-003 | P0 | complete | Sol T4 -> Terra | LL-004, SO-001 | 2026-07-18 / 送信先snapshot・共通guard・advisory lock・86 suites 306 tests・実DB12 tests成功 | 配信拒否・重複接触guard |
 | 19 | SO-004 | P0 | complete | Sol T4 | SO-002, SO-003 | 2026-07-18 / Opportunity分離・状態・DB・API・権限・移行・rollback契約 | 商談状態・履歴設計 |
-| 20 | SO-005 | P0 | pending | Terra T3 + Sol audit | SO-004 | - | 商談状態・履歴実装 |
+| 20 | SO-005 | P0 | complete | Terra T3 + Sol audit | SO-004 | 2026-07-18 / 8段階・履歴・排他・冪等・自動進行・UI、87 suites 331 tests・実DB21 tests・移行58/58件成功 | 商談状態・履歴実装 |
 | 21 | LS-006 | P1 | pending | Terra T3 | LS-005 | - | 逐次候補追加 |
 | 22 | LL-001 | P1 | pending | Terra T3 | LR-001, LR-004 | - | server pagination/filter |
 | 23 | LL-002 | P1 | pending | Luna T2 | LL-001 | - | 全件CSV/TSV |
@@ -103,3 +103,5 @@ Baseline:
 | 2026-07-18 | SO-002 | Terra T3 + Luna audit agent | complete | 返信8分類、Lead・Task・Contact・EmailEventの原子更新、同一返信の同時重複防止、返信一覧のTask期限、今日・期限超過のserver paginationを実装。OpenAPI 71 operations、86 suites 297 tests、実DB4 suites 8 tests、Prisma・build成功 |
 | 2026-07-18 | SO-003 | Sol design audit + Terra implementation | complete | email・問い合わせURL・サイト内URLの正規化snapshot、会社block・配信停止・別Lead重複の共通guard、送信先advisory lockを実装。OpenAPI 71 operations、86 suites 306 tests、実DB5 suites 12 tests、Prisma・build成功 |
 | 2026-07-18 | SO-004 | main + Terra/Sol read-only audit agents | complete | LeadStatus拡張を採用せず、SalesLead 1:1 Opportunityを商談正本とする契約を決定。状態遷移、履歴、担当、金額、確度、予定日、失注理由、API、権限、集計、排他、既存Lead移行、rollback、SO-005検証条件を文書化 |
+| 2026-07-18 | SO-005 | Terra workers + Sol audit + main | start | OpportunityのDB・API・業務連携・営業画面を並行実装し、既存Lead移行と競合制御の検証を開始 |
+| 2026-07-18 | SO-005 | Terra workers + Sol audit + main | complete | 8段階、append-only履歴、version競合、入力指紋付きoperationKey冪等、削除済みLead遮断、終端確認、メール送信・返信からの自動進行を実装。OpenAPI 77 operations、87 suites 331 tests、実DB6 suites 21 tests、Prisma・build成功。開発DBはLead 58件・Opportunity 58件・欠損0件 |

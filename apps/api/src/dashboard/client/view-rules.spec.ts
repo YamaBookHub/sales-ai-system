@@ -2,6 +2,8 @@ import {
   compareValues,
   labelLeadStatus,
   labelMailStatus,
+  labelOpportunityLossReason,
+  labelOpportunityStage,
   labelPriority,
   nextActionLabel,
   renderClientViewRulesScript,
@@ -16,6 +18,10 @@ describe('dashboard client view rules', () => {
     expect(labelPriority('high')).toBe('高');
     expect(labelMailStatus('in_review')).toBe('確認待ち');
     expect(labelMailStatus('unknown')).toBe('unknown');
+    expect(labelOpportunityStage('proposal')).toBe('提案');
+    expect(labelOpportunityStage('unknown')).toBe('未取得');
+    expect(labelOpportunityLossReason('timing')).toBe('時期が合わない');
+    expect(labelOpportunityLossReason('unknown')).toBe('未設定');
   });
 
   it('keeps next action, sort, and truncation pure', () => {

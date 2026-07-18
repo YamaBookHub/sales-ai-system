@@ -3,6 +3,7 @@ import { ReplyCategory } from '@prisma/client';
 import { classifyReplyText } from '../../ai/domain/reply-classifier';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateMailReplyDto } from '../mail.dto';
+import { progressOpportunityInTransaction } from '../../leads/infrastructure/prisma-opportunity.repository';
 
 const TERMINAL_CATEGORIES: ReplyCategory[] = ['unsubscribe', 'not_interested'];
 
@@ -90,6 +91,16 @@ export class RecordMailReplyUseCase {
             }
           });
         }
+
+        const opportunityStage = opportunityStageForReply(classification.category);
+        if (opportunityStage) {
+          await progressOpportunityInTransaction(tx, {
+            leadId: email.leadId,
+            toStage: opportunityStage,
+            sourceId: reply.id,
+            operationKey: `mail-reply:${reply.id}`
+          });
+        }
       }
 
       await tx.emailEvent.create({
@@ -108,6 +119,13 @@ export class RecordMailReplyUseCase {
       return { reply, classification, task };
     });
   }
+}
+
+function opportunityStageForReply(category: ReplyCategory): 'contacted' | 'replied' | 'meeting' | null {
+  if (category === 'meeting_request') return 'meeting';
+  if (['interested', 'need_info', 'complaint', 'unknown'].includes(category)) return 'replied';
+  if (category === 'auto_reply') return 'contacted';
+  return null;
 }
 
 function replyTaskTitle(category: ReplyCategory) {

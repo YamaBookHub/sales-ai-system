@@ -98,6 +98,35 @@ enum TaskStatus {
   cancelled
 }
 
+enum OpportunityStage {
+  uncontacted
+  contacted
+  replied
+  meeting
+  proposal
+  won
+  lost
+  excluded
+}
+
+enum OpportunityLossReason {
+  no_interest
+  no_budget
+  timing
+  no_response
+  competitor
+  service_mismatch
+  contact_unavailable
+  duplicate
+  other
+}
+
+enum OpportunityChangeSource {
+  manual
+  system
+  migration
+}
+
 enum AiGenerationType {
   lead_scoring
   email_draft
@@ -128,6 +157,8 @@ model User {
   audits    AuditLog[]
   tasks     Task[]
   approvals OutreachEmail[] @relation("MailApprover")
+  ownedOpportunities Opportunity[] @relation("OpportunityOwner")
+  opportunityStageChanges OpportunityStageHistory[] @relation("OpportunityStageChanger")
 
   @@index([role, isActive])
 }
@@ -265,6 +296,7 @@ model SalesLead {
   tasks         Task[]
   scores        LeadScore[]
   aiGenerations AiGeneration[]
+  opportunity   Opportunity?
 
   @@index([status, priority])
   @@index([score])
@@ -493,6 +525,56 @@ model Task {
   @@index([status, dueAt])
   @@index([leadId])
   @@index([assigneeId])
+}
+
+model Opportunity {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  leadId             String                 @unique @db.Uuid
+  ownerId            String?                @db.Uuid
+  stage              OpportunityStage       @default(uncontacted)
+  probability        Int                    @default(0)
+  expectedAmount     Int?
+  wonAmount          Int?
+  meetingScheduledAt DateTime?
+  expectedCloseDate  DateTime?
+  wonAt              DateTime?
+  lostAt             DateTime?
+  lossReason         OpportunityLossReason?
+  lossReasonDetail   String?
+  stageChangedAt     DateTime               @default(now())
+  version            Int                    @default(1)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  lead    SalesLead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  owner   User?                    @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  history OpportunityStageHistory[]
+
+  @@index([stage, updatedAt])
+  @@index([ownerId, stage])
+  @@index([expectedCloseDate])
+}
+
+model OpportunityStageHistory {
+  id            String                  @id @default(uuid()) @db.Uuid
+  opportunityId String                  @db.Uuid
+  fromStage     OpportunityStage?
+  toStage       OpportunityStage
+  changedById   String?                 @db.Uuid
+  source        OpportunityChangeSource @default(manual)
+  sourceId      String?
+  reason        String?
+  operationKey  String?                 @unique
+  versionAfter  Int
+  snapshot      Json?
+  createdAt     DateTime                @default(now())
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  changedBy   User?       @relation("OpportunityStageChanger", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([opportunityId, createdAt])
+  @@index([toStage, createdAt])
+  @@index([changedById, createdAt])
 }
 
 model AuditLog {

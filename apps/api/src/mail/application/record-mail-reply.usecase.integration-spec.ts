@@ -85,15 +85,17 @@ describe('RecordMailReplyUseCase integration', () => {
       receivedAt: receivedAt.toISOString()
     });
 
-    const [lead, task, inbox] = await Promise.all([
+    const [lead, task, inbox, opportunity] = await Promise.all([
       prisma.salesLead.findUniqueOrThrow({ where: { id: leadId } }),
       prisma.task.findFirstOrThrow({ where: { leadId, title: '商談日程を調整' } }),
-      replies.list({ category: 'meeting_request' })
+      replies.list({ category: 'meeting_request' }),
+      prisma.opportunity.findUniqueOrThrow({ where: { leadId } })
     ]);
 
     expect(result.classification.category).toBe('meeting_request');
     expect(lead).toMatchObject({ status: 'meeting_candidate', nextActionAt: receivedAt });
     expect(task).toMatchObject({ status: 'todo', dueAt: receivedAt });
+    expect(opportunity).toMatchObject({ stage: 'meeting', probability: 50 });
     expect(inbox.items.find((item) => item.id === result.reply.id)).toMatchObject({
       category: 'meeting_request',
       email: { lead: { id: leadId, nextActionAt: receivedAt } }
