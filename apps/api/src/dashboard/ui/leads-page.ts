@@ -29,10 +29,10 @@ export function renderLeadsPage() {
       }
     }
 
-    function buildLeadListPath() {
+    function buildLeadListPath(overrides = {}) {
       const params = new URLSearchParams({
-        page: String(state.listPage),
-        limit: String(state.pageSize),
+        page: String(overrides.page || state.listPage),
+        limit: String(overrides.limit || state.pageSize),
         sort: state.sort.key || 'createdAt',
         sortDirection: state.sort.direction || 'desc'
       });
@@ -857,40 +857,48 @@ export function renderLeadsPage() {
       const scope = value('exportScope') || 'visible';
       const format = value('exportFormat') || 'csv';
       const columns = value('exportColumns') || 'summary';
-      const count = exportLeadRows(scope).length;
-      const scopeLabel = scope === 'all' ? '全件' : '表示中';
+      const count = scope === 'all' ? state.leadListMeta.total : state.leads.length;
+      const scopeLabel = scope === 'all' ? '現在の条件に合う全件' : '現在ページ';
       const columnLabel = columns === 'detail' ? '詳細用' : '一覧用';
       preview.textContent = scopeLabel + ' ' + count + '件を' + format.toUpperCase() + '・' + columnLabel + 'で出力します';
     }
 
-    function exportLeads() {
+    async function exportLeads() {
       const scope = value('exportScope') || 'visible';
       const format = value('exportFormat') || 'csv';
       const columns = value('exportColumns') || 'summary';
-      const leads = exportLeadRows(scope);
-      if (!leads.length) {
-        setInlineStatus('exportStatus', '出力する営業案件がありません', 'warn');
-        return;
+      const button = document.getElementById('exportButton');
+      button.disabled = true;
+      setInlineStatus('exportStatus', scope === 'all' ? '条件に合う全件を準備中' : '現在ページを準備中', 'warn');
+      try {
+        const leads = scope === 'all'
+          ? await window.SalesAiLeadExport.collectAllLeadPages(
+              (page, limit) => api(buildLeadListPath({ page, limit })),
+              { pageSize: 100, concurrency: 4 }
+            )
+          : [...state.leads];
+        if (!leads.length) {
+          setInlineStatus('exportStatus', '出力する営業案件がありません', 'warn');
+          return;
+        }
+        const rows = buildLeadExportRows(leads, columns);
+        const text = window.SalesAiLeadExport.serializeLeadExportRows(rows, format);
+        const blob = new Blob([text], { type: format === 'tsv' ? 'text/tab-separated-values;charset=utf-8' : 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        link.href = url;
+        link.download = 'sales-leads-' + timestamp + '.' + format;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        setInlineStatus('exportStatus', '出力しました: ' + leads.length + '件', 'ok');
+      } catch (error) {
+        setInlineStatus('exportStatus', '出力に失敗しました: ' + error.message, 'error');
+      } finally {
+        button.disabled = false;
       }
-      const delimiter = format === 'tsv' ? '\\t' : ',';
-      const rows = buildLeadExportRows(leads, columns);
-      const text = rows.map((row) => row.map((cell) => formatExportCell(cell, delimiter)).join(delimiter)).join('\\n');
-      const bom = format === 'csv' ? '\\ufeff' : '';
-      const blob = new Blob([bom + text], { type: format === 'tsv' ? 'text/tab-separated-values;charset=utf-8' : 'text/csv;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      link.href = url;
-      link.download = 'sales-leads-' + timestamp + '.' + format;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      setInlineStatus('exportStatus', '出力しました: ' + leads.length + '件', 'ok');
-    }
-
-    function exportLeadRows(scope) {
-      return scope === 'all' ? sortItems([...state.leads], state.sort, leadSortValue) : filteredLeads();
     }
 
     function buildLeadExportRows(leads, columnSet) {
@@ -912,8 +920,8 @@ export function renderLeadsPage() {
         ['点数', (lead) => Number(lead.score || 0)],
         ['連絡先', (lead) => contactSummary(lead)],
         ['送信手段', (lead) => lead.sendMethod || suggestSendMethod(lead)],
-        ['最新メール', (lead) => latestMail(lead.id) ? labelMailStatus(latestMail(lead.id).status) : '未生成'],
-        ['次にやること', (lead) => nextActionLabel(lead, latestMail(lead.id))],
+        ['最新メール', (lead) => latestMailForLead(lead) ? labelMailStatus(latestMailForLead(lead).status) : '未生成'],
+        ['次にやること', (lead) => nextActionLabel(lead, latestMailForLead(lead))],
         ['次対応日', (lead) => nextActionDateLabel(lead)]
       ];
       const detail = [
@@ -941,12 +949,6 @@ export function renderLeadsPage() {
         ['SNS分析メモ', (lead) => lead.snsAnalysisMemo || '']
       ];
       return (columnSet === 'detail' ? detail : summary).map(([label, value]) => ({ label, value }));
-    }
-
-    function formatExportCell(value, delimiter) {
-      const text = String(value ?? '').replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
-      if (delimiter === '\\t') return text.replace(/\\t/g, ' ').replace(/\\n/g, ' ');
-      return '"' + text.replace(/"/g, '""') + '"';
     }
 
     function toggleSort(table, key) {
@@ -1009,6 +1011,10 @@ export function renderLeadsPage() {
 
     function latestMail(leadId) {
       const lead = state.leads.find((item) => item.id === leadId) || (state.selectedLeadRecord?.id === leadId ? state.selectedLeadRecord : null);
+      return latestMailForLead(lead, leadId);
+    }
+
+    function latestMailForLead(lead, leadId = lead?.id) {
       const embeddedMails = Array.isArray(lead?.mails) ? lead.mails : [];
       const candidates = embeddedMails.concat(state.mails)
         .filter((mail) => {

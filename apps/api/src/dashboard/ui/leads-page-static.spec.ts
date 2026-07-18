@@ -62,4 +62,44 @@ describe('Lead page static HTML', () => {
 
     expect(runtime.selectedLead()).toEqual({ id: 'lead-selected' });
   });
+
+  it('builds all-page export requests from the active filters and server sort', () => {
+    const html = renderLeadsPage();
+    const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] || '';
+    const clientStart = script.indexOf("const SELECTED_LEAD_STORAGE_KEY");
+    const clientEnd = script.lastIndexOf('loadAll();');
+    const clientScript = script.slice(clientStart, clientEnd);
+    const values: Record<string, string> = {
+      keyword: 'needle',
+      sourceFilter: 'makuake',
+      statusFilter: 'qualified',
+      priorityFilter: 'high',
+      contactFilter: 'has',
+      mailFilter: 'draft',
+      nextActionFilter: 'overdue'
+    };
+    const document = { getElementById: (id: string) => ({ value: values[id] || '' }) };
+    const runtime = new Function('document', clientScript + '; return { state, buildLeadListPath };')(document) as {
+      state: { sort: { key: string; direction: string } };
+      buildLeadListPath: (overrides: { page: number; limit: number }) => string;
+    };
+    runtime.state.sort = { key: 'amount', direction: 'desc' };
+
+    const path = runtime.buildLeadListPath({ page: 2, limit: 100 });
+    const params = new URL(path, 'http://localhost').searchParams;
+
+    expect(Object.fromEntries(params)).toEqual({
+      page: '2',
+      limit: '100',
+      sort: 'amount',
+      sortDirection: 'desc',
+      keyword: 'needle',
+      source: 'makuake',
+      status: 'qualified',
+      priority: 'high',
+      contactState: 'has',
+      mailStatus: 'draft',
+      nextAction: 'overdue'
+    });
+  });
 });

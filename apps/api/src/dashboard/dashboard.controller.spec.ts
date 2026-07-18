@@ -147,6 +147,13 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('<span class="status muted">CSV / TSV出力</span>');
     expect(html).toContain('id="exportScope"');
     expect(html).toContain('id="exportFormat"');
+    expect(html).toContain('id="exportButton"');
+    expect(html).toContain('<option value="visible">現在ページだけ</option>');
+    expect(html).toContain('<option value="all">現在の条件に合う全件</option>');
+    expect(html).toContain('window.SalesAiLeadExport.collectAllLeadPages');
+    expect(html).toContain("api(buildLeadListPath({ page, limit }))");
+    expect(html).toContain('{ pageSize: 100, concurrency: 4 }');
+    expect(html).toContain('window.SalesAiLeadExport.serializeLeadExportRows(rows, format)');
     expect(html).toContain('id="leadRows"');
     expect(html).toContain('id="leadPagination"');
     expect(html).toContain('pageSize: 20');
@@ -161,7 +168,7 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('id="keyword"');
     expect(html).toContain('function scheduleLeadListReload(debounce = true)');
     expect(html).toContain('function setLeadListSortFromControls()');
-    expect(html).toContain('function buildLeadListPath()');
+    expect(html).toContain('function buildLeadListPath(overrides = {})');
     expect(html).toContain("return '/api/leads?' + params.toString()");
     expect(html).not.toContain("api('/api/leads?limit=200')");
     expect(html).toContain('selectedLeadRecord: null');

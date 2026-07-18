@@ -3,6 +3,7 @@ import { renderClientViewRulesScript } from '../client/view-rules';
 import { renderClientApiScript } from '../client/api-client';
 import { renderNavigationBadgesScript } from '../client/navigation-badges';
 import { renderClientContactsScript } from '../client/contacts';
+import { renderClientLeadExportScript } from '../client/lead-export';
 import { renderTopNavigation } from './top-navigation';
 
 export function renderLeadsPageDocument(clientScript: string): string {
@@ -45,8 +46,8 @@ export function renderLeadsPageDocument(clientScript: string): string {
         </summary>
         <div class="body export-panel">
           <select id="exportScope" onchange="updateExportPreview()">
-            <option value="visible">表示中だけ出力</option>
-            <option value="all">全件出力</option>
+            <option value="visible">現在ページだけ</option>
+            <option value="all">現在の条件に合う全件</option>
           </select>
           <select id="exportFormat" onchange="updateExportPreview()">
             <option value="csv">CSV</option>
@@ -56,9 +57,9 @@ export function renderLeadsPageDocument(clientScript: string): string {
             <option value="summary">一覧用</option>
             <option value="detail">詳細用</option>
           </select>
-          <button class="primary" onclick="exportLeads()">出力する</button>
-          <span id="exportPreview" class="export-preview">表示中の営業案件をCSVで出力します</span>
-          <span id="exportStatus" class="status muted"></span>
+          <button id="exportButton" class="primary" onclick="exportLeads()">出力する</button>
+          <span id="exportPreview" class="export-preview">現在ページの営業案件をCSVで出力します</span>
+          <span id="exportStatus" class="status muted" aria-live="polite"></span>
         </div>
       </details>
     </section>
@@ -198,7 +199,7 @@ export function renderLeadsPageDocument(clientScript: string): string {
 
   </main>
   <footer>Sales AI System</footer>
-  <script>\n${renderClientViewRulesScript()}\n${renderClientApiScript()}\n${renderClientContactsScript()}\n${renderNavigationBadgesScript()}\n${clientScript}\n  </script>
+  <script>\n${renderClientViewRulesScript()}\n${renderClientApiScript()}\n${renderClientContactsScript()}\n${renderClientLeadExportScript()}\n${renderNavigationBadgesScript()}\n${clientScript}\n  </script>
 </body>
 </html>`;
 }
