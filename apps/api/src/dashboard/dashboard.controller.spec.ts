@@ -26,6 +26,7 @@ describe('DashboardController HTML contracts', () => {
   function expectTopNavigation(html: string) {
     expect(html).toContain('class="top-nav" data-ui="top-nav"');
     expect(html).toContain("location.href='/today'");
+    expect(html).toContain("location.href='/sales-performance'");
     expect(html).toContain("location.href='/replies'");
     expect(html).toContain("location.href='/'");
     expect(html).toContain("location.href='/leads-view'");
@@ -34,10 +35,11 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('返信');
     expect(html).toContain('営業案件');
     expect(html).toContain('作成・レビュー');
+    expect(html).toContain('営業成績');
 
     const navStart = html.indexOf('<div class="top-nav" data-ui="top-nav">');
     const nav = html.slice(navStart, html.indexOf('</div>', navStart));
-    const navPaths = ['/today', '/replies', '/leads-view', '/mail-workspace', '/'];
+    const navPaths = ['/today', '/sales-performance', '/replies', '/leads-view', '/mail-workspace', '/'];
     const positions = navPaths.map((path) => nav.indexOf(`location.href='${path}'`));
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
@@ -48,6 +50,7 @@ describe('DashboardController HTML contracts', () => {
     expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.leadsView)).toBe('leads-view');
     expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.mailWorkspace)).toBe('mail-workspace');
     expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.today)).toBe('today');
+    expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.salesPerformance)).toBe('sales-performance');
     expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.index)).toBe('/');
   });
 
@@ -66,6 +69,32 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('id="pageLabel"');
     expect(html).toContain('今日の対応はありません');
     expect(html).toContain("location.href = '/leads-view'");
+  });
+
+  it('returns sales performance HTML with report API and operational states', () => {
+    const html = controller.salesPerformance();
+
+    expectHtmlResponse(html);
+    expectTopNavigation(html);
+    expect(html).toContain('<body data-ui-page="sales-performance">');
+    expect(html).toContain('<h1>営業成績</h1>');
+    expect(html).toContain('data-ui="sales-performance-filters"');
+    expect(html).toContain('data-ui="sales-performance-summary"');
+    expect(html).toContain('data-ui="sales-performance-rates"');
+    expect(html).toContain('data-ui="sales-performance-loss-reasons"');
+    expect(html).toContain("'/api/reports/sales-performance?' + params.toString()");
+    expect(html).toContain("api('/api/task-assignees')");
+    expect(html).toContain('返信率・商談率・受注率はすべて接触リード数を分母として表示しています。');
+    expect(html).toContain('function defaultFromDate()');
+    expect(html).toContain("timeZone: 'Asia/Tokyo'");
+    expect(html).toContain('function renderError(message)');
+    expect(html).toContain('この条件の失注理由はありません。');
+    expect(html).toContain('salesPerformanceRequestGeneration');
+    expect(html).toContain('AbortController');
+    expect(html).toContain('function isCurrentSalesPerformanceRequest(generation, controller)');
+    expect(html).toContain('if (!isCurrentSalesPerformanceRequest(generation, controller)) return;');
+    expect(html).toContain('if (!isCurrentSalesPerformanceRequest(generation, controller) || controller?.signal.aborted) return;');
+    expect(html).not.toContain('/api/leads?');
   });
 
   it('returns Reply Inbox HTML with API and safety-state markers', () => {
