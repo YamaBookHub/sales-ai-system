@@ -22,6 +22,7 @@
 | `ReplyCategory` | `interested`, `need_info`, `meeting_request`, `not_interested`, `unsubscribe`, `auto_reply`, `complaint`, `unknown` |
 | `TaskStatus` | `todo`, `doing`, `done`, `cancelled` |
 | `AiGenerationType` | `lead_scoring`, `email_draft`, `subject_generation`, `reply_classification`, `project_summary`, `next_action` |
+| `AiUsageStatus` | `reserved`, `completed`, `failed` |
 | `AttachmentType` | `proposal_pdf`, `lp_url`, `video_url`, `case_study_url`, `other` |
 | `OpportunityStage` | `uncontacted`, `contacted`, `replied`, `meeting`, `proposal`, `won`, `lost`, `excluded` |
 | `OpportunityLossReason` | `no_interest`, `no_budget`, `timing`, `no_response`, `competitor`, `service_mismatch`, `contact_unavailable`, `duplicate`, `other` |
@@ -404,6 +405,24 @@ Relation: `OutreachEmail`。Index: `emailId`, `type`。
 | `createdAt` | `DateTime @default(now())` |
 
 Relation: `SalesLead?`, `OutreachEmail?`。Index: `type`, `leadId`, `emailId`, `createdAt`。
+
+### 3.19 `AiUsageLedger`
+
+OpenAI月額予算の同時実行予約と概算費用を管理する。生成内容やAPIキーは保存しない。
+
+| フィールド | 型 / default |
+|---|---|
+| `id` | `String @id @default(uuid()) @db.Uuid` |
+| `provider` | `String` |
+| `model` | `String` |
+| `operation` | `String` |
+| `status` | `AiUsageStatus @default(reserved)` |
+| `estimatedCostUsd` | `Decimal @db.Decimal(12, 6)` |
+| `actualCostUsd` | `Decimal? @db.Decimal(12, 6)` |
+| `createdAt` | `DateTime @default(now())` |
+| `completedAt` | `DateTime?` |
+
+Index: `[provider, createdAt, status]`。予算判定時はPostgreSQL advisory lockで予約作成を直列化する。
 
 ### 3.17 `Task`
 

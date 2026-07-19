@@ -50,11 +50,25 @@ OPENAI_API_KEY=""
 OPENAI_MODEL="gpt-5.6-luna"
 OPENAI_MAX_DESCRIPTION_CHARS="1200"
 OPENAI_MAX_OUTPUT_TOKENS="1200"
+OPENAI_SEMANTIC_CHECK_MAX_OUTPUT_TOKENS="400"
+OPENAI_MONTHLY_BUDGET_USD=""
+OPENAI_ESTIMATED_COST_PER_REQUEST_USD="0.01"
 OPENAI_INPUT_COST_PER_1M=""
 OPENAI_OUTPUT_COST_PER_1M=""
 ```
 
 Geminiの概算単価は2026-07-16時点の標準有料枠を既定値とする。Flash-Liteは入力 `$0.25` / 出力 `$1.50`、Flashは入力 `$1.50` / 出力 `$9.00`（いずれも100万トークンあたり、出力はthinking tokenを含む）。価格変更時は `.env` のモデル別単価で上書きする。無料枠では入力データがGoogleの製品改善に使われる設定であるため、営業先データを扱う本番運用では有料枠のデータ取扱条件を確認する。
+
+## OpenAI月額予算guard
+
+- `OPENAI_MONTHLY_BUDGET_USD` を空欄にすると利用額だけを記録し、自動停止しない。
+- 金額を設定すると、JSTの月初から翌月初までの確定概算費用と実行中予約を合算する。
+- OpenAI実行前に概算費用をDBへ予約し、同時操作でも予算残額を二重利用しない。
+- 料金単価が設定済みなら入力文字数と最大出力tokenから見積もり、未設定なら `OPENAI_ESTIMATED_COST_PER_REQUEST_USD` を使う。
+- 予算設定時に見積額を0または不正値へ設定すると、guardを無効化せず503で停止する。
+- 上限を超える実行はOpenAI通信前に429と日本語メッセージで拒否する。
+- Gemini、ローカル分析、ローカルメール生成はOpenAI予算の影響を受けない。
+- `GET /api/ai/usage-summary` で当月の概算利用額、予約中金額、残額、停止状態を確認できる。APIキーは返さない。
 
 ## エラー時の扱い
 
@@ -62,3 +76,4 @@ Geminiの概算単価は2026-07-16時点の標準有料枠を既定値とする�
 - APIキー不正: 日本語メッセージで502を返す。
 - 残高不足・利用上限: 日本語メッセージで502を返す。
 - AI応答がJSONでない場合: 下書きを保存せず502を返す。
+- OpenAI月額予算超過: OpenAI通信を行わず、日本語メッセージで429を返す。

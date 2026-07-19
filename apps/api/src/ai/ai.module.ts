@@ -11,6 +11,7 @@ import { AiClientService } from './ai-client.service';
 import { AiService } from './ai.service';
 import { GeminiClientService } from './gemini-client.service';
 import { OpenAiClientService } from './openai-client.service';
+import { OpenAiBudgetService } from './application/openai-budget.service';
 
 @Module({
   controllers: [AiController],
@@ -19,6 +20,7 @@ import { OpenAiClientService } from './openai-client.service';
     AiClientService,
     GeminiClientService,
     OpenAiClientService,
+    OpenAiBudgetService,
     AnalyzeLeadUseCase,
     CheckMailSemanticConsistencyUseCase,
     GenerateMailDraftUseCase,

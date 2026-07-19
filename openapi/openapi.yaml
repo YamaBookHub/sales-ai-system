@@ -940,6 +940,21 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
+  /api/ai/usage-summary:
+    get:
+      summary: Get the current OpenAI monthly budget usage
+      responses:
+        '200':
+          description: OpenAI monthly budget usage summary
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OpenAiUsageSummary'
   /api/ai/leads/{leadId}/generate-mail:
     post:
       summary: Generate a mail draft for a lead
@@ -1062,6 +1077,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
+        '429':
+          description: OpenAI monthly budget would be exceeded before this request
   /api/ai/mails/{mailId}/semantic-consistency:
     post:
       summary: Check mail semantic consistency
@@ -1073,6 +1090,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
+        '429':
+          description: OpenAI monthly budget would be exceeded before this request
   /api/ai/leads/{leadId}/generations:
     get:
       summary: List AI generations for a lead
@@ -1671,6 +1690,22 @@ components:
         templateKey: { type: string, minLength: 1 }
         tone: { type: string }
         analysisRevisionId: { type: string, format: uuid }
+    OpenAiUsageSummary:
+      type: object
+      required: [provider, month, configured, budgetUsd, spentUsd, reservedUsd, remainingUsd, usagePercent, blocked, statusMessage]
+      properties:
+        provider:
+          type: string
+          enum: [openai]
+        month: { type: string, pattern: '^\\d{4}-\\d{2}$' }
+        configured: { type: boolean }
+        budgetUsd: { type: number, format: double, nullable: true, minimum: 0 }
+        spentUsd: { type: number, format: double, minimum: 0 }
+        reservedUsd: { type: number, format: double, minimum: 0 }
+        remainingUsd: { type: number, format: double, nullable: true, minimum: 0 }
+        usagePercent: { type: number, format: double, nullable: true, minimum: 0 }
+        blocked: { type: boolean }
+        statusMessage: { type: string }
     LeadAnalysisRevisionRequest:
       type: object
       required: [expectedVersion, expectedSourceFingerprint, appeal, targetUser, videoIdea]

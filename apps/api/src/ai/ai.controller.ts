@@ -52,6 +52,11 @@ export class AiController {
     return ok(await this.ai.listLeadGenerations(leadId));
   }
 
+  @Get('usage-summary')
+  async getUsageSummary() {
+    return ok(await this.ai.getOpenAiUsageSummary());
+  }
+
   @Post('replies/:replyId/classify')
   async classifyReply(@Param('replyId') replyId: string) {
     return ok(await this.ai.classifyReply(replyId));

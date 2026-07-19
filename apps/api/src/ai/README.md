@@ -14,6 +14,8 @@
 - AI provider振り分け: `ai-client.service.ts`
 - Gemini呼び出し: `gemini-client.service.ts`
 - OpenAI呼び出し: `openai-client.service.ts`
+- OpenAI月額予算・同時実行予約: `application/openai-budget.service.ts`
+- OpenAI予算計算: `domain/openai-budget.ts`
 - プロンプト本文: `prompts/*.prompt.ts`
 - AI出力検証: `domain/ai-output-validator.ts`
 - AI生成メールの安定化: `domain/openai-sales-mail-draft.ts`
@@ -39,6 +41,8 @@
 - 構造化分析は既存版を更新せず、新しいversionとして追加する
 - 自由文メモと過去のAIログをメール生成時の構造化分析へfallbackしない
 - 案件編集・再取り込み・分析保存・メール生成は `lead-analysis:{leadId}` の排他境界を共有する
+- OpenAI呼び出しは `AiClientService` から予算予約を通し、上限超過時は通信前に停止する
+- Geminiとローカル生成はOpenAI月額予算の影響を受けない
 
 ## AI向け注意
 provider振り分けを変える場合は `ai-client.service.ts`。Gemini/OpenAI APIの呼び方を変える場合は各providerのclient service。共通プロンプトを変える場合は `prompts/sales-mail-draft.prompt.ts` または `prompts/semantic-consistency.prompt.ts`。AI生成後の本文安定化を変える場合は `domain/openai-sales-mail-draft.ts`。意味整合性の出力形式を変える場合は `domain/semantic-consistency.ts`。無料/ローカル分析の判断ルールを変える場合は `domain/local-lead-analysis.ts`。無料/ローカル生成の文面ルールを変える場合は `domain/local-mail-draft.ts`。返信分類の判定語句やステータスを変える場合は `domain/reply-classifier.ts`。分析3項目の版管理を変える場合は `application/lead-analysis.usecase.ts` と `domain/lead-analysis.ts`、分析生成ログとの接続を変える場合は `application/analyze-lead.usecase.ts`。

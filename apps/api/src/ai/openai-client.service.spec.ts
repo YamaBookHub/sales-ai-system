@@ -1,4 +1,10 @@
-import { chatCompletionOptions, DEFAULT_OPENAI_MODEL, OpenAiClientService, resolveOpenAiModelId } from './openai-client.service';
+import {
+  chatCompletionOptions,
+  DEFAULT_OPENAI_MODEL,
+  estimateOpenAiCost,
+  OpenAiClientService,
+  resolveOpenAiModelId
+} from './openai-client.service';
 
 describe('openai-client model options', () => {
   it('uses LUNA as the default model', () => {
@@ -27,6 +33,21 @@ describe('openai-client model options', () => {
       temperature: 0.2,
       max_tokens: 1200
     });
+  });
+
+  it('does not turn blank pricing settings into zero-cost usage', () => {
+    const inputRate = process.env.OPENAI_INPUT_COST_PER_1M;
+    const outputRate = process.env.OPENAI_OUTPUT_COST_PER_1M;
+    process.env.OPENAI_INPUT_COST_PER_1M = '';
+    process.env.OPENAI_OUTPUT_COST_PER_1M = '';
+    try {
+      expect(estimateOpenAiCost(100, 50)).toBeUndefined();
+    } finally {
+      if (inputRate === undefined) delete process.env.OPENAI_INPUT_COST_PER_1M;
+      else process.env.OPENAI_INPUT_COST_PER_1M = inputRate;
+      if (outputRate === undefined) delete process.env.OPENAI_OUTPUT_COST_PER_1M;
+      else process.env.OPENAI_OUTPUT_COST_PER_1M = outputRate;
+    }
   });
 
   it('uses a request-level model instead of the environment default', async () => {

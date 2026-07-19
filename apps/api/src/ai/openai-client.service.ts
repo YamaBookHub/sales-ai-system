@@ -29,11 +29,15 @@ export const DEFAULT_OPENAI_MODEL = 'gpt-5.6-luna';
 
 @Injectable()
 export class OpenAiClientService {
-  async createSalesMailDraft(input: SalesMailDraftInput, requestedModel?: SelectableOpenAiModel): Promise<SalesMailDraftOutput> {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
+  assertConfigured() {
+    if (!process.env.OPENAI_API_KEY) {
       throw new ServiceUnavailableException('OpenAI APIキーが未設定です。.env の OPENAI_API_KEY を確認してください。');
     }
+  }
+
+  async createSalesMailDraft(input: SalesMailDraftInput, requestedModel?: SelectableOpenAiModel): Promise<SalesMailDraftOutput> {
+    this.assertConfigured();
+    const apiKey = process.env.OPENAI_API_KEY!;
 
     const configuredModel = requestedModel || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
     const model = resolveOpenAiModelId(configuredModel);
@@ -80,7 +84,7 @@ export class OpenAiClientService {
       inputTokens: payload.usage?.prompt_tokens,
       outputTokens: payload.usage?.completion_tokens,
       totalTokens: payload.usage?.total_tokens,
-      costUsd: estimateCost(payload.usage?.prompt_tokens, payload.usage?.completion_tokens)
+      costUsd: estimateOpenAiCost(payload.usage?.prompt_tokens, payload.usage?.completion_tokens)
     };
 
     return {
@@ -95,11 +99,13 @@ export class OpenAiClientService {
   async checkSemanticConsistency(
     input: SemanticConsistencyInput,
     requestedModel?: SelectableOpenAiModel
-  ): Promise<SemanticConsistencyResult & { model: string; latencyMs: number }> {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new ServiceUnavailableException('OpenAI APIキーが未設定です。.env の OPENAI_API_KEY を確認してください。');
-    }
+  ): Promise<SemanticConsistencyResult & {
+    model: string;
+    latencyMs: number;
+    usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number; costUsd?: number };
+  }> {
+    this.assertConfigured();
+    const apiKey = process.env.OPENAI_API_KEY!;
 
     const model = resolveOpenAiModelId(requestedModel || process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL);
     const startedAt = Date.now();
@@ -141,7 +147,13 @@ export class OpenAiClientService {
     return {
       ...parseSemanticConsistencyJson(content),
       model,
-      latencyMs: Date.now() - startedAt
+      latencyMs: Date.now() - startedAt,
+      usage: {
+        inputTokens: payload.usage?.prompt_tokens,
+        outputTokens: payload.usage?.completion_tokens,
+        totalTokens: payload.usage?.total_tokens,
+        costUsd: estimateOpenAiCost(payload.usage?.prompt_tokens, payload.usage?.completion_tokens)
+      }
     };
   }
 }
@@ -174,14 +186,21 @@ function numberFromEnv(name: string, fallback: number) {
   return Number.isFinite(value) ? value : fallback;
 }
 
-function estimateCost(inputTokens?: number, outputTokens?: number) {
-  const inputCostPer1m = Number(process.env.OPENAI_INPUT_COST_PER_1M || '');
-  const outputCostPer1m = Number(process.env.OPENAI_OUTPUT_COST_PER_1M || '');
-  if (!inputTokens || !outputTokens || !Number.isFinite(inputCostPer1m) || !Number.isFinite(outputCostPer1m)) {
+export function estimateOpenAiCost(inputTokens?: number, outputTokens?: number) {
+  const inputCostPer1m = optionalNonNegativeEnvNumber('OPENAI_INPUT_COST_PER_1M');
+  const outputCostPer1m = optionalNonNegativeEnvNumber('OPENAI_OUTPUT_COST_PER_1M');
+  if (inputTokens === undefined || outputTokens === undefined || inputCostPer1m === undefined || outputCostPer1m === undefined) {
     return undefined;
   }
 
   return (inputTokens / 1_000_000) * inputCostPer1m + (outputTokens / 1_000_000) * outputCostPer1m;
+}
+
+function optionalNonNegativeEnvNumber(name: string) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 function toJapaneseOpenAiError(rawText: string, status: number) {

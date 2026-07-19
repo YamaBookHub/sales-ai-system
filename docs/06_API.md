@@ -126,6 +126,7 @@ Opportunityは、SalesLeadの候補・メール作業状態とは分離した商
 
 | Method | Path | Body |
 |---|---|---|
+| GET | `/api/ai/usage-summary` | - |
 | POST | `/api/ai/leads/{leadId}/generate-mail` | `GenerateMailDto` |
 | POST | `/api/ai/leads/{leadId}/email-draft` | `GenerateMailDto` |
 | GET | `/api/ai/leads/{leadId}/analysis` | - |
@@ -138,6 +139,8 @@ Opportunityは、SalesLeadの候補・メール作業状態とは分離した商
 | POST | `/api/ai/replies/{replyId}/classify` | - |
 
 `GenerateMailDto` は `templateKey` と、使用する確認済み分析版を指定する `analysisRevisionId`（UUID）が必須、`tone` は任意。メール生成は指定版が現在のLead・案件に属し、確認済みで、案件fingerprintが一致し、最新の利用可能な確認済み版である場合だけ成功する。未確認、案件変更によるstale、別案件、存在しない版、古いversionの場合は409で停止し、メール・Lead状態・AI生成ログを作成しない。`/api/ai/leads/{id}/next-action` は現行controllerに実装がないため、現行API routeではない。
+
+`GET /api/ai/usage-summary` はJST当月のOpenAI概算費用を返す。`budgetUsd` は未設定時null、`spentUsd` は完了済み、`reservedUsd` は実行中、`remainingUsd` は残額、`blocked` は新しいOpenAI実行の停止状態である。APIキーやプロンプト、メール本文は返さない。
 
 ### 構造化Lead分析
 

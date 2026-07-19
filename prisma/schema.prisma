@@ -147,6 +147,12 @@ enum LeadAnalysisOrigin {
   migration
 }
 
+enum AiUsageStatus {
+  reserved
+  completed
+  failed
+}
+
 enum AttachmentType {
   proposal_pdf
   lp_url
@@ -523,6 +529,20 @@ model AiGeneration {
   @@index([leadId])
   @@index([emailId])
   @@index([createdAt])
+}
+
+model AiUsageLedger {
+  id               String        @id @default(uuid()) @db.Uuid
+  provider         String
+  model            String
+  operation        String
+  status           AiUsageStatus @default(reserved)
+  estimatedCostUsd Decimal       @db.Decimal(12, 6)
+  actualCostUsd    Decimal?      @db.Decimal(12, 6)
+  createdAt        DateTime      @default(now())
+  completedAt      DateTime?
+
+  @@index([provider, createdAt, status])
 }
 
 model LeadAnalysisRevision {

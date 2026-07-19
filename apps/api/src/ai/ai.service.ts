@@ -6,6 +6,7 @@ import { GenerateMailDraftUseCase } from './application/generate-mail-draft.usec
 import { ListLeadGenerationsUseCase } from './application/list-lead-generations.usecase';
 import { LeadAnalysisUseCase } from './application/lead-analysis.usecase';
 import { PolishMailUseCase } from './application/polish-mail.usecase';
+import { OpenAiBudgetService } from './application/openai-budget.service';
 import { GenerateMailDto, UpdateLeadAnalysisDto } from './ai.dto';
 import type { SelectableAiModel } from './ai.dto';
 
@@ -18,7 +19,8 @@ export class AiService {
     private readonly classifyReplyUseCase: ClassifyReplyUseCase,
     private readonly listLeadGenerationsUseCase: ListLeadGenerationsUseCase,
     private readonly checkMailSemanticConsistencyUseCase: CheckMailSemanticConsistencyUseCase,
-    private readonly leadAnalysisUseCase: LeadAnalysisUseCase
+    private readonly leadAnalysisUseCase: LeadAnalysisUseCase,
+    private readonly openAiBudgetService: OpenAiBudgetService
   ) {}
 
   async analyzeLead(leadId: string) {
@@ -55,5 +57,9 @@ export class AiService {
 
   async checkMailSemanticConsistency(mailId: string, model?: SelectableAiModel) {
     return this.checkMailSemanticConsistencyUseCase.execute(mailId, model);
+  }
+
+  getOpenAiUsageSummary() {
+    return this.openAiBudgetService.getUsageSummary();
   }
 }
