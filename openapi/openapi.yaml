@@ -956,6 +956,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
+        '409':
+          description: Analysis is unconfirmed, stale, belongs to another project, or is not the latest confirmed version
   /api/ai/leads/{leadId}/email-draft:
     post:
       summary: Generate a mail draft alias for a lead
@@ -972,6 +974,72 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
+        '409':
+          description: Analysis is unconfirmed, stale, belongs to another project, or is not the latest confirmed version
+  /api/ai/leads/{leadId}/analysis:
+    get:
+      summary: Get structured lead analysis and revision history
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      responses:
+        '200':
+          description: Structured lead analysis response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LeadAnalysisResponse'
+    patch:
+      summary: Save a structured lead analysis draft revision
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LeadAnalysisRevisionRequest' }
+      responses:
+        '200':
+          description: Saved structured lead analysis draft
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LeadAnalysisResponse'
+        '409':
+          description: Version conflict or the lead/project changed while editing
+  /api/ai/leads/{leadId}/analysis/confirm:
+    post:
+      summary: Confirm a structured lead analysis revision
+      parameters:
+        - $ref: '#/components/parameters/LeadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LeadAnalysisRevisionRequest' }
+      responses:
+        '201':
+          description: Confirmed structured lead analysis revision
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LeadAnalysisResponse'
+        '409':
+          description: Version conflict, stale project data, or one or more required analysis values are missing
   /api/ai/leads/{leadId}/analyze:
     post:
       summary: Analyze a lead
@@ -1555,9 +1623,10 @@ components:
           items: { $ref: '#/components/schemas/SaveMailTemplateRequest' }
     CreateMailDraftRequest:
       type: object
-      required: [leadId, templateKey]
+      required: [leadId, analysisRevisionId, templateKey]
       properties:
         leadId: { type: string, format: uuid }
+        analysisRevisionId: { type: string, format: uuid }
         templateKey: { type: string, minLength: 1 }
         manualInstruction: { type: string }
     UpdateMailRequest:
@@ -1597,10 +1666,79 @@ components:
         receivedAt: { type: string, format: date-time }
     GenerateMailRequest:
       type: object
-      required: [templateKey]
+      required: [templateKey, analysisRevisionId]
       properties:
         templateKey: { type: string, minLength: 1 }
         tone: { type: string }
+        analysisRevisionId: { type: string, format: uuid }
+    LeadAnalysisRevisionRequest:
+      type: object
+      required: [expectedVersion, expectedSourceFingerprint, appeal, targetUser, videoIdea]
+      properties:
+        expectedVersion: { type: integer, minimum: 0 }
+        expectedSourceFingerprint: { type: string, minLength: 32, maxLength: 32 }
+        appeal: { type: string, maxLength: 1000 }
+        targetUser: { type: string, maxLength: 1000 }
+        videoIdea: { type: string, maxLength: 1000 }
+    LeadAnalysisRevision:
+      type: object
+      required: [id, leadId, projectId, version, status, origin, sourceFingerprint, humanEdited, editedFields, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        leadId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        sourceGenerationId: { type: string, format: uuid, nullable: true }
+        changedById: { type: string, format: uuid, nullable: true }
+        version: { type: integer, minimum: 1 }
+        status:
+          type: string
+          enum: [draft, confirmed]
+        origin:
+          type: string
+          enum: [generated, manual, migration]
+        appeal: { type: string, nullable: true }
+        targetUser: { type: string, nullable: true }
+        videoIdea: { type: string, nullable: true }
+        sourceFingerprint: { type: string, minLength: 1 }
+        generatedAt: { type: string, format: date-time, nullable: true }
+        confirmedAt: { type: string, format: date-time, nullable: true }
+        humanEdited: { type: boolean }
+        editedFields:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        stale: { type: boolean }
+        missingFields:
+          type: array
+          items:
+            type: string
+            enum: [appeal, targetUser, videoIdea]
+    LeadAnalysisResponse:
+      type: object
+      required: [projectId, sourceFingerprint, proposal, confirmed, history, missingFields, stale, canGenerateMail]
+      properties:
+        projectId: { type: string, format: uuid }
+        sourceFingerprint: { type: string, minLength: 32, maxLength: 32 }
+        proposal:
+          allOf:
+            - $ref: '#/components/schemas/LeadAnalysisRevision'
+          nullable: true
+        confirmed:
+          allOf:
+            - $ref: '#/components/schemas/LeadAnalysisRevision'
+          nullable: true
+        history:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/LeadAnalysisRevision'
+        missingFields:
+          type: array
+          items:
+            type: string
+            enum: [appeal, targetUser, videoIdea]
+        stale: { type: boolean }
+        canGenerateMail: { type: boolean }
     CreateTrackedLinkRequest:
       type: object
       required: [emailId, originalUrl]

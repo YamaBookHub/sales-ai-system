@@ -128,13 +128,53 @@ Opportunityは、SalesLeadの候補・メール作業状態とは分離した商
 |---|---|---|
 | POST | `/api/ai/leads/{leadId}/generate-mail` | `GenerateMailDto` |
 | POST | `/api/ai/leads/{leadId}/email-draft` | `GenerateMailDto` |
+| GET | `/api/ai/leads/{leadId}/analysis` | - |
+| PATCH | `/api/ai/leads/{leadId}/analysis` | `LeadAnalysisRevisionDto` |
+| POST | `/api/ai/leads/{leadId}/analysis/confirm` | `LeadAnalysisRevisionDto` |
 | POST | `/api/ai/leads/{leadId}/analyze` | - |
 | POST | `/api/ai/mails/{mailId}/polish` | - |
 | POST | `/api/ai/mails/{mailId}/semantic-consistency` | - |
 | GET | `/api/ai/leads/{leadId}/generations` | - |
 | POST | `/api/ai/replies/{replyId}/classify` | - |
 
-`GenerateMailDto` は `templateKey` 必須、`tone` 任意。`/api/ai/leads/{id}/next-action` は現行controllerに実装がないため、現行API routeではない。
+`GenerateMailDto` は `templateKey` と、使用する確認済み分析版を指定する `analysisRevisionId`（UUID）が必須、`tone` は任意。メール生成は指定版が現在のLead・案件に属し、確認済みで、案件fingerprintが一致し、最新の利用可能な確認済み版である場合だけ成功する。未確認、案件変更によるstale、別案件、存在しない版、古いversionの場合は409で停止し、メール・Lead状態・AI生成ログを作成しない。`/api/ai/leads/{id}/next-action` は現行controllerに実装がないため、現行API routeではない。
+
+### 構造化Lead分析
+
+LM-004では、メール生成前に次の3項目を案件単位で確認する。自由記述の営業メモや過去のAIログは、メール生成に使う分析の正本ではない。
+
+- `appeal`: 商品・企画の魅力
+- `targetUser`: 想定する相手
+- `videoIdea`: 動画での見せ方
+
+`GET /api/ai/leads/{leadId}/analysis` の `data` は次の形を返す。
+
+| Field | 内容 |
+|---|---|
+| `projectId` | 現在紐づいている案件ID |
+| `sourceFingerprint` | 編集開始時の案件情報を識別するfingerprint |
+| `proposal` | 最新の分析版。未分析の場合はnull |
+| `confirmed` | 現在案件とfingerprintが一致する最新confirmed版。なければnull |
+| `history` | 直近20件の追記専用revision履歴 |
+| `missingFields` | `appeal`、`targetUser`、`videoIdea` の不足項目 |
+| `stale` | proposalまたはconfirmedが現在案件から古いか |
+| `canGenerateMail` | 確認済み・3項目入力済み・案件一致・fingerprint一致の場合だけtrue |
+
+`PATCH /api/ai/leads/{leadId}/analysis` と `POST /api/ai/leads/{leadId}/analysis/confirm` は、共通して次のJSONを受け取る。空欄を含む下書き保存は許可するが、確認は3項目すべてが入力済みの場合だけ成功する。`expectedVersion` が最新versionと異なる場合、`expectedSourceFingerprint` が現在案件と異なる場合、確認時に必須項目が不足している場合は409を返す。
+
+```json
+{
+  "expectedVersion": 3,
+  "expectedSourceFingerprint": "0123456789abcdef0123456789abcdef",
+  "appeal": "商品の魅力",
+  "targetUser": "想定する相手",
+  "videoIdea": "短尺動画での見せ方"
+}
+```
+
+分析版はLead・案件・作成元AI生成ログ・version・status（`draft` / `confirmed`）・origin（`generated` / `manual` / `migration`）・fingerprint・確認日時を保持する。分析の再生成や手動編集は既存版を上書きせず、新しいversionとして履歴に追加する。メール生成時はメール側に使用した `analysisRevisionId` を固定する。
+
+`POST /api/mails/draft` も `analysisRevisionId` を必須とし、手動本文を保存する場合を含めて、現在案件と一致する最新の確認済み分析だけをメールへ固定する。
 
 ## Tracking API
 

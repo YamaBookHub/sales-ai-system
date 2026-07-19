@@ -2,7 +2,7 @@ import { renderLeadsPageDocument } from './leads-page-static';
 
 export function renderLeadsPage() {
     return renderLeadsPageDocument(`    const SELECTED_LEAD_STORAGE_KEY = 'salesAiSystem.selectedLeadId';
-    const state = { leads: [], mails: [], aiGenerations: [], tasks: [], assignees: [], companyContacts: [], contactsCompanyId: null, selectedContactId: null, contactsLoading: false, selectedLeadId: null, selectedLeadRecord: null, editingTaskId: null, listPage: 1, pageSize: 20, leadListMeta: { page: 1, limit: 20, total: 0, summary: { total: 0, noContact: 0, draft: 0, review: 0, queued: 0 } }, leadListRequestId: 0, leadFilterTimerId: null, summaryFilter: 'all', sort: { table: 'lead', key: 'createdAt', direction: 'desc' }, opportunitiesByLeadId: {}, opportunity: null, opportunityHistory: [], opportunityLoading: false, opportunityError: '', opportunityNotice: null, opportunityRequestId: 0 };
+    const state = { leads: [], mails: [], aiGenerations: [], structuredAnalysis: null, structuredAnalysisLoading: false, tasks: [], assignees: [], companyContacts: [], contactsCompanyId: null, selectedContactId: null, contactsLoading: false, selectedLeadId: null, selectedLeadRecord: null, editingTaskId: null, listPage: 1, pageSize: 20, leadListMeta: { page: 1, limit: 20, total: 0, summary: { total: 0, noContact: 0, draft: 0, review: 0, queued: 0 } }, leadListRequestId: 0, leadFilterTimerId: null, summaryFilter: 'all', sort: { table: 'lead', key: 'createdAt', direction: 'desc' }, opportunitiesByLeadId: {}, opportunity: null, opportunityHistory: [], opportunityLoading: false, opportunityError: '', opportunityNotice: null, opportunityRequestId: 0 };
 
     async function api(path, options = {}) {
       return window.SalesAiApi.request(path, options, { includeOperatorEmail: true });
@@ -22,6 +22,7 @@ export function renderLeadsPage() {
         void loadCompanyContacts();
         void loadTaskAssignees();
         void loadLeadTasks();
+        void loadStructuredAnalysis();
         void loadSelectedOpportunity();
         setPageStatus(state.leads.length ? '読み込み完了' : '営業案件は0件です', state.leads.length ? 'ok' : 'empty');
       } catch (error) {
@@ -255,6 +256,7 @@ export function renderLeadsPage() {
         rowBlock('ブランド/SNS', snsDetail(lead), true) +
         rowBlock('次にやること', nextActionLabel(lead, mail)) +
         rowBlock('最新メール件名', mail?.subject || '未生成') +
+        renderStructuredAnalysisSummary() +
         renderOpportunityWorkspace(lead) +
         renderCompanyContactManager(lead) +
         renderLeadEditPanel(lead);
@@ -625,6 +627,33 @@ export function renderLeadsPage() {
       }
     }
 
+    async function loadStructuredAnalysis() {
+      const leadId = state.selectedLeadId;
+      if (!leadId) {
+        state.structuredAnalysis = null;
+        state.structuredAnalysisLoading = false;
+        renderDetail();
+        renderLeadAnalysis();
+        return;
+      }
+      state.structuredAnalysisLoading = true;
+      renderDetail();
+      renderLeadAnalysis();
+      try {
+        const result = await api('/api/ai/leads/' + leadId + '/analysis');
+        if (leadId !== state.selectedLeadId) return;
+        state.structuredAnalysis = result || null;
+      } catch (error) {
+        if (leadId !== state.selectedLeadId) return;
+        state.structuredAnalysis = { loadError: error.message || '構造化分析を読み込めませんでした' };
+      } finally {
+        if (leadId !== state.selectedLeadId) return;
+        state.structuredAnalysisLoading = false;
+        renderDetail();
+        renderLeadAnalysis();
+      }
+    }
+
     function renderLeadAnalysis() {
       const container = document.getElementById('leadAnalysis');
       if (!container) return;
@@ -632,13 +661,14 @@ export function renderLeadsPage() {
         container.innerHTML = '<div class="muted">案件を選択すると分析結果が表示されます</div>';
         return;
       }
+      const structuredAnalysis = renderStructuredAnalysisEditor();
       const latest = state.aiGenerations.find((item) => item.type === 'project_summary') || state.aiGenerations[0];
       if (!latest) {
-        container.innerHTML = '<section style="border-radius:4px"><div class="section-head"><h2>分析</h2></div><div class="body ui-state-empty">まだ分析結果がありません。URL取り込み時の自動分析、またはAI分析を実行してください。</div></section>';
+        container.innerHTML = structuredAnalysis + '<section style="border-radius:4px"><div class="section-head"><h2>分析</h2></div><div class="body ui-state-empty">まだ分析結果がありません。URL取り込み時の自動分析、またはAI分析を実行してください。</div></section>';
         return;
       }
       const output = latest.outputJson || {};
-      container.innerHTML =
+      container.innerHTML = structuredAnalysis +
         '<section style="border-radius:4px">' +
           '<div class="section-head"><h2>分析</h2><span class="status muted">' + escapeHtml(formatDate(latest.createdAt)) + '</span></div>' +
           '<div class="body">' +
@@ -659,6 +689,106 @@ export function renderLeadsPage() {
             '<div class="row"><label>生成履歴</label><div class="ai-history">' + renderAiHistory() + '</div></div>' +
           '</div>' +
         '</section>';
+    }
+
+    function editableStructuredAnalysis() {
+      const analysis = state.structuredAnalysis || {};
+      return analysis.proposal || analysis.confirmed || null;
+    }
+
+    function confirmedStructuredAnalysis() {
+      const confirmed = state.structuredAnalysis?.confirmed;
+      return confirmed && confirmed.status === 'confirmed' ? confirmed : null;
+    }
+
+    function structuredAnalysisMissingFields() {
+      return Array.isArray(state.structuredAnalysis?.missingFields) ? state.structuredAnalysis.missingFields : [];
+    }
+
+    function structuredAnalysisStatusLabel() {
+      if (state.structuredAnalysisLoading) return '読み込み中';
+      if (state.structuredAnalysis?.loadError) return '読み込み失敗';
+      if (state.structuredAnalysis?.stale) return '再確認が必要';
+      const proposal = editableStructuredAnalysis();
+      const confirmed = confirmedStructuredAnalysis();
+      if (proposal && confirmed && proposal.id !== confirmed.id) return '編集中（確定済み版あり）';
+      if (proposal?.status === 'confirmed' && confirmed?.id === proposal.id) return '確定済み';
+      if (proposal) return '未確定';
+      if (confirmed) return '確定済み';
+      return '未作成';
+    }
+
+    function structuredAnalysisGuidance() {
+      const analysis = state.structuredAnalysis || {};
+      if (analysis.loadError) return analysis.loadError;
+      if (state.structuredAnalysisLoading) return '構造化分析を読み込んでいます';
+      if (analysis.stale) return '案件情報が更新されています。内容を見直して、もう一度確定してください。';
+      const missing = structuredAnalysisMissingFields();
+      if (missing.length) return '未入力: ' + missing.join(' / ');
+      const proposal = editableStructuredAnalysis();
+      const confirmed = confirmedStructuredAnalysis();
+      if (proposal && confirmed && proposal.id !== confirmed.id) {
+        return '編集中の内容は未確定です。メール生成では確定済み v' + confirmed.version + ' を使用します。';
+      }
+      if (!confirmedStructuredAnalysis()) return '3項目を確認して確定すると、メール生成に使えます。';
+      return analysis.canGenerateMail ? '確定済みの分析をメール生成に使います。' : 'メール生成条件を確認してください。';
+    }
+
+    function renderStructuredAnalysisSummary() {
+      const current = confirmedStructuredAnalysis() || editableStructuredAnalysis();
+      if (!current) return rowBlock('メール用の分析', state.structuredAnalysisLoading ? '読み込み中' : '未作成。分析欄で3項目を確認してください。');
+      return '<div class="row" data-ui="structured-lead-analysis-summary"><label>メール用の分析</label><div class="detail-text"><strong>' +
+        escapeHtml(structuredAnalysisStatusLabel()) + '</strong><br>商品の魅力: ' + escapeHtml(current.appeal || '未入力') +
+        '<br>使う人: ' + escapeHtml(current.targetUser || '未入力') +
+        '<br>動画での見せ方: ' + escapeHtml(current.videoIdea || '未入力') +
+        '<br><span class="muted">' + escapeHtml(structuredAnalysisGuidance()) + '</span></div></div>';
+    }
+
+    function renderStructuredAnalysisEditor() {
+      const current = editableStructuredAnalysis() || {};
+      const disabled = state.structuredAnalysisLoading || Boolean(state.structuredAnalysis?.loadError);
+      return '<section class="panel" data-ui="structured-lead-analysis"><div class="section-head"><h2>メール用の分析</h2><span class="status muted">' + escapeHtml(structuredAnalysisStatusLabel()) + '</span></div><div class="body">' +
+        '<div class="detail-grid">' + detailItem('生成日時', current.generatedAt ? formatDate(current.generatedAt) : '未生成') + detailItem('人が編集', current.humanEdited ? 'あり' : 'なし') + detailItem('不足項目', structuredAnalysisMissingFields().join(' / ') || 'なし') + '</div>' +
+        (state.structuredAnalysis?.stale ? '<div class="notice">案件情報が変わったため、確定済みの分析はメール生成に使えません。</div>' : '') +
+        '<div class="row"><label for="leadStructuredAppeal">商品の魅力</label><textarea id="leadStructuredAppeal"' + (disabled ? ' disabled' : '') + '>' + escapeHtml(current.appeal || '') + '</textarea></div>' +
+        '<div class="row"><label for="leadStructuredTargetUser">使う人</label><textarea id="leadStructuredTargetUser"' + (disabled ? ' disabled' : '') + '>' + escapeHtml(current.targetUser || '') + '</textarea></div>' +
+        '<div class="row"><label for="leadStructuredVideoIdea">動画での見せ方</label><textarea id="leadStructuredVideoIdea"' + (disabled ? ' disabled' : '') + '>' + escapeHtml(current.videoIdea || '') + '</textarea></div>' +
+        '<div class="toolbar"><button type="button" onclick="saveStructuredAnalysis()"' + (disabled ? ' disabled' : '') + '>下書き保存</button><button type="button" class="primary" onclick="confirmStructuredAnalysis()"' + (disabled ? ' disabled' : '') + '>内容を確定</button><span id="structuredAnalysisStatus" class="status muted">' + escapeHtml(structuredAnalysisGuidance()) + '</span></div></div></section>';
+    }
+
+    function structuredAnalysisPayload() {
+      const current = editableStructuredAnalysis() || {};
+      return {
+        expectedVersion: Number(current.version || 0),
+        expectedSourceFingerprint: state.structuredAnalysis?.sourceFingerprint || '',
+        appeal: (document.getElementById('leadStructuredAppeal')?.value || '').trim(),
+        targetUser: (document.getElementById('leadStructuredTargetUser')?.value || '').trim(),
+        videoIdea: (document.getElementById('leadStructuredVideoIdea')?.value || '').trim()
+      };
+    }
+
+    async function saveStructuredAnalysis() {
+      if (!state.selectedLeadId) return;
+      setInlineStatus('structuredAnalysisStatus', '保存中', 'warn');
+      try {
+        await api('/api/ai/leads/' + state.selectedLeadId + '/analysis', { method: 'PATCH', body: JSON.stringify(structuredAnalysisPayload()) });
+        await loadStructuredAnalysis();
+        setInlineStatus('structuredAnalysisStatus', '下書きを保存しました。内容を確認して確定してください。', 'ok');
+      } catch (error) {
+        setInlineStatus('structuredAnalysisStatus', error.message, 'error');
+      }
+    }
+
+    async function confirmStructuredAnalysis() {
+      if (!state.selectedLeadId) return;
+      setInlineStatus('structuredAnalysisStatus', '確定中', 'warn');
+      try {
+        await api('/api/ai/leads/' + state.selectedLeadId + '/analysis/confirm', { method: 'POST', body: JSON.stringify(structuredAnalysisPayload()) });
+        await loadStructuredAnalysis();
+        setInlineStatus('structuredAnalysisStatus', 'メールに使う分析を確定しました。', 'ok');
+      } catch (error) {
+        setInlineStatus('structuredAnalysisStatus', error.message, 'error');
+      }
     }
 
     async function loadTaskAssignees() {
@@ -1037,6 +1167,8 @@ export function renderLeadsPage() {
       state.selectedLeadRecord = state.leads.find((lead) => lead.id === id) || state.selectedLeadRecord;
       persistSelectedLead(id);
       state.aiGenerations = [];
+      state.structuredAnalysis = null;
+      state.structuredAnalysisLoading = false;
       state.opportunity = null;
       state.opportunityHistory = [];
       state.opportunityError = '';
@@ -1048,6 +1180,7 @@ export function renderLeadsPage() {
       void loadCompanyContacts();
       void loadLeadTasks();
       void loadLeadAnalysis();
+      void loadStructuredAnalysis();
       void loadSelectedOpportunity();
     }
 

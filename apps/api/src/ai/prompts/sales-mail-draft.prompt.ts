@@ -43,7 +43,8 @@ export function buildLunaSalesMailDraftSystemPrompt() {
 
 function commonSalesMailRules() {
   return [
-    '使用できる情報は入力されたcompanyName、project、leadReason、brandAnalysisMemo、snsAnalysisMemoだけです。担当者名や相手の課題を推測してはいけません。',
+    '使用できる情報は入力されたcompanyName、project、confirmedAnalysisだけです。担当者名や相手の課題を推測してはいけません。',
+    'confirmedAnalysisのappeal、targetUser、videoIdeaは人が確認済みの正本です。別案件の知識で置き換えたり、意味を変えたりしてはいけません。',
     'brandAnalysisMemo、snsAnalysisMemo、leadReasonは、現在のproject.titleまたはproject.descriptionと明確に一致する場合だけ使用してください。',
     '達成率、残り日数、支援額、支援者数、カテゴリ名、「カテゴリーからさがす」、価格、割引は魅力として書かないでください。',
     '過去商品、別案件、動画アイデア、強い提案、情報交換依頼、日程調整、資料確認、上長確認を追加しないでください。',

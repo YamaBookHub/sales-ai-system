@@ -4,6 +4,7 @@ import { ClassifyReplyUseCase } from './application/classify-reply.usecase';
 import { CheckMailSemanticConsistencyUseCase } from './application/check-mail-semantic-consistency.usecase';
 import { GenerateMailDraftUseCase } from './application/generate-mail-draft.usecase';
 import { ListLeadGenerationsUseCase } from './application/list-lead-generations.usecase';
+import { LeadAnalysisUseCase } from './application/lead-analysis.usecase';
 import { PolishMailUseCase } from './application/polish-mail.usecase';
 import { AiController } from './ai.controller';
 import { AiClientService } from './ai-client.service';
@@ -23,7 +24,8 @@ import { OpenAiClientService } from './openai-client.service';
     GenerateMailDraftUseCase,
     PolishMailUseCase,
     ClassifyReplyUseCase,
-    ListLeadGenerationsUseCase
+    ListLeadGenerationsUseCase,
+    LeadAnalysisUseCase
   ],
   exports: [AiService, GenerateMailDraftUseCase]
 })

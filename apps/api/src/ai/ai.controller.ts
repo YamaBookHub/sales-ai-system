@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { ok } from '../common/api-response';
-import { GenerateMailDto, SelectAiModelDto } from './ai.dto';
+import { GenerateMailDto, SelectAiModelDto, UpdateLeadAnalysisDto } from './ai.dto';
 import { AiService } from './ai.service';
 
 @Controller('ai')
@@ -20,6 +20,21 @@ export class AiController {
   @Post('leads/:leadId/analyze')
   async analyzeLead(@Param('leadId') leadId: string) {
     return ok(await this.ai.analyzeLead(leadId));
+  }
+
+  @Get('leads/:leadId/analysis')
+  async getLeadAnalysis(@Param('leadId') leadId: string) {
+    return ok(await this.ai.getLeadAnalysis(leadId));
+  }
+
+  @Patch('leads/:leadId/analysis')
+  async saveLeadAnalysis(@Param('leadId') leadId: string, @Body() dto: UpdateLeadAnalysisDto) {
+    return ok(await this.ai.saveLeadAnalysis(leadId, dto));
+  }
+
+  @Post('leads/:leadId/analysis/confirm')
+  async confirmLeadAnalysis(@Param('leadId') leadId: string, @Body() dto: UpdateLeadAnalysisDto) {
+    return ok(await this.ai.confirmLeadAnalysis(leadId, dto));
   }
 
   @Post('mails/:mailId/polish')

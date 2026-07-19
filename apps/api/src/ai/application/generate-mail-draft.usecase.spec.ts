@@ -1,7 +1,9 @@
 import { ConflictException } from '@nestjs/common';
+import { projectSourceFingerprint } from '../domain/lead-analysis';
 import { GenerateMailDraftUseCase } from './generate-mail-draft.usecase';
 
 describe('GenerateMailDraftUseCase', () => {
+  const analysisRevisionId = '00000000-0000-4000-8000-000000000001';
   const lead = {
     id: 'lead_1',
     companyId: 'company_1',
@@ -14,6 +16,7 @@ describe('GenerateMailDraftUseCase', () => {
     sendMethod: 'email',
     company: { name: 'テスト株式会社', isBlocked: false, inquiryUrl: null },
     project: {
+      id: 'project_1',
       title: '真空保存できる米びつ',
       platform: { name: 'CAMPFIRE', type: 'campfire' },
       url: 'https://camp-fire.jp/projects/1',
@@ -22,6 +25,17 @@ describe('GenerateMailDraftUseCase', () => {
       amount: 1000000,
       supporterCount: 100
     }
+  };
+  const analysisRevision = {
+    id: analysisRevisionId,
+    leadId: lead.id,
+    projectId: lead.project.id,
+    version: 1,
+    status: 'confirmed',
+    appeal: 'お米を真空で分けて保存できる点',
+    targetUser: 'お米の鮮度と収納性を重視する方',
+    videoIdea: '真空保存の操作と収納前後の比較',
+    sourceFingerprint: projectSourceFingerprint(lead.project)
   };
 
   const createPrisma = () => {
@@ -32,7 +46,12 @@ describe('GenerateMailDraftUseCase', () => {
         findMany: jest.fn().mockResolvedValue([])
       },
       salesLead: {
+        findUnique: jest.fn().mockResolvedValue(lead),
         update: jest.fn().mockResolvedValue({ id: lead.id, status: 'drafted' })
+      },
+      leadAnalysisRevision: {
+        findUnique: jest.fn().mockResolvedValue(analysisRevision),
+        findFirst: jest.fn().mockResolvedValue(analysisRevision)
       },
       aiGeneration: {
         create: jest.fn().mockResolvedValue({ id: 'generation_1' })
@@ -69,13 +88,18 @@ describe('GenerateMailDraftUseCase', () => {
     const { prisma, tx } = createPrisma();
     const useCase = new GenerateMailDraftUseCase(prisma as any);
 
-    const result = await useCase.execute(lead.id, { templateKey: 'normal', tone: 'low_sales_pressure' });
+    const result = await useCase.execute(lead.id, {
+      templateKey: 'normal',
+      tone: 'low_sales_pressure',
+      analysisRevisionId
+    });
 
     expect(result.email.status).toBe('draft');
     expect(tx.outreachEmail.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           leadId: lead.id,
+          analysisRevisionId,
           status: 'draft',
           events: { create: { type: 'generated' } }
         })
@@ -111,7 +135,7 @@ describe('GenerateMailDraftUseCase', () => {
     prisma.outreachEmail.findFirst.mockResolvedValue({ id: 'mail_existing', status: 'draft' });
     const useCase = new GenerateMailDraftUseCase(prisma as any);
 
-    await expect(useCase.execute(lead.id, { templateKey: 'normal' })).rejects.toThrow(ConflictException);
+    await expect(useCase.execute(lead.id, { templateKey: 'normal', analysisRevisionId })).rejects.toThrow(ConflictException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
@@ -126,7 +150,7 @@ describe('GenerateMailDraftUseCase', () => {
     });
     const useCase = new GenerateMailDraftUseCase(prisma as any);
 
-    const result = await useCase.execute(lead.id, { templateKey: 'email-custom' });
+    const result = await useCase.execute(lead.id, { templateKey: 'email-custom', analysisRevisionId });
 
     expect(tx.outreachEmail.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -154,7 +178,12 @@ describe('GenerateMailDraftUseCase', () => {
     });
     const useCase = new GenerateMailDraftUseCase(prisma as any);
 
-    await expect(useCase.execute(lead.id, { templateKey: 'normal' }))
+    tx.salesLead.findUnique.mockResolvedValue({
+      ...lead,
+      company: { ...lead.company, isBlocked: true }
+    });
+
+    await expect(useCase.execute(lead.id, { templateKey: 'normal', analysisRevisionId }))
       .rejects.toThrow('この企業は送信禁止');
 
     expect(tx.outreachEmail.create).not.toHaveBeenCalled();
@@ -177,8 +206,21 @@ describe('GenerateMailDraftUseCase', () => {
     }]);
     const useCase = new GenerateMailDraftUseCase(prisma as any);
 
-    await expect(useCase.execute(lead.id, { templateKey: 'normal' }))
+    await expect(useCase.execute(lead.id, { templateKey: 'normal', analysisRevisionId }))
       .rejects.toThrow('重複接触');
+
+    expect(tx.outreachEmail.create).not.toHaveBeenCalled();
+    expect(tx.salesLead.update).not.toHaveBeenCalled();
+    expect(tx.aiGeneration.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unconfirmed analysis before writing mail data', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.leadAnalysisRevision.findUnique.mockResolvedValue({ ...analysisRevision, status: 'draft' });
+    const useCase = new GenerateMailDraftUseCase(prisma as any);
+
+    await expect(useCase.execute(lead.id, { templateKey: 'normal', analysisRevisionId }))
+      .rejects.toThrow('確認済みの最新分析');
 
     expect(tx.outreachEmail.create).not.toHaveBeenCalled();
     expect(tx.salesLead.update).not.toHaveBeenCalled();

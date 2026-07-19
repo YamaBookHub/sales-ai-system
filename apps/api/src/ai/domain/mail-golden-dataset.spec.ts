@@ -26,9 +26,14 @@ function buildLead(goldenCase: MailGoldenCase) {
 describe('mail golden dataset', () => {
   it.each(mailGoldenDataset)('$id keeps mail and analysis facts within the case', (goldenCase) => {
     const lead = buildLead(goldenCase);
-    const localMailInput = buildLocalMailInput(lead, { templateKey: 'normal', tone: '丁寧' });
-    const draft = buildLocalMailDraft(localMailInput);
     const analysis = buildLocalLeadAnalysis(lead);
+    const localMailInput = buildLocalMailInput(
+      lead,
+      { templateKey: 'normal', tone: '丁寧', analysisRevisionId: '00000000-0000-4000-8000-000000000001' },
+      undefined,
+      analysis.output.mailPlaceholders
+    );
+    const draft = buildLocalMailDraft(localMailInput);
     const analysisText = JSON.stringify(analysis.output);
 
     expect(draft.model).toBe('local-template-v2');
@@ -56,7 +61,14 @@ describe('mail golden dataset', () => {
     const eventCase = mailGoldenDataset.find(({ id }) => id === 'music-anniversary-event');
     expect(eventCase).toBeDefined();
 
-    const draft = buildLocalMailDraft(buildLocalMailInput(buildLead(eventCase!), { templateKey: 'normal' }));
+    const lead = buildLead(eventCase!);
+    const analysis = buildLocalLeadAnalysis(lead);
+    const draft = buildLocalMailDraft(buildLocalMailInput(
+      lead,
+      { templateKey: 'normal', analysisRevisionId: '00000000-0000-4000-8000-000000000001' },
+      undefined,
+      analysis.output.mailPlaceholders
+    ));
 
     for (const word of eventCase!.forbiddenMailWords || []) expect(draft.body).not.toContain(word);
     expect(draft.body).toContain('取り組み');

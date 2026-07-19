@@ -1,4 +1,5 @@
 import { GenerateMailDto } from '../ai.dto';
+import { isCompleteStructuredAnalysis, normalizeStructuredAnalysis, StructuredLeadAnalysis } from './lead-analysis';
 import { MailTemplateForDraft, renderMailTemplate } from './template-mail-draft';
 
 export type LocalMailDraftInput = {
@@ -15,6 +16,7 @@ export type LocalMailDraftInput = {
   leadReason?: string | null;
   brandAnalysisMemo?: string | null;
   snsAnalysisMemo?: string | null;
+  analysis: StructuredLeadAnalysis;
   sendMethod?: string | null;
   template?: MailTemplateForDraft;
 };
@@ -37,7 +39,8 @@ export function buildLocalMailInput(
     } | null;
   },
   dto: GenerateMailDto,
-  template?: MailTemplateForDraft
+  template: MailTemplateForDraft | undefined,
+  analysis: StructuredLeadAnalysis
 ): LocalMailDraftInput {
   const projectSource = [lead.project?.title, lead.project?.category, lead.project?.description].filter(Boolean).join(' ');
   return {
@@ -54,6 +57,7 @@ export function buildLocalMailInput(
     leadReason: compatibleAnalysisMemo(lead.reason, projectSource),
     brandAnalysisMemo: compatibleAnalysisMemo(lead.brandAnalysisMemo, projectSource),
     snsAnalysisMemo: compatibleAnalysisMemo(lead.snsAnalysisMemo, projectSource),
+    analysis: normalizeStructuredAnalysis(analysis),
     sendMethod: lead.sendMethod,
     template
   };
@@ -62,18 +66,18 @@ export function buildLocalMailInput(
 export function buildLocalMailDraft(input: LocalMailDraftInput) {
   const platformName = input.projectPlatformName || 'クラウドファンディングサイト';
   const projectSource = [input.projectTitle, input.projectCategory, input.projectDescription].filter(Boolean).join(' ');
-  const safeLeadReason = compatibleAnalysisMemo(input.leadReason, projectSource);
-  const safeBrandAnalysisMemo = compatibleAnalysisMemo(input.brandAnalysisMemo, projectSource);
-  const safeSnsAnalysisMemo = compatibleAnalysisMemo(input.snsAnalysisMemo, projectSource);
-  const placeholders = buildMailPlaceholders(
-    input.companyName,
-    input.projectTitle,
-    input.projectCategory,
-    input.projectDescription,
-    safeLeadReason,
-    safeBrandAnalysisMemo,
-    safeSnsAnalysisMemo
-  );
+  if (!isCompleteStructuredAnalysis(input.analysis)) throw new Error('Confirmed structured analysis is required');
+  const subjectType = /飲食|焼き鳥|焼鳥|炭火|居酒屋|レストラン|店舗|リフォーム|改装|地域|支援|ライブ|コンサート|音楽|バンド|ファン|周年|記念|イベント|公演/.test(projectSource)
+    ? '取り組み'
+    : '商品';
+  const placeholders = {
+    companyRecipient: input.companyName ? `${input.companyName} ご担当者様` : 'ご担当者様',
+    productName: cleanProjectTitleForMail(input.projectTitle) || 'クラウドファンディング掲載プロジェクト',
+    appeal: input.analysis.appeal || '',
+    targetUser: input.analysis.targetUser || '',
+    videoIdea: input.analysis.videoIdea || '',
+    subjectType
+  };
   const targetSentence = placeholders.subjectType === '取り組み'
     ? `${placeholders.targetUser}にとって、参加・応援する理由が伝わりやすい取り組みだと感じました。`
     : `${placeholders.targetUser}にとって、実際に使う場面をイメージしやすい商品だと感じました。`;
@@ -87,6 +91,8 @@ export function buildLocalMailDraft(input: LocalMailDraftInput) {
     '',
     `${placeholders.appeal}が特に印象に残っています。`,
     targetSentence,
+    '',
+    `${placeholders.videoIdea}を短尺動画で見せることで、SNSでも魅力を伝えやすいと考えています。`,
     '',
     '弊社では、クラウドファンディング支援とSNSマーケティング支援を行っています。',
     '',
@@ -106,6 +112,7 @@ export function buildLocalMailDraft(input: LocalMailDraftInput) {
         category: input.projectCategory,
         appeal: placeholders.appeal,
         targetUser: placeholders.targetUser,
+        videoIdea: placeholders.videoIdea,
         subjectType: placeholders.subjectType
       })
     : null;
@@ -125,10 +132,9 @@ export function buildLocalMailDraft(input: LocalMailDraftInput) {
       `プロジェクト名: ${placeholders.productName}`,
       `魅力: ${placeholders.appeal}`,
       `想定読者: ${placeholders.targetUser}`,
-      safeBrandAnalysisMemo ? `ブランド分析メモ: ${safeBrandAnalysisMemo}` : '',
-      safeSnsAnalysisMemo ? `SNS分析メモ: ${safeSnsAnalysisMemo}` : ''
+      `動画での見せ方: ${placeholders.videoIdea}`
     ].filter(Boolean),
-    assumptions: ['OpenAI APIを使わず、無料分析で作成した置換項目から本文を作成しています。'],
+    assumptions: ['人が確認した構造化分析の3項目から本文を作成しています。'],
     riskFlags: [
       '送信前に、会社名・案件名・訴求内容が相手の案件と合っているか確認してください。',
       ...templateRisks

@@ -41,6 +41,9 @@ describe('Lead page static HTML', () => {
     expect(html).toContain('受注・失注・対象外へ変更する理由を入力してください');
     expect(html).toContain("'/api/companies/' + companyId + '/contacts'");
     expect(html).toContain("'/api/contacts/' + state.selectedContactId + '/archive'");
+    expect(html).toContain("'/api/ai/leads/' + leadId + '/analysis'");
+    expect(html).toContain('expectedSourceFingerprint: state.structuredAnalysis?.sourceFingerprint');
+    expect(html).toContain('メール生成では確定済み v');
     expect(html).not.toContain("nextFollowUpAt: dateTimeValue('leadNextActionAtEdit')");
   });
 

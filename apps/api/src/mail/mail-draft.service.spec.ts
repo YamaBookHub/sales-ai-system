@@ -1,7 +1,9 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { projectSourceFingerprint } from '../ai/domain/lead-analysis';
 import { MailService } from './mail.service';
 
 describe('MailService draft creation', () => {
+  const analysisRevisionId = '00000000-0000-4000-8000-000000000001';
   const lead = {
     id: 'lead_1',
     companyId: 'company_1',
@@ -10,7 +12,14 @@ describe('MailService draft creation', () => {
     siteMessageUrl: null,
     sendMethod: 'email',
     company: { isBlocked: false, inquiryUrl: null },
-    project: { platform: { name: 'CAMPFIRE' } }
+    project: {
+      id: 'project_1',
+      title: 'テスト商品',
+      url: 'https://camp-fire.jp/projects/1',
+      category: '商品',
+      description: 'テスト商品の説明',
+      platform: { name: 'CAMPFIRE' }
+    }
   };
 
   const createService = () => {
@@ -21,7 +30,21 @@ describe('MailService draft creation', () => {
         findMany: jest.fn().mockResolvedValue([])
       },
       salesLead: {
+        findUnique: jest.fn().mockResolvedValue(lead),
         update: jest.fn().mockResolvedValue({ id: lead.id, status: 'drafted' })
+      },
+      leadAnalysisRevision: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: analysisRevisionId,
+          leadId: lead.id,
+          projectId: lead.project.id,
+          status: 'confirmed',
+          appeal: '商品の使いやすさが伝わる点',
+          targetUser: '暮らしを便利にしたい方',
+          videoIdea: '使用前後を比較する様子',
+          sourceFingerprint: projectSourceFingerprint(lead.project)
+        }),
+        findFirst: jest.fn().mockResolvedValue({ id: analysisRevisionId })
       },
       contactPerson: {
         findFirst: jest.fn().mockResolvedValue({
@@ -69,7 +92,7 @@ describe('MailService draft creation', () => {
   it('keeps the manual draft path and never saves the legacy TODO body', async () => {
     const { service, tx, generateMailDraft } = createService();
 
-    await expect(service.createDraft({ leadId: lead.id, templateKey: 'normal', manualInstruction: '手動で作成した本文' })).resolves.toMatchObject({
+    await expect(service.createDraft({ leadId: lead.id, analysisRevisionId, templateKey: 'normal', manualInstruction: '手動で作成した本文' })).resolves.toMatchObject({
       id: 'mail_manual',
       status: 'draft'
     });
@@ -79,6 +102,7 @@ describe('MailService draft creation', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           body: '手動で作成した本文',
+          analysisRevisionId,
           contactId: 'contact_1',
           toEmail: 'primary@example.com',
           destinationType: 'email',
@@ -94,33 +118,33 @@ describe('MailService draft creation', () => {
   it('returns only the generated OutreachEmail when manual instruction is omitted', async () => {
     const { service, prisma, generateMailDraft, generatedEmail } = createService();
 
-    await expect(service.createDraft({ leadId: lead.id, templateKey: 'normal' })).resolves.toBe(generatedEmail);
+    await expect(service.createDraft({ leadId: lead.id, analysisRevisionId, templateKey: 'normal' })).resolves.toBe(generatedEmail);
 
-    expect(generateMailDraft.execute).toHaveBeenCalledWith(lead.id, { templateKey: 'normal' });
+    expect(generateMailDraft.execute).toHaveBeenCalledWith(lead.id, { templateKey: 'normal', analysisRevisionId });
     expect(prisma.salesLead.findUnique).not.toHaveBeenCalled();
   });
 
   it('uses the generated draft path for an empty manual instruction', async () => {
     const { service, generateMailDraft } = createService();
 
-    await service.createDraft({ leadId: lead.id, templateKey: 'normal', manualInstruction: '' });
+    await service.createDraft({ leadId: lead.id, analysisRevisionId, templateKey: 'normal', manualInstruction: '' });
 
-    expect(generateMailDraft.execute).toHaveBeenCalledWith(lead.id, { templateKey: 'normal' });
+    expect(generateMailDraft.execute).toHaveBeenCalledWith(lead.id, { templateKey: 'normal', analysisRevisionId });
   });
 
   it('uses the generated draft path for a whitespace-only manual instruction', async () => {
     const { service, generateMailDraft } = createService();
 
-    await service.createDraft({ leadId: lead.id, templateKey: 'normal', manualInstruction: '  \n  ' });
+    await service.createDraft({ leadId: lead.id, analysisRevisionId, templateKey: 'normal', manualInstruction: '  \n  ' });
 
-    expect(generateMailDraft.execute).toHaveBeenCalledWith(lead.id, { templateKey: 'normal' });
+    expect(generateMailDraft.execute).toHaveBeenCalledWith(lead.id, { templateKey: 'normal', analysisRevisionId });
   });
 
   it('keeps the lead not found behavior for manual drafts', async () => {
     const { service, prisma, generateMailDraft } = createService();
     prisma.salesLead.findUnique.mockResolvedValue(null);
 
-    await expect(service.createDraft({ leadId: lead.id, templateKey: 'normal', manualInstruction: '手動本文' })).rejects.toThrow(NotFoundException);
+    await expect(service.createDraft({ leadId: lead.id, analysisRevisionId, templateKey: 'normal', manualInstruction: '手動本文' })).rejects.toThrow(NotFoundException);
 
     expect(generateMailDraft.execute).not.toHaveBeenCalled();
   });
@@ -129,7 +153,7 @@ describe('MailService draft creation', () => {
     const { service, prisma, generateMailDraft } = createService();
     prisma.outreachEmail.findFirst.mockResolvedValue({ id: 'mail_existing' });
 
-    await expect(service.createDraft({ leadId: lead.id, templateKey: 'normal', manualInstruction: '手動本文' })).rejects.toThrow(ConflictException);
+    await expect(service.createDraft({ leadId: lead.id, analysisRevisionId, templateKey: 'normal', manualInstruction: '手動本文' })).rejects.toThrow(ConflictException);
 
     expect(generateMailDraft.execute).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();

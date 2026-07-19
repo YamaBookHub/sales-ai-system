@@ -127,6 +127,7 @@ export function renderMailWorkspace(): string {
             </div>
             <div class="mail-stage-body">
               <div id="mailLeadSummary" data-ui="mail-lead-summary">上の営業対象一覧から、作成・レビューする案件を選択してください。</div>
+              <div id="mailStructuredAnalysis" data-ui="mail-structured-analysis" class="mail-structured-analysis" aria-live="polite"></div>
               <div id="mailMaterialEngagement" data-ui="mail-material-engagement" class="mail-material-engagement" aria-live="polite"></div>
               <div class="mail-create-bar" style="margin-top:12px">
                 <select id="templateKey">

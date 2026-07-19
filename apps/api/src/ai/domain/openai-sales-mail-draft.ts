@@ -14,6 +14,9 @@ export type SalesMailDraftInput = {
   leadReason?: string | null;
   brandAnalysisMemo?: string | null;
   snsAnalysisMemo?: string | null;
+  appeal?: string | null;
+  targetUser?: string | null;
+  videoIdea?: string | null;
 };
 
 export type SalesMailDraftOutput = {
@@ -54,11 +57,16 @@ export function compactSalesMailDraftInput(input: SalesMailDraftInput, maxDescri
       category: input.projectCategory,
       amount: input.projectAmount,
       supporterCount: input.supporterCount,
-        description: truncate(sanitizeSourceText(input.projectDescription), maxDescriptionLength)
+      description: truncate(sanitizeSourceText(input.projectDescription), maxDescriptionLength)
     },
     leadReason: sanitizeSourceText(input.leadReason),
     brandAnalysisMemo: sanitizeSourceText(input.brandAnalysisMemo),
-    snsAnalysisMemo: sanitizeSourceText(input.snsAnalysisMemo)
+    snsAnalysisMemo: sanitizeSourceText(input.snsAnalysisMemo),
+    confirmedAnalysis: {
+      appeal: sanitizeSourceText(input.appeal),
+      targetUser: sanitizeSourceText(input.targetUser),
+      videoIdea: sanitizeSourceText(input.videoIdea)
+    }
   };
 }
 
@@ -82,17 +90,21 @@ function composeStableMailBody(input: SalesMailDraftInput, aiBody: string) {
   const targetSentence = subjectType === '取り組み'
     ? `${targetUser}にとって、参加・応援する理由が伝わりやすい取り組みだと感じました。`
     : `${targetUser}にとって、実際に使う場面をイメージしやすい商品だと感じました。`;
+  const videoSentence = cleanPhrase(input.videoIdea)
+    ? `${cleanPhrase(input.videoIdea)}を短尺動画で見せることで、SNSでも魅力を伝えやすいと考えています。`
+    : '';
 
   return [
     recipient,
     '突然のご連絡失礼いたします。\n株式会社第弐ヴォヌールの山本と申します。',
     `${platformName}で「${productName}」を拝見しました。`,
     `${withPointSuffix(appeal)}が特に印象に残っています。\n${targetSentence}`,
+    videoSentence,
     '弊社では、クラウドファンディング支援とSNSマーケティング支援を行っています。',
     'SNS運用では1か月総再生400万回超、クラウドファンディングでは担当案件で3,500万円規模の売上実績があります。',
     'プロジェクトの魅力を伝える見せ方から、支援につながる導線づくりまでお手伝いしています。',
     'もしご関心があれば、今回のプロジェクトに合わせた支援内容を簡単にお送りしますが、いかがでしょうか。'
-  ].join('\n\n');
+  ].filter(Boolean).join('\n\n');
 }
 
 function withPointSuffix(value: string) {
@@ -101,6 +113,8 @@ function withPointSuffix(value: string) {
 }
 
 function extractAppeal(input: SalesMailDraftInput, aiBody: string) {
+  const confirmedAppeal = cleanPhrase(input.appeal);
+  if (confirmedAppeal) return confirmedAppeal.replace(/という点$/, '');
   const sourceBundle = {
     description: sanitizeSourceText(compatibleProjectSource(input)),
     aiBody: sanitizeSourceText(aiBody)
@@ -139,6 +153,8 @@ function toAppealPhrase(value: string) {
 }
 
 function extractTargetUser(input: SalesMailDraftInput) {
+  const confirmedTarget = cleanPhrase(input.targetUser);
+  if (confirmedTarget) return confirmedTarget;
   const source = compatibleProjectSource(input);
   const manualTarget = pickManualTarget(source);
   if (manualTarget) return manualTarget;

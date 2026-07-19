@@ -42,6 +42,9 @@ export class CreateMailDraftDto {
   @IsUUID()
   leadId!: string;
 
+  @IsUUID()
+  analysisRevisionId!: string;
+
   @IsString()
   @MinLength(1)
   templateKey!: string;

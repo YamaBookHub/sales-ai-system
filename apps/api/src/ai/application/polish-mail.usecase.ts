@@ -4,6 +4,7 @@ import { AiClientService } from '../ai-client.service';
 import type { SelectableAiModel } from '../ai.dto';
 import { aiProviderForModel } from '../domain/ai-model';
 import { SalesMailDraftInput } from '../domain/openai-sales-mail-draft';
+import { isCompleteStructuredAnalysis, projectSourceFingerprint } from '../domain/lead-analysis';
 
 @Injectable()
 export class PolishMailUseCase {
@@ -16,6 +17,7 @@ export class PolishMailUseCase {
     const email = await this.prisma.outreachEmail.findUnique({
       where: { id: mailId },
       include: {
+        analysisRevision: true,
         lead: { include: { company: true, project: { include: { platform: true } } } }
       }
     });
@@ -28,8 +30,18 @@ export class PolishMailUseCase {
       throw new ConflictException('AIで整えられるのは下書きまたは棄却後のメールだけです。');
     }
 
+    if (!email.lead.project
+      || !email.analysisRevision
+      || email.analysisRevision.leadId !== email.lead.id
+      || email.analysisRevision.projectId !== email.lead.project.id
+      || email.analysisRevision.status !== 'confirmed'
+      || email.analysisRevision.sourceFingerprint !== projectSourceFingerprint(email.lead.project)
+      || !isCompleteStructuredAnalysis(email.analysisRevision)) {
+      throw new ConflictException('このメールに紐づく確認済み分析を利用できません。新しい下書きを作成してください。');
+    }
+
     const lead = email.lead;
-    const aiInput = toSalesMailDraftInput(lead, {
+    const aiInput = toSalesMailDraftInput(lead, email.analysisRevision, {
       templateKey: email.templateKey || 'normal',
       tone: 'low_sales_pressure'
     });
@@ -101,6 +113,7 @@ function toSalesMailDraftInput(
       supporterCount?: number | null;
     } | null;
   },
+  analysis: { appeal: string | null; targetUser: string | null; videoIdea: string | null },
   input: { templateKey: string; tone?: string }
 ): SalesMailDraftInput {
   return {
@@ -114,9 +127,9 @@ function toSalesMailDraftInput(
     projectDescription: compatibleAnalysisMemo(lead.project?.description, [lead.project?.title, lead.project?.category].filter(Boolean).join(' ')),
     projectAmount: lead.project?.amount,
     supporterCount: lead.project?.supporterCount,
-    leadReason: lead.reason,
-    brandAnalysisMemo: lead.brandAnalysisMemo,
-    snsAnalysisMemo: lead.snsAnalysisMemo
+    appeal: analysis.appeal,
+    targetUser: analysis.targetUser,
+    videoIdea: analysis.videoIdea
   };
 }
 

@@ -4,8 +4,9 @@ import { ClassifyReplyUseCase } from './application/classify-reply.usecase';
 import { CheckMailSemanticConsistencyUseCase } from './application/check-mail-semantic-consistency.usecase';
 import { GenerateMailDraftUseCase } from './application/generate-mail-draft.usecase';
 import { ListLeadGenerationsUseCase } from './application/list-lead-generations.usecase';
+import { LeadAnalysisUseCase } from './application/lead-analysis.usecase';
 import { PolishMailUseCase } from './application/polish-mail.usecase';
-import { GenerateMailDto } from './ai.dto';
+import { GenerateMailDto, UpdateLeadAnalysisDto } from './ai.dto';
 import type { SelectableAiModel } from './ai.dto';
 
 @Injectable()
@@ -16,7 +17,8 @@ export class AiService {
     private readonly polishMailUseCase: PolishMailUseCase,
     private readonly classifyReplyUseCase: ClassifyReplyUseCase,
     private readonly listLeadGenerationsUseCase: ListLeadGenerationsUseCase,
-    private readonly checkMailSemanticConsistencyUseCase: CheckMailSemanticConsistencyUseCase
+    private readonly checkMailSemanticConsistencyUseCase: CheckMailSemanticConsistencyUseCase,
+    private readonly leadAnalysisUseCase: LeadAnalysisUseCase
   ) {}
 
   async analyzeLead(leadId: string) {
@@ -25,6 +27,18 @@ export class AiService {
 
   async generateMailDraft(leadId: string, dto: GenerateMailDto) {
     return this.generateMailDraftUseCase.execute(leadId, dto);
+  }
+
+  getLeadAnalysis(leadId: string) {
+    return this.leadAnalysisUseCase.get(leadId);
+  }
+
+  saveLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto) {
+    return this.leadAnalysisUseCase.save(leadId, dto);
+  }
+
+  confirmLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto) {
+    return this.leadAnalysisUseCase.confirm(leadId, dto);
   }
 
   async polishMail(mailId: string, model?: SelectableAiModel) {

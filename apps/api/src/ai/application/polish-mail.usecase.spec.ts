@@ -1,7 +1,18 @@
 import { BadGatewayException, ConflictException } from '@nestjs/common';
+import { projectSourceFingerprint } from '../domain/lead-analysis';
 import { PolishMailUseCase } from './polish-mail.usecase';
 
 describe('PolishMailUseCase', () => {
+  const project = {
+    id: 'project_1',
+    title: '真空保存できる米びつ',
+    platform: { name: 'CAMPFIRE', type: 'campfire' },
+    url: 'https://camp-fire.jp/projects/1',
+    category: 'キッチン',
+    description: 'お米を分けて保存できるキッチン用品',
+    amount: 1000000,
+    supporterCount: 100
+  };
   const email = {
     id: 'mail_1',
     leadId: 'lead_1',
@@ -9,21 +20,23 @@ describe('PolishMailUseCase', () => {
     subject: '元の件名',
     body: '元の本文',
     status: 'draft',
+    analysisRevision: {
+      id: 'analysis_1',
+      leadId: 'lead_1',
+      projectId: project.id,
+      status: 'confirmed',
+      appeal: 'お米を真空で分けて保存できる点',
+      targetUser: 'お米の鮮度と収納性を重視する方',
+      videoIdea: '真空保存の操作と収納前後の比較',
+      sourceFingerprint: projectSourceFingerprint(project)
+    },
     lead: {
       id: 'lead_1',
       reason: 'SNSで商品の魅力が伝わりやすい',
       brandAnalysisMemo: null,
       snsAnalysisMemo: null,
       company: { name: 'テスト株式会社' },
-      project: {
-        title: '真空保存できる米びつ',
-        platform: { name: 'CAMPFIRE', type: 'campfire' },
-        url: 'https://camp-fire.jp/projects/1',
-        category: 'キッチン',
-        description: 'お米を分けて保存できるキッチン用品',
-        amount: 1000000,
-        supporterCount: 100
-      }
+      project
     }
   };
 
@@ -71,7 +84,10 @@ describe('PolishMailUseCase', () => {
     expect(result.model).toBe('gpt-test');
     expect(aiClient.createSalesMailDraft).toHaveBeenCalledWith(expect.objectContaining({
       companyName: 'テスト株式会社',
-      projectTitle: '真空保存できる米びつ'
+      projectTitle: '真空保存できる米びつ',
+      appeal: email.analysisRevision.appeal,
+      targetUser: email.analysisRevision.targetUser,
+      videoIdea: email.analysisRevision.videoIdea
     }), 'gpt-5.6-sol');
     expect(tx.outreachEmail.update).toHaveBeenCalledWith({
       where: { id: email.id },

@@ -46,7 +46,7 @@ Baseline:
 | 21 | LS-006 | P1 | complete | Terra T3 + Sol audit | LS-005 | 2026-07-18 / 両provider逐次通知・Makuake確定値4件並列・URL重複排除・10件上限・停止/旧応答guard、88 suites 337 tests・verify成功 | 逐次候補追加 |
 | 22 | LL-001 | P1 | complete | Terra T3 + Sol audit | LR-001, LR-004 | 2026-07-18 / DB側pagination・filter・sort、最新メールCTE、実DB201件到達、選択維持、89 suites 351 tests・実DB23 tests・verify成功 | server pagination/filter |
 | 23 | LL-002 | P1 | complete | Luna T2 | LL-001 | 2026-07-18 / 現在ページ・現在条件全件を分離、100件単位・最大4並列、server sort維持、CSV BOM・TSV escape、201件到達、90 suites 358 tests・verify成功 | 全件CSV/TSV |
-| 24 | LM-004 | P1 | in_progress | Sol T4 -> Terra | LM-003, LL-003 | 2026-07-18 / 追記専用version・案件fingerprint・確認済み版・メール固定の契約を設計 | 構造化分析値 |
+| 24 | LM-004 | P1 | complete | Sol T4 -> Terra | LM-003, LL-003 | 2026-07-19 / 追記専用version・案件fingerprint・確認API・メール固定、91 suites 365 tests・実DB7 suites 26 tests・build成功 | 構造化分析値 |
 | 25 | LM-005 | P1 | pending | Terra T3 | LM-003 | - | AI予算guard |
 | 26 | SM-001 | P1 | pending | Terra T3 | SO-005, LL-001 | - | 営業成績 |
 | 27 | LA-001 | P1 | deferred | Sol T4 | LL-004 | - | 本番送信を再優先化するまで後回し |
@@ -112,3 +112,4 @@ Baseline:
 | 2026-07-18 | LL-002 | Luna worker + main audit | start | 営業リスト出力を現在ページと現在条件全件に分離し、全ページ収集とCSV/TSV契約の実装を開始 |
 | 2026-07-18 | LL-002 | Luna worker + main audit | complete | 現在ページは表示中のみ、全件はfilter・server sortを保持して100件単位・最大4並列で収集。CSV UTF-8 BOM、改行・タブ・引用符escape、201件の欠落なしと順序維持を固定。OpenAPI 77 operations、90 suites 358 tests、Prisma・build成功。ブラウザはユーザー指示により未実行 |
 | 2026-07-18 | LM-004 | Sol design agents + main | start | 構造化3値の正本、追記専用version、案件fingerprint、確認、メール使用版固定の設計を開始 |
+| 2026-07-19 | LM-004 | Sol T4 + read-only audit agents + main | complete | 魅力・対象者・動画案を追記専用revisionへ保存し、案件fingerprint・編集競合・再取り込み排他・確認済み最新版・メール使用版固定を実装。OpenAPI・Prisma、91 suites 365 tests、実DB7 suites 26 tests、build成功。ブラウザとport 3000はユーザー指示により未実行 |

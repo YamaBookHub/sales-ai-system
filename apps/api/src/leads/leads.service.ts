@@ -301,6 +301,9 @@ export class LeadsService {
 
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `lead-detail:${id}`);
+      if (hasProjectPatch) {
+        await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `lead-analysis:${id}`);
+      }
       const lead = await tx.salesLead.findUnique({
         where: { id },
         include: { company: true, project: { include: { platform: true } } }

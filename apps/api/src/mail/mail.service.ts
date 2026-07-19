@@ -12,6 +12,7 @@ import { RetryMailUseCase } from './application/retry-mail.usecase';
 import { SendQueuedMailUseCase } from './application/send-queued-mail.usecase';
 import { RecordMailReplyUseCase } from './application/record-mail-reply.usecase';
 import { GenerateMailDraftUseCase } from '../ai/application/generate-mail-draft.usecase';
+import { requireLatestConfirmedAnalysis } from '../ai/application/confirmed-analysis.reader';
 import { DEFAULT_CHECKLIST_ITEMS } from './mail-checklist.defaults';
 import { resolveMailRecipient } from './infrastructure/contact-recipient.resolver';
 import { assertLeadContactEligible } from './infrastructure/contact-eligibility.reader';
@@ -99,7 +100,8 @@ export class MailService {
     const manualInstruction = dto.manualInstruction;
     if (!manualInstruction || !manualInstruction.trim()) {
       const result = await this.generateMailDraft.execute(dto.leadId, {
-        templateKey: dto.templateKey
+        templateKey: dto.templateKey,
+        analysisRevisionId: dto.analysisRevisionId
       });
 
       return result.email;
@@ -129,8 +131,19 @@ export class MailService {
         'SELECT pg_advisory_xact_lock(hashtext($1))',
         `mail-draft:${lead.id}`
       );
-      const recipient = await resolveMailRecipient(tx, lead.companyId);
-      const destination = await assertLeadContactEligible(tx, lead, recipient, { lock: true });
+      await tx.$executeRawUnsafe(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        `lead-analysis:${lead.id}`
+      );
+      const currentLead = await tx.salesLead.findUnique({
+        where: { id: lead.id },
+        include: { company: true, project: { include: { platform: true } } }
+      });
+      if (!currentLead) throw new NotFoundException('Lead not found');
+      if (!currentLead.project) throw new ConflictException('この営業対象には案件が紐づいていません。');
+      const analysisRevision = await requireLatestConfirmedAnalysis(tx, currentLead, dto.analysisRevisionId);
+      const recipient = await resolveMailRecipient(tx, currentLead.companyId);
+      const destination = await assertLeadContactEligible(tx, currentLead, recipient, { lock: true });
       const concurrentMail = await tx.outreachEmail.findFirst({
         where: { leadId: lead.id },
         select: { id: true }
@@ -140,15 +153,16 @@ export class MailService {
       }
       const email = await tx.outreachEmail.create({
         data: {
-          leadId: lead.id,
-          companyId: lead.companyId,
+          leadId: currentLead.id,
+          companyId: currentLead.companyId,
           contactId: recipient?.id,
+          analysisRevisionId: analysisRevision.id,
           toEmail: recipient?.email,
           destinationType: destination?.type,
           destinationValue: destination?.value,
           destinationKey: destination?.key,
           templateKey: dto.templateKey,
-          subject: `${projectPlatformLabel(lead.project)}でのプロジェクトを拝見しご連絡いたしました`,
+          subject: `${projectPlatformLabel(currentLead.project)}でのプロジェクトを拝見しご連絡いたしました`,
           body: manualInstruction,
           status: 'draft',
           events: { create: { type: 'created' } }
@@ -156,7 +170,7 @@ export class MailService {
       });
 
       await tx.salesLead.update({
-        where: { id: lead.id },
+        where: { id: currentLead.id },
         data: { status: 'drafted' }
       });
 

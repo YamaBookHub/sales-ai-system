@@ -58,25 +58,29 @@ export function buildLocalLeadAnalysis(lead: {
       materialEngagementFact(lead.materialEngagement)
     ].filter(Boolean);
 
+    const snsIdeas = buildLocalSnsIdeas(project?.category, projectAnalysisSource, projectKind);
     const output = {
       summary: buildLocalSummary(lead.company.name, project?.title, project?.category, project?.amount, project?.supporterCount, projectKind),
       productStrengths: buildLocalStrengths(projectAnalysisSource, safeLeadReason, projectKind),
       targetUsers: buildLocalTargetUsers(project?.category, projectAnalysisSource, projectKind),
       salesAngles: buildLocalSalesAngles(project?.amount, project?.supporterCount, lead.materialEngagement, projectKind),
-      snsIdeas: buildLocalSnsIdeas(project?.category, projectAnalysisSource, projectKind),
+      snsIdeas,
       readiness: buildMailReadiness(lead, project, projectKind),
       missingInfo: buildMissingInfo(lead, project, projectKind),
       nextChecks: buildNextChecks(lead, project, lead.materialEngagement, projectKind),
       mailAdvice: buildMailAdvice(project?.category, analysisSource, safeLeadReason, projectKind),
-      mailPlaceholders: buildMailPlaceholders(
-        lead.company.name,
-        project?.title,
-        project?.category,
-      safeProjectDescription,
-        safeLeadReason,
-        safeBrandAnalysisMemo,
-        safeSnsAnalysisMemo
-      ),
+      mailPlaceholders: {
+        ...buildMailPlaceholders(
+          lead.company.name,
+          project?.title,
+          project?.category,
+          safeProjectDescription,
+          safeLeadReason,
+          safeBrandAnalysisMemo,
+          safeSnsAnalysisMemo
+        ),
+        videoIdea: snsIdeas[0] || null
+      },
       materialEngagement: lead.materialEngagement || null,
       factsUsed,
       assumptions: [

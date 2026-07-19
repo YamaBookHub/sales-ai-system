@@ -109,6 +109,7 @@ relation:
 ```json
 {
   "expectedVersion": 3,
+  "expectedSourceFingerprint": "0123456789abcdef0123456789abcdef",
   "appeal": "商品の魅力",
   "targetUser": "想定する相手",
   "videoIdea": "短尺動画での見せ方"
@@ -116,6 +117,7 @@ relation:
 ```
 
 - 空欄を含む保存を許可する。
+- `expectedSourceFingerprint` が現在案件と異なる場合は409で再読込を促す。
 - 新しいdraft版を追加する。
 - `humanEdited = true` とする。
 - `editedFields` は直前版との差分からサーバーが計算する。
@@ -124,7 +126,7 @@ relation:
 
 `POST /api/ai/leads/{leadId}/analysis/confirm`
 
-- requestは下書き保存と同じ3値と `expectedVersion` を受け取る。
+- requestは下書き保存と同じ3値、`expectedVersion`、`expectedSourceFingerprint` を受け取る。
 - 3値がすべて入力済みの場合だけconfirmed版を追加する。
 - `confirmedAt` をサーバー時刻で保存する。
 - 案件が更新済み、またはversion競合の場合は409。
@@ -185,4 +187,3 @@ response data:
 - メールが使用した分析版を追跡できる。
 - 米びつ、食品、イベント、生活用品の分析が別案件へ混入しない。
 - OpenAPI、Prisma、unit/contract、実DBintegration、buildが成功する。
-

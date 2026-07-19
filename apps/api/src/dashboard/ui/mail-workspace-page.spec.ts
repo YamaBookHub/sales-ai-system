@@ -20,5 +20,8 @@ describe('Mail workspace static HTML', () => {
     expect(mailWorkspaceHtml).toContain('<option value="gpt-5.6-sol">5.6 SOL（互換用）</option>');
     expect(mailWorkspaceHtml).toContain('data-mail-work-tab="review"');
     expect(mailWorkspaceHtml).toContain('id="checklistRows"');
+    expect(mailWorkspaceHtml).toContain('expectedSourceFingerprint: state.structuredAnalysis?.sourceFingerprint');
+    expect(mailWorkspaceHtml).toContain('analysisRevisionId: analysis.id');
+    expect(mailWorkspaceHtml).toContain('await loadStructuredAnalysis();');
   });
 });

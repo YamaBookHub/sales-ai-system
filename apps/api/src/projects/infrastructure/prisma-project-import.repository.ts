@@ -55,6 +55,17 @@ export class PrismaProjectImportRepository {
       for (const lockKey of projectImportLockKeys(projectUrl, normalizedCompanyName)) {
         await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', lockKey);
       }
+      const existingLeadIds = await tx.salesLead.findMany({
+        where: { project: { url: projectUrl }, deletedAt: null },
+        select: { id: true },
+        orderBy: { id: 'asc' }
+      });
+      for (const existingLead of existingLeadIds) {
+        await tx.$executeRawUnsafe(
+          'SELECT pg_advisory_xact_lock(hashtext($1))',
+          `lead-analysis:${existingLead.id}`
+        );
+      }
       const platform = await tx.crowdfundingPlatform.upsert({
         where: {
           type_baseUrl: {

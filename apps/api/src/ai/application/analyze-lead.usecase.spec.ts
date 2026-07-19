@@ -2,14 +2,31 @@ import { AnalyzeLeadUseCase } from './analyze-lead.usecase';
 
 describe('AnalyzeLeadUseCase', () => {
   it('passes material engagement into the analysis input and output', async () => {
+    const lead = {
+      id: 'lead_1',
+      reason: '資料を確認',
+      company: { name: 'テスト株式会社' },
+      project: {
+        id: 'project_1',
+        title: 'テスト商品',
+        url: 'https://camp-fire.jp/projects/1',
+        category: '商品',
+        description: '商品説明',
+        platform: { name: 'CAMPFIRE', type: 'campfire' }
+      }
+    };
+    const tx = {
+      $executeRawUnsafe: jest.fn().mockResolvedValue(1),
+      salesLead: { findUnique: jest.fn().mockResolvedValue(lead) },
+      aiGeneration: { create: jest.fn().mockResolvedValue({ id: 'generation_1' }) },
+      leadAnalysisRevision: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'analysis_1' })
+      }
+    };
     const prisma = {
       salesLead: {
-        findUnique: jest.fn().mockResolvedValue({
-          id: 'lead_1',
-          reason: '資料を確認',
-          company: { name: 'テスト株式会社' },
-          project: { title: 'テスト商品', platform: { name: 'CAMPFIRE', type: 'campfire' }, description: '商品説明' }
-        })
+        findUnique: jest.fn().mockResolvedValue(lead)
       },
       trackedLink: {
         findMany: jest.fn().mockResolvedValue([
@@ -22,9 +39,7 @@ describe('AnalyzeLeadUseCase', () => {
           }
         ])
       },
-      aiGeneration: {
-        create: jest.fn().mockResolvedValue({ id: 'generation_1' })
-      }
+      $transaction: jest.fn((callback) => callback(tx))
     };
     const useCase = new AnalyzeLeadUseCase(prisma as any);
 
@@ -38,12 +53,21 @@ describe('AnalyzeLeadUseCase', () => {
       materialClickCount: 3,
       appointmentAngle: 'hot'
     });
-    expect(prisma.aiGeneration.create).toHaveBeenCalledWith(expect.objectContaining({
+    expect(tx.aiGeneration.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         inputJson: expect.objectContaining({
           materialEngagement: expect.objectContaining({ materialClickCount: 3 })
         })
       })
     }));
+    expect(tx.leadAnalysisRevision.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        leadId: 'lead_1',
+        projectId: 'project_1',
+        status: 'draft',
+        origin: 'generated'
+      })
+    }));
+    expect(result.analysisRevisionId).toBe('analysis_1');
   });
 });

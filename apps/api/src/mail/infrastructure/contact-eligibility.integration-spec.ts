@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { GenerateMailDraftUseCase } from '../../ai/application/generate-mail-draft.usecase';
+import { projectSourceFingerprint } from '../../ai/domain/lead-analysis';
 import { MarkMailSentUseCase } from '../application/mark-mail-sent.usecase';
 import { PrismaMailWorkflowRepository } from './prisma-mail-workflow.repository';
 
@@ -32,7 +33,10 @@ describe('contact eligibility integration', () => {
     await prisma.company.update({ where: { id: fixture.companyId }, data: { isBlocked: true } });
     const useCase = new GenerateMailDraftUseCase(prisma as any);
 
-    await expect(useCase.execute(fixture.leadIds[0], { templateKey: 'normal' }))
+    await expect(useCase.execute(fixture.leadIds[0], {
+      templateKey: 'normal',
+      analysisRevisionId: fixture.analysisRevisionIds[0]
+    }))
       .rejects.toThrow('この企業は送信禁止');
 
     expect(await prisma.outreachEmail.count({ where: { leadId: fixture.leadIds[0] } })).toBe(0);
@@ -45,8 +49,14 @@ describe('contact eligibility integration', () => {
     const fixture = await createFixture('duplicate');
     const useCase = new GenerateMailDraftUseCase(prisma as any);
 
-    await useCase.execute(fixture.leadIds[0], { templateKey: 'normal' });
-    await expect(useCase.execute(fixture.leadIds[1], { templateKey: 'normal' }))
+    await useCase.execute(fixture.leadIds[0], {
+      templateKey: 'normal',
+      analysisRevisionId: fixture.analysisRevisionIds[0]
+    });
+    await expect(useCase.execute(fixture.leadIds[1], {
+      templateKey: 'normal',
+      analysisRevisionId: fixture.analysisRevisionIds[1]
+    }))
       .rejects.toThrow('重複接触');
 
     expect(await prisma.outreachEmail.count({ where: { companyId: fixture.companyId } })).toBe(1);
@@ -57,7 +67,10 @@ describe('contact eligibility integration', () => {
   it('does not advance review after the selected contact unsubscribes', async () => {
     const fixture = await createFixture('unsubscribe');
     const generated = await new GenerateMailDraftUseCase(prisma as any)
-      .execute(fixture.leadIds[0], { templateKey: 'normal' });
+      .execute(fixture.leadIds[0], {
+        templateKey: 'normal',
+        analysisRevisionId: fixture.analysisRevisionIds[0]
+      });
     await prisma.contactPerson.update({
       where: { id: fixture.contactId },
       data: { isUnsubscribed: true, unsubscribedAt: new Date(), isPrimary: false }
@@ -79,7 +92,10 @@ describe('contact eligibility integration', () => {
   it('records one sent event when the same manual sent action runs concurrently', async () => {
     const fixture = await createFixture('manual-sent');
     const generated = await new GenerateMailDraftUseCase(prisma as any)
-      .execute(fixture.leadIds[0], { templateKey: 'normal' });
+      .execute(fixture.leadIds[0], {
+        templateKey: 'normal',
+        analysisRevisionId: fixture.analysisRevisionIds[0]
+      });
     await prisma.outreachEmail.update({
       where: { id: generated.email.id },
       data: { status: 'approved' }
@@ -142,11 +158,28 @@ describe('contact eligibility integration', () => {
         sendMethod: 'email'
       }
     })));
+    const analysisRevisions = await Promise.all(leads.map((lead, index) => prisma.leadAnalysisRevision.create({
+      data: {
+        leadId: lead.id,
+        projectId: projects[index].id,
+        version: 1,
+        status: 'confirmed',
+        origin: 'manual',
+        appeal: '商品の特徴が分かりやすく伝わる点',
+        targetUser: '商品の利用場面を具体的に考えたい方',
+        videoIdea: '利用前後を短尺動画で比較する見せ方',
+        sourceFingerprint: projectSourceFingerprint(projects[index]),
+        confirmedAt: new Date(),
+        humanEdited: true,
+        editedFields: ['appeal', 'targetUser', 'videoIdea']
+      }
+    })));
 
     return {
       companyId: company.id,
       contactId: contact.id,
-      leadIds: leads.map((lead) => lead.id)
+      leadIds: leads.map((lead) => lead.id),
+      analysisRevisionIds: analysisRevisions.map((revision) => revision.id)
     };
   }
 });

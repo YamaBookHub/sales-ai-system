@@ -105,6 +105,7 @@ describe('PrismaProjectImportRepository', () => {
         upsert: jest.fn().mockResolvedValue({ id: 'project-1' })
       },
       salesLead: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'lead-existing' }]),
         findUnique: jest.fn().mockResolvedValue({
           contactFormUrl: 'https://existing.example.com/contact',
           brandWebsiteUrl: 'https://existing.example.com',
@@ -141,10 +142,11 @@ describe('PrismaProjectImportRepository', () => {
     const result = await repository.persistImportedProject(imported, { bulk: true, userId: 'user-1' });
 
     expect(result.lead.id).toBe('lead-1');
-    expect(tx.$executeRawUnsafe).toHaveBeenCalledTimes(3);
+    expect(tx.$executeRawUnsafe).toHaveBeenCalledTimes(4);
     expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(1, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'project-import:company:テスト食品株式会社');
     expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(2, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'project-import:project:https://camp-fire.jp/projects/test/view');
-    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(3, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'opportunity:lead-1');
+    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(3, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'lead-analysis:lead-existing');
+    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(4, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'opportunity:lead-1');
     expect(tx.company.update).toHaveBeenCalledWith({
       where: { id: 'company-1' },
       data: expect.objectContaining({

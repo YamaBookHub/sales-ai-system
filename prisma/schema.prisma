@@ -136,6 +136,17 @@ enum AiGenerationType {
   next_action
 }
 
+enum LeadAnalysisStatus {
+  draft
+  confirmed
+}
+
+enum LeadAnalysisOrigin {
+  generated
+  manual
+  migration
+}
+
 enum AttachmentType {
   proposal_pdf
   lp_url
@@ -154,11 +165,12 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  audits    AuditLog[]
-  tasks     Task[]
-  approvals OutreachEmail[] @relation("MailApprover")
-  ownedOpportunities Opportunity[] @relation("OpportunityOwner")
+  audits                  AuditLog[]
+  tasks                   Task[]
+  approvals               OutreachEmail[]           @relation("MailApprover")
+  ownedOpportunities      Opportunity[]             @relation("OpportunityOwner")
   opportunityStageChanges OpportunityStageHistory[] @relation("OpportunityStageChanger")
+  leadAnalysisChanges     LeadAnalysisRevision[]    @relation("LeadAnalysisChanger")
 
   @@index([role, isActive])
 }
@@ -178,22 +190,22 @@ model CrowdfundingPlatform {
 }
 
 model Company {
-  id            String    @id @default(uuid()) @db.Uuid
-  name          String
-  normalizedName String?
-  websiteUrl    String?
-  inquiryUrl    String?
-  industry      String?
-  location      String?
-  sourceTotalAmount Int?
-  sourceProjectCount Int?
+  id                   String    @id @default(uuid()) @db.Uuid
+  name                 String
+  normalizedName       String?
+  websiteUrl           String?
+  inquiryUrl           String?
+  industry             String?
+  location             String?
+  sourceTotalAmount    Int?
+  sourceProjectCount   Int?
   sourceSupporterCount Int?
-  memo          String?
-  isBlocked     Boolean   @default(false)
-  blockedReason String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
+  memo                 String?
+  isBlocked            Boolean   @default(false)
+  blockedReason        String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
 
   contacts ContactPerson[]
   projects CrowdfundingProject[]
@@ -219,7 +231,7 @@ model ContactPerson {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  company Company @relation(fields: [companyId], references: [id])
+  company Company         @relation(fields: [companyId], references: [id])
   mails   OutreachEmail[]
 
   @@index([companyId])
@@ -249,9 +261,10 @@ model CrowdfundingProject {
   updatedAt      DateTime      @updatedAt
   deletedAt      DateTime?
 
-  platform CrowdfundingPlatform @relation(fields: [platformId], references: [id])
-  company  Company?             @relation(fields: [companyId], references: [id])
-  leads    SalesLead[]
+  platform             CrowdfundingPlatform   @relation(fields: [platformId], references: [id])
+  company              Company?               @relation(fields: [companyId], references: [id])
+  leads                SalesLead[]
+  LeadAnalysisRevision LeadAnalysisRevision[]
 
   @@index([platformId])
   @@index([companyId])
@@ -263,45 +276,46 @@ model CrowdfundingProject {
 }
 
 model SalesLead {
-  id           String       @id @default(uuid()) @db.Uuid
-  companyId    String       @db.Uuid
-  projectId    String?      @db.Uuid
-  status       LeadStatus   @default(discovered)
-  priority     LeadPriority @default(medium)
-  score        Int          @default(0)
-  reason       String?
-  source       String       @default("manual")
-  ownerMemo    String?
-  contactEmail String?
-  contactFormUrl String?
-  siteMessageUrl String?
-  contactMemo  String?
-  sendMethod   String?
-  sentAt       DateTime?
-  nextFollowUpAt DateTime?
-  brandWebsiteUrl String?
-  instagramUrl String?
-  tiktokUrl    String?
-  xUrl         String?
+  id                String       @id @default(uuid()) @db.Uuid
+  companyId         String       @db.Uuid
+  projectId         String?      @db.Uuid
+  status            LeadStatus   @default(discovered)
+  priority          LeadPriority @default(medium)
+  score             Int          @default(0)
+  reason            String?
+  source            String       @default("manual")
+  ownerMemo         String?
+  contactEmail      String?
+  contactFormUrl    String?
+  siteMessageUrl    String?
+  contactMemo       String?
+  sendMethod        String?
+  sentAt            DateTime?
+  nextFollowUpAt    DateTime?
+  brandWebsiteUrl   String?
+  instagramUrl      String?
+  tiktokUrl         String?
+  xUrl              String?
   brandAnalysisMemo String?
-  snsAnalysisMemo String?
-  nextActionAt DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  deletedAt    DateTime?
+  snsAnalysisMemo   String?
+  nextActionAt      DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  deletedAt         DateTime?
 
-  company       Company              @relation(fields: [companyId], references: [id])
-  project       CrowdfundingProject? @relation(fields: [projectId], references: [id])
-  mails         OutreachEmail[]
-  tasks         Task[]
-  scores        LeadScore[]
-  aiGenerations AiGeneration[]
-  opportunity   Opportunity?
+  company           Company                @relation(fields: [companyId], references: [id])
+  project           CrowdfundingProject?   @relation(fields: [projectId], references: [id])
+  mails             OutreachEmail[]
+  tasks             Task[]
+  scores            LeadScore[]
+  aiGenerations     AiGeneration[]
+  analysisRevisions LeadAnalysisRevision[]
+  opportunity       Opportunity?
 
+  @@unique([companyId, projectId])
   @@index([status, priority])
   @@index([score])
   @@index([nextActionAt])
-  @@unique([companyId, projectId])
 }
 
 model LeadScore {
@@ -324,47 +338,50 @@ model LeadScore {
 }
 
 model OutreachEmail {
-  id             String      @id @default(uuid()) @db.Uuid
-  leadId         String?     @db.Uuid
-  companyId      String      @db.Uuid
-  contactId      String?     @db.Uuid
-  approvedById   String?     @db.Uuid
-  status         EmailStatus @default(draft)
-  templateKey    String?
-  subject        String
-  body           String
-  bodyHtml       String?
-  toEmail        String?
-  destinationType  String?
-  destinationValue String?
-  destinationKey   String?
-  ccEmails       String[]    @default([])
-  bccEmails      String[]    @default([])
-  gmailMessageId String?
-  gmailThreadId  String?
-  provider       String      @default("gmail")
-  scheduledAt    DateTime?
-  sentAt         DateTime?
-  approvedAt     DateTime?
-  failedReason   String?
-  retryCount     Int         @default(0)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id                 String      @id @default(uuid()) @db.Uuid
+  leadId             String?     @db.Uuid
+  companyId          String      @db.Uuid
+  contactId          String?     @db.Uuid
+  approvedById       String?     @db.Uuid
+  analysisRevisionId String?     @db.Uuid
+  status             EmailStatus @default(draft)
+  templateKey        String?
+  subject            String
+  body               String
+  bodyHtml           String?
+  toEmail            String?
+  destinationType    String?
+  destinationValue   String?
+  destinationKey     String?
+  ccEmails           String[]    @default([])
+  bccEmails          String[]    @default([])
+  gmailMessageId     String?
+  gmailThreadId      String?
+  provider           String      @default("gmail")
+  scheduledAt        DateTime?
+  sentAt             DateTime?
+  approvedAt         DateTime?
+  failedReason       String?
+  retryCount         Int         @default(0)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
-  lead          SalesLead?       @relation(fields: [leadId], references: [id])
-  company       Company          @relation(fields: [companyId], references: [id])
-  contact       ContactPerson?   @relation(fields: [contactId], references: [id])
-  approvedBy    User?            @relation("MailApprover", fields: [approvedById], references: [id])
-  events        EmailEvent[]
-  replies       EmailReply[]
-  links         TrackedLink[]
-  attachments   MailAttachment[]
-  aiGenerations AiGeneration[]
-  checklistItems MailChecklistItem[]
+  lead             SalesLead?            @relation(fields: [leadId], references: [id])
+  company          Company               @relation(fields: [companyId], references: [id])
+  contact          ContactPerson?        @relation(fields: [contactId], references: [id])
+  approvedBy       User?                 @relation("MailApprover", fields: [approvedById], references: [id])
+  analysisRevision LeadAnalysisRevision? @relation(fields: [analysisRevisionId], references: [id], onDelete: SetNull)
+  events           EmailEvent[]
+  replies          EmailReply[]
+  links            TrackedLink[]
+  attachments      MailAttachment[]
+  aiGenerations    AiGeneration[]
+  checklistItems   MailChecklistItem[]
 
   @@index([status])
   @@index([leadId])
   @@index([companyId])
+  @@index([analysisRevisionId])
   @@index([destinationKey, status])
   @@index([gmailThreadId])
   @@index([scheduledAt])
@@ -386,14 +403,14 @@ model MailTemplate {
 }
 
 model MailChecklistItem {
-  id        String   @id @default(uuid()) @db.Uuid
-  emailId   String   @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
+  emailId   String    @db.Uuid
   key       String
   label     String
-  checked   Boolean  @default(false)
+  checked   Boolean   @default(false)
   checkedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   email OutreachEmail @relation(fields: [emailId], references: [id])
 
@@ -419,17 +436,17 @@ model EmailEvent {
 
 model EmailReply {
   id             String        @id @default(uuid()) @db.Uuid
-  emailId         String        @db.Uuid
-  gmailMessageId  String?       @unique
-  fromEmail       String?
-  body            String
-  bodyText        String?
-  category        ReplyCategory @default(unknown)
-  confidence      Float         @default(0)
-  summary         String?
-  nextAction      String?
-  receivedAt      DateTime      @default(now())
-  createdAt       DateTime      @default(now())
+  emailId        String        @db.Uuid
+  gmailMessageId String?       @unique
+  fromEmail      String?
+  body           String
+  bodyText       String?
+  category       ReplyCategory @default(unknown)
+  confidence     Float         @default(0)
+  summary        String?
+  nextAction     String?
+  receivedAt     DateTime      @default(now())
+  createdAt      DateTime      @default(now())
 
   email OutreachEmail @relation(fields: [emailId], references: [id])
 
@@ -498,13 +515,46 @@ model AiGeneration {
   costUsd       Decimal?         @db.Decimal(12, 6)
   createdAt     DateTime         @default(now())
 
-  lead  SalesLead?     @relation(fields: [leadId], references: [id])
-  email OutreachEmail? @relation(fields: [emailId], references: [id])
+  lead              SalesLead?             @relation(fields: [leadId], references: [id])
+  email             OutreachEmail?         @relation(fields: [emailId], references: [id])
+  analysisRevisions LeadAnalysisRevision[]
 
   @@index([type])
   @@index([leadId])
   @@index([emailId])
   @@index([createdAt])
+}
+
+model LeadAnalysisRevision {
+  id                 String             @id @default(uuid()) @db.Uuid
+  leadId             String             @db.Uuid
+  projectId          String             @db.Uuid
+  sourceGenerationId String?            @db.Uuid
+  changedById        String?            @db.Uuid
+  version            Int
+  status             LeadAnalysisStatus @default(draft)
+  origin             LeadAnalysisOrigin
+  appeal             String?
+  targetUser         String?
+  videoIdea          String?
+  sourceFingerprint  String
+  generatedAt        DateTime?
+  confirmedAt        DateTime?
+  humanEdited        Boolean            @default(false)
+  editedFields       String[]           @default([])
+  createdAt          DateTime           @default(now())
+
+  lead             SalesLead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  project          CrowdfundingProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceGeneration AiGeneration?       @relation(fields: [sourceGenerationId], references: [id], onDelete: SetNull)
+  changedBy        User?               @relation("LeadAnalysisChanger", fields: [changedById], references: [id], onDelete: SetNull)
+  emails           OutreachEmail[]
+
+  @@unique([leadId, version])
+  @@index([leadId, status, version])
+  @@index([projectId])
+  @@index([sourceGenerationId])
+  @@index([changedById])
 }
 
 model Task {
@@ -546,8 +596,8 @@ model Opportunity {
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
 
-  lead    SalesLead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  owner   User?                    @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  lead    SalesLead                 @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  owner   User?                     @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   history OpportunityStageHistory[]
 
   @@index([stage, updatedAt])
