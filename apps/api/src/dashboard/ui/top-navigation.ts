@@ -1,7 +1,8 @@
-export type DashboardNavigationPage = 'url-search' | 'leads' | 'mail-workspace' | 'today' | 'replies';
+export type DashboardNavigationPage = 'url-search' | 'leads' | 'mail-workspace' | 'today' | 'sales-performance' | 'replies';
 
 const NAVIGATION_ITEMS: Array<{ key: DashboardNavigationPage; path: string; label: string; badge: string }> = [
   { key: 'today', path: '/today', label: '今日の営業', badge: 'today' },
+  { key: 'sales-performance', path: '/sales-performance', label: '営業成績', badge: '' },
   { key: 'replies', path: '/replies', label: '返信', badge: 'replies' },
   { key: 'leads', path: '/leads-view', label: '営業案件', badge: 'leads' },
   { key: 'mail-workspace', path: '/mail-workspace', label: '作成・レビュー', badge: 'mail' },

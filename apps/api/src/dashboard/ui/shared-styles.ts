@@ -1,4 +1,4 @@
-export type SharedStylePage = 'dashboard' | 'leads' | 'today' | 'replies';
+export type SharedStylePage = 'dashboard' | 'leads' | 'today' | 'sales-performance' | 'replies';
 
 export function renderSharedStyles(page: SharedStylePage): string {
   switch (page) {
@@ -1452,6 +1452,57 @@ export function renderSharedStyles(page: SharedStylePage): string {
     footer { max-width:1240px; margin:0 auto; padding:0 12px 14px; color:var(--muted); font-size:12px; }
     @media (max-width:1050px) { .today-stats { grid-template-columns:repeat(4,minmax(0,1fr)); } .today-row { grid-template-columns:140px minmax(0,1fr) 120px; } .today-row .date { display:none; } }
     @media (max-width:700px) { header { padding:0 14px; align-items:flex-start; padding-top:12px; padding-bottom:12px; } .top-nav { max-width:100%; overflow:auto; } .today-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } .today-row { grid-template-columns:minmax(0,1fr) auto; gap:6px; } .today-row .reason { grid-column:1 / -1; grid-row:1; } .today-row strong { grid-column:1; grid-row:2; } .today-row .badge { grid-column:2; grid-row:2; } }
+  </style>`;
+    case 'sales-performance':
+      return `<style>
+    :root { color-scheme:light; --bg:#f6f7f9; --panel:#fff; --line:#dfe4ea; --text:#172026; --muted:#66737f; --accent:#136f63; --accent-strong:#0f554c; --danger:#a83232; --warn:#9f5a00; --ok:#1d7b45; --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --radius-control:6px; --radius-panel:4px; --radius-nav:8px; --control-height:34px; --font-body:14px; --font-heading:18px; --shadow-panel:none; }
+    * { box-sizing:border-box; }
+    :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif; font-size:var(--font-body); }
+    header { min-height:58px; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:0 24px; border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; z-index:10; }
+    h1, h2, p { margin:0; }
+    h1 { font-size:var(--font-heading); }
+    h2 { font-size:15px; }
+    button, input, select { min-height:var(--control-height); border:1px solid var(--line); border-radius:var(--radius-control); background:#fff; color:inherit; font:inherit; }
+    button { padding:0 12px; cursor:pointer; }
+    button:hover { border-color:var(--accent); }
+    button.primary { border-color:var(--accent); background:var(--accent); color:#fff; }
+    button:disabled { cursor:not-allowed; opacity:.55; }
+    input, select { width:100%; padding:0 9px; }
+    .toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    .top-nav { display:inline-flex; gap:4px; padding:4px; border:1px solid var(--line); border-radius:var(--radius-nav); background:#f4f6f8; }
+    .top-nav button { border-color:transparent; background:transparent; }
+    .top-nav button.primary { background:var(--accent); color:#fff; }
+    .nav-badge { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; margin-left:4px; padding:0 5px; border-radius:9px; background:var(--warn); color:#fff; font-size:11px; line-height:1; font-variant-numeric:tabular-nums; }
+    .nav-badge[hidden] { visibility:hidden; }
+    main { display:grid; gap:10px; max-width:1240px; margin:0 auto; padding:12px 12px 24px; }
+    section { border:1px solid var(--line); border-radius:var(--radius-panel); background:var(--panel); overflow:hidden; }
+    .section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border-bottom:1px solid var(--line); }
+    .body { padding:12px; }
+    .filters { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)) auto; gap:10px; align-items:end; }
+    .filters label { display:grid; gap:4px; color:var(--muted); font-size:12px; }
+    .metric-grid { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); }
+    .metric { min-width:0; padding:8px 12px; border-left:1px solid var(--line); }
+    .metric:first-child { border-left:0; }
+    .metric-label { display:block; color:var(--muted); font-size:12px; line-height:1.4; }
+    .metric-value { display:block; margin-top:4px; font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+    .rate-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); }
+    .rate-grid .metric { padding-top:0; padding-bottom:0; }
+    .rate-note { margin:0 0 12px; color:var(--muted); font-size:12px; line-height:1.5; }
+    .status { min-height:18px; color:var(--muted); font-size:12px; }
+    .status.ok { color:var(--ok); }
+    .status.error { color:var(--danger); font-weight:600; }
+    .ui-state-loading, .ui-state-empty { color:var(--muted); }
+    .ui-state-error { color:var(--danger); font-weight:600; }
+    .period-meta { color:var(--muted); font-size:12px; }
+    .table-scroll { overflow:auto; }
+    table { width:100%; min-width:540px; border-collapse:collapse; }
+    th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { color:var(--muted); font-size:12px; font-weight:600; background:#fafbfc; }
+    td.number, th.number { text-align:right; font-variant-numeric:tabular-nums; }
+    footer { max-width:1240px; margin:0 auto; padding:0 12px 14px; color:var(--muted); font-size:12px; }
+    @media (max-width:1000px) { .filters { grid-template-columns:repeat(2, minmax(0, 1fr)); } .metric-grid { grid-template-columns:repeat(3, minmax(0, 1fr)); } .metric:nth-child(4) { border-left:0; } }
+    @media (max-width:700px) { header { align-items:flex-start; flex-direction:column; gap:8px; padding:12px 14px; } .toolbar { justify-content:flex-start; } .top-nav { max-width:100%; overflow-x:auto; } .filters, .metric-grid, .rate-grid { grid-template-columns:1fr; } .metric, .metric:first-child, .metric:nth-child(4) { border-left:0; border-top:1px solid var(--line); } .metric:first-child { border-top:0; } }
   </style>`;
     case 'replies':
       return `<style>

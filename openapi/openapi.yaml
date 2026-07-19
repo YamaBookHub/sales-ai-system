@@ -47,6 +47,16 @@ paths:
           content:
             text/html:
               schema: { type: string }
+  /sales-performance:
+    get:
+      summary: Sales performance dashboard HTML
+      security: []
+      responses:
+        '200':
+          description: Dashboard HTML
+          content:
+            text/html:
+              schema: { type: string }
   /replies:
     get:
       summary: Reply inbox dashboard HTML
@@ -76,6 +86,58 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
+  /api/reports/sales-performance:
+    get:
+      summary: Aggregate sales performance for a sent-lead cohort
+      parameters:
+        - name: from
+          in: query
+          description: Inclusive actual sent date in Asia/Tokyo (YYYY-MM-DD). Defaults to 29 days before `to`.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Inclusive actual sent date in Asia/Tokyo (YYYY-MM-DD). Defaults to today.
+          schema: { type: string, format: date }
+        - name: ownerId
+          in: query
+          description: Current opportunity owner
+          schema: { type: string, format: uuid }
+        - name: source
+          in: query
+          description: Acquisition source. `manual` means a lead without a crowdfunding project.
+          schema:
+            type: string
+            enum: [campfire, makuake, green_funding, other, manual]
+      responses:
+        '200':
+          description: Database-backed cohort metrics
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SalesPerformanceResponse' }
+        '400':
+          description: Invalid date or date range
+  /api/reports/sales-performance/owners:
+    get:
+      summary: List current and historical opportunity owners represented in performance data
+      responses:
+        '200':
+          description: Performance owner options, including inactive owners
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta, error]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SalesPerformanceOwner'
+                  meta:
+                    nullable: true
+                  error:
+                    nullable: true
+                    allOf:
+                      - $ref: '#/components/schemas/ErrorResponse'
   /api/companies:
     get:
       summary: List companies
@@ -1273,6 +1335,77 @@ components:
           nullable: true
           allOf:
             - $ref: '#/components/schemas/ErrorResponse'
+    SalesPerformanceResponse:
+      type: object
+      required: [data, meta, error]
+      properties:
+        data:
+          $ref: '#/components/schemas/SalesPerformanceReport'
+        meta:
+          nullable: true
+        error:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ErrorResponse'
+    SalesPerformanceOwner:
+      type: object
+      required: [id, name, email, isActive]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, nullable: true }
+        email: { type: string, format: email }
+        isActive: { type: boolean }
+    SalesPerformanceReport:
+      type: object
+      required: [period, filters, counts, rates, lossReasons]
+      properties:
+        period:
+          type: object
+          required: [from, to, timezone, asOf]
+          properties:
+            from: { type: string, format: date }
+            to: { type: string, format: date }
+            timezone: { type: string, enum: [Asia/Tokyo] }
+            asOf: { type: string, format: date-time }
+        filters:
+          type: object
+          required: [ownerId, source]
+          properties:
+            ownerId: { type: string, format: uuid, nullable: true }
+            source:
+              type: string
+              enum: [campfire, makuake, green_funding, other, manual]
+              nullable: true
+        counts:
+          type: object
+          required: [sentMessages, contactedLeads, repliedLeads, meetingLeads, wonLeads, lostLeads, lossReasonCounts]
+          properties:
+            sentMessages: { type: integer, minimum: 0 }
+            contactedLeads: { type: integer, minimum: 0 }
+            repliedLeads: { type: integer, minimum: 0 }
+            meetingLeads: { type: integer, minimum: 0 }
+            wonLeads: { type: integer, minimum: 0 }
+            lostLeads: { type: integer, minimum: 0 }
+            lossReasonCounts:
+              type: object
+              additionalProperties: { type: integer, minimum: 0 }
+        rates:
+          type: object
+          required: [replyRate, meetingRate, wonRate]
+          properties:
+            replyRate: { type: number, minimum: 0, maximum: 100 }
+            meetingRate: { type: number, minimum: 0, maximum: 100 }
+            wonRate: { type: number, minimum: 0, maximum: 100 }
+        lossReasons:
+          type: array
+          items:
+            type: object
+            required: [reason, label, count, share]
+            properties:
+              reason: { $ref: '#/components/schemas/OpportunityLossReason' }
+              label: { type: string }
+              count: { type: integer, minimum: 1 }
+              share: { type: number, minimum: 0, maximum: 100 }
     LeadListData:
       type: object
       required: [items, page, limit, total, summary]

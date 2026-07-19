@@ -1,6 +1,7 @@
 import { Controller, Get, Header } from '@nestjs/common';
 import { renderDashboardPage } from './ui/dashboard-page';
 import { renderLeadsPage } from './ui/leads-page';
+import { renderSalesPerformancePage } from './ui/sales-performance-page';
 import { renderTodayPage } from './ui/today-page';
 
 @Controller()
@@ -21,6 +22,12 @@ export class DashboardController {
   @Header('Content-Type', 'text/html; charset=utf-8')
   today() {
     return renderTodayPage();
+  }
+
+  @Get('sales-performance')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  salesPerformance() {
+    return renderSalesPerformancePage();
   }
 
   @Get()

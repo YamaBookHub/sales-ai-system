@@ -16,6 +16,7 @@ dashboard/
     dashboard-page.ts           # URL検索 / メール作成の既存HTML
     leads-page.ts               # 営業リストの既存HTML
     replies-page.ts             # 返信対応の一覧HTML
+    sales-performance-page.ts   # DB集計による営業成績HTML
 ```
 
 表示変更は `dashboard.controller.ts` ではなく、対象の `ui/*-page.ts` で行う。
@@ -27,6 +28,7 @@ dashboard/
 | `/` | `DashboardController.index()` | 候補探し、取り込み、営業対象一覧、案件詳細、AI分析、メール確認 |
 | `/leads-view` | `DashboardController.leadsView()` | 営業案件の一覧、詳細、分析、出力 |
 | `/mail-workspace` | `DashboardController.mailWorkspace()` | 作成・レビュー、履歴、本文編集、チェック、承認 |
+| `/sales-performance` | `DashboardController.salesPerformance()` | 期間・担当・取得元別の営業成績 |
 | `/replies` | `main.ts` の画面公開ルート | 返信一覧、分類、manager確認、追客停止 |
 
 `/replies` と `GET /api/replies` は同じGET名になるため、APIプレフィックスの除外には追加せず、画面だけをHTTPアダプタの公開ルートから `ui/replies-page.ts` へ接続する。これにより画面URLと既存API URLを同時に維持する。
@@ -43,6 +45,7 @@ URLは変更しない。既存APIのURL、リクエスト、レスポンスも�
 | `data-ui-page="leads"` | 営業リスト画面 |
 | `data-ui-page="mail-workspace"` | 作成・レビュー画面 |
 | `data-ui-page="replies"` | 返信対応画面 |
+| `data-ui-page="sales-performance"` | 営業成績画面 |
 | `data-ui="top-nav"` | 画面上部ナビゲーション |
 | `data-ui="candidate-search"` | 候補検索、URL直接取り込み |
 | `data-ui="lead-list-workspace"` | 営業リストの一覧と詳細 |

@@ -83,7 +83,8 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('data-ui="sales-performance-rates"');
     expect(html).toContain('data-ui="sales-performance-loss-reasons"');
     expect(html).toContain("'/api/reports/sales-performance?' + params.toString()");
-    expect(html).toContain("api('/api/task-assignees')");
+    expect(html).toContain("api('/api/reports/sales-performance/owners')");
+    expect(html).toContain("assignee.isActive === false ? '（無効）' : ''");
     expect(html).toContain('返信率・商談率・受注率はすべて接触リード数を分母として表示しています。');
     expect(html).toContain('function defaultFromDate()');
     expect(html).toContain("timeZone: 'Asia/Tokyo'");

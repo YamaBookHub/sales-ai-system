@@ -11,7 +11,10 @@ describe('top navigation', () => {
     expect(html).toContain('data-nav-badge="leads"');
     expect(html).toContain('data-nav-badge="mail"');
 
-    const paths = ['/today', '/replies', '/leads-view', '/mail-workspace', '/'];
+    expect(html).toContain("location.href='/sales-performance'");
+    expect(html).toContain('営業成績');
+
+    const paths = ['/today', '/sales-performance', '/replies', '/leads-view', '/mail-workspace', '/'];
     const positions = paths.map((path) => html.indexOf(`location.href='${path}'`));
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
   });

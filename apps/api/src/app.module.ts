@@ -9,6 +9,7 @@ import { MailModule } from './mail/mail.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
 import { TrackingModule } from './tracking/tracking.module';
+import { PerformanceModule } from './performance/performance.module';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { TrackingModule } from './tracking/tracking.module';
     LeadsModule,
     MailModule,
     AiModule,
-    TrackingModule
+    TrackingModule,
+    PerformanceModule
   ]
 })
 export class AppModule {}

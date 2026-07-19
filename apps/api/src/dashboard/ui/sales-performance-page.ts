@@ -181,9 +181,12 @@ ${renderNavigationBadgesScript()}
 
     async function loadAssignees() {
       try {
-        state.assignees = await api('/api/task-assignees');
+        state.assignees = await api('/api/reports/sales-performance/owners');
         const select = document.getElementById('salesPerformanceOwner');
-        select.innerHTML = '<option value="">すべての担当者</option>' + (Array.isArray(state.assignees) ? state.assignees : []).map((assignee) => '<option value="' + escapeHtml(assignee.id) + '">' + escapeHtml(assignee.name || assignee.email || '担当未設定') + '</option>').join('');
+        select.innerHTML = '<option value="">すべての担当者</option>' + (Array.isArray(state.assignees) ? state.assignees : []).map((assignee) => {
+          const label = (assignee.name || assignee.email || '担当未設定') + (assignee.isActive === false ? '（無効）' : '');
+          return '<option value="' + escapeHtml(assignee.id) + '">' + escapeHtml(label) + '</option>';
+        }).join('');
       } catch (_error) {
         setStatus('担当者候補を読み込めませんでした。全担当者で集計できます。', 'error');
       }

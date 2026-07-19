@@ -5,7 +5,7 @@
 ### 共通
 
 - NestJS REST API。global prefix は `api`。
-- ただし `GET /`、`GET /leads-view`、`GET /mail-workspace`、`GET /today`、`GET /replies`、`GET /health`、`GET /t/open/{emailId}.png`、`GET /t/click/{token}` は `/api` 外。
+- ただし `GET /`、`GET /leads-view`、`GET /mail-workspace`、`GET /today`、`GET /sales-performance`、`GET /replies`、`GET /health`、`GET /t/open/{emailId}.png`、`GET /t/click/{token}` は `/api` 外。
 - JSONレスポンスは原則 `{ data, meta, error }`。成功時は `error: null`、`meta` は原則 `null`。
 - HTML画面と開封計測画像、クリックリダイレクトはこのwrapperの対象外。
 - page/limit はcontrollerが数値化する。既定値は `page=1`、`limit=20`。Reply Inboxのlimit上限は100。
@@ -18,6 +18,7 @@
 | GET | `/leads-view` | - | - | 案件一覧画面HTML |
 | GET | `/mail-workspace` | - | - | メール画面HTML |
 | GET | `/today` | - | - | 今日の対応画面HTML |
+| GET | `/sales-performance` | - | - | 営業成績画面HTML |
 | GET | `/replies` | - | - | 返信一覧画面HTML |
 | GET | `/health` | - | - | `{ data: { status: "ok" }, meta, error }` |
 
@@ -81,6 +82,19 @@ Opportunityは、SalesLeadの候補・メール作業状態とは分離した商
 `ReopenOpportunityDto` は終端状態（`lost` / `excluded`）を、明示した `toStage`（`uncontacted`〜`proposal`）へ戻す操作である。`expectedVersion`、UUIDの `operationKey`、`reason`、`toStage` が必須。`won` の通常再開は許可しない。
 
 状態は `uncontacted` → `contacted` → `replied` → `meeting` → `proposal` → `won` または `lost` とし、営業対象外は `excluded` とする。通常操作による後方遷移・終端状態からの変更は拒否する。各遷移は`OpportunityStageHistory`へ追記され、`source`、`sourceId`、`operationKey`、変更後version、snapshotを保存する。送信済みメール・返信の記録からの自動連動は前方遷移だけを行い、提案・受注・失注を巻き戻さない。
+
+### 営業成績API
+
+| Method | Path | Query | Body |
+|---|---|---|---|
+| GET | `/api/reports/sales-performance` | `from`, `to`, `ownerId`, `source` | - |
+| GET | `/api/reports/sales-performance/owners` | - | - |
+
+`from`と`to`は`Asia/Tokyo`の営業日付を`YYYY-MM-DD`で指定し、両端を含む。省略時は当日を含む直近30暦日を使う。`source`は`campfire`、`makuake`、`green_funding`、`other`、`manual`を受け付け、`manual`は案件に紐づかない手動登録Leadを意味する。`ownerId`は現在のOpportunity担当者で絞る。
+
+集計は期間内に実送信日時`OutreachEmail.sentAt`を持ち、送信済みイベントで裏付けられた非削除Leadを母集団とする。イベント登録日は集計日付に使わない。`sentMessages`は送信メール・サイトDM・問い合わせフォーム文面の件数、`contactedLeads`は重複を除いた営業対象数である。返信率、商談率、受注率はすべて`contactedLeads`を分母とし、実送信後に返信・商談・受注へ到達したかを集計する。返信は`EmailReply`、商談・受注到達は`OpportunityStageHistory`、現在の失注理由は`stage=lost`の`Opportunity`を正本とする。0件時の率は`0`で、画面表示中のページ件数は使用しない。
+
+担当者候補APIは現在Opportunityを持つ利用者を返す。過去成績を確認できるよう、無効化済み利用者も`isActive: false`として含める。
 
 ### 次回対応Task API
 

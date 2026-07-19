@@ -48,7 +48,7 @@ Baseline:
 | 23 | LL-002 | P1 | complete | Luna T2 | LL-001 | 2026-07-18 / 現在ページ・現在条件全件を分離、100件単位・最大4並列、server sort維持、CSV BOM・TSV escape、201件到達、90 suites 358 tests・verify成功 | 全件CSV/TSV |
 | 24 | LM-004 | P1 | complete | Sol T4 -> Terra | LM-003, LL-003 | 2026-07-19 / 追記専用version・案件fingerprint・確認API・メール固定、91 suites 365 tests・実DB7 suites 26 tests・build成功 | 構造化分析値 |
 | 25 | LM-005 | P1 | complete | Terra T3 + Sol audit | LM-003 | 2026-07-19 / JST月次予算・DB予約排他・429停止・usage API、93 suites 380 tests・実DB8 suites 27 tests・verify成功 | AI予算guard |
-| 26 | SM-001 | P1 | pending | Terra T3 | SO-005, LL-001 | - | 営業成績 |
+| 26 | SM-001 | P1 | complete | Terra T3 + Sol audit | SO-005, LL-001 | 2026-07-19 / JST期間・担当者・取得元filter、送信4指標・失注理由、97 suites 393 tests・実DB9 suites 32 tests・verify成功 | 営業成績 |
 | 27 | LA-001 | P1 | deferred | Sol T4 | LL-004 | - | 本番送信を再優先化するまで後回し |
 | 28 | LA-002 | 公開前 | pending | Sol T4 | LR-002 | - | 認証設計 |
 | 29 | LA-003 | 公開前 | pending | Terra T3 + Sol audit | LA-002 | - | 認証実装 |
@@ -114,3 +114,4 @@ Baseline:
 | 2026-07-18 | LM-004 | Sol design agents + main | start | 構造化3値の正本、追記専用version、案件fingerprint、確認、メール使用版固定の設計を開始 |
 | 2026-07-19 | LM-004 | Sol T4 + read-only audit agents + main | complete | 魅力・対象者・動画案を追記専用revisionへ保存し、案件fingerprint・編集競合・再取り込み排他・確認済み最新版・メール使用版固定を実装。OpenAPI・Prisma、91 suites 365 tests、実DB7 suites 26 tests、build成功。ブラウザとport 3000はユーザー指示により未実行 |
 | 2026-07-19 | LM-005 | Terra T3 + Sol read-only audit + main | complete | OpenAI実行前の概算費用をDB台帳へ予約し、月額上限と同時実行をguard。JST当月summary API、日本語429、既存費用backfill、Gemini・ローカル継続を実装。OpenAPI 81 operations、93 suites 380 tests、実DB8 suites 27 tests、build成功。実OpenAI・ブラウザ・port 3000は未使用 |
+| 2026-07-19 | SM-001 | Terra T3 + Sol read-only audit + main | complete | 実送信日時を正本に、送信数・返信率・商談率・受注率・失注理由をDB集計。JST期間、現・過去担当者、取得元、送信後の時系列、重複除外、終了境界、ゼロ件を固定し、連続条件変更の旧応答も遮断。OpenAPI 84 operations、97 suites 393 tests、実DB9 suites 32 tests、Prisma・build成功。ブラウザとport 3000はユーザー指示により未実行 |

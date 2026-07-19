@@ -12,7 +12,7 @@ async function bootstrap() {
     response.type('text/html; charset=utf-8').send(renderRepliesPage());
   });
   app.setGlobalPrefix('api', {
-    exclude: ['/', '/leads-view', '/mail-workspace', '/today', '/health', '/t/open/:emailId.png', '/t/click/:token']
+    exclude: ['/', '/leads-view', '/mail-workspace', '/today', '/sales-performance', '/health', '/t/open/:emailId.png', '/t/click/:token']
   });
   app.useGlobalPipes(
     new ValidationPipe({
