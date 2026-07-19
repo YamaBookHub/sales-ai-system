@@ -43,6 +43,8 @@
 
 ## 3. 認証・権限の実装状況
 
+認証方式、画面/APIの保護範囲、Googleログイン、local開発、session、CSRF、`X-Operator-Email` 廃止順は `37_AUTHENTICATION_CONTRACT.md` で設計済みである。現時点では設計のみで、実装済みとは扱わない。
+
 ### DBに定義済み
 
 `UserRole` enumは `admin`、`manager`、`operator`、`viewer` を持ち、`User.role`、`User.isActive`、`AuditLog.userId` を保存できる。
@@ -55,6 +57,8 @@
 - actorを認証済みuserから取得する監査境界
 
 したがって、role enumの存在だけで「RBAC実装済み」と書かない。現行APIには内部操作を識別するためのheaderを受け取るrouteがあるが、これは認証の代替ではない。
+
+現行 `POST /api/unsubscribe` はemailまたはcontact IDだけで状態を変更できるため、認証導入時は保護対象にする。受信者向け公開配信停止は、対象と期限を署名したtokenを必要とする別routeを設計するまで公開しない。
 
 ## 4. 監査と個人情報
 

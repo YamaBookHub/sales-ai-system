@@ -50,15 +50,16 @@ Baseline:
 | 25 | LM-005 | P1 | complete | Terra T3 + Sol audit | LM-003 | 2026-07-19 / JST月次予算・DB予約排他・429停止・usage API、93 suites 380 tests・実DB8 suites 27 tests・verify成功 | AI予算guard |
 | 26 | SM-001 | P1 | complete | Terra T3 + Sol audit | SO-005, LL-001 | 2026-07-19 / JST期間・担当者・取得元filter、送信4指標・失注理由、97 suites 393 tests・実DB9 suites 32 tests・verify成功 | 営業成績 |
 | 27 | LA-001 | P1 | deferred | Sol T4 | LL-004 | - | 本番送信を再優先化するまで後回し |
-| 28 | LA-002 | 公開前 | pending | Sol T4 | LR-002 | - | 認証設計 |
+| 28 | LA-002 | 公開前 | complete | Sol T4 | LR-002 | 2026-07-19 / session・Google OAuth・local/test・保護範囲・CSRF・header廃止・rollback契約 | 認証設計 |
 | 29 | LA-003 | 公開前 | pending | Terra T3 + Sol audit | LA-002 | - | 認証実装 |
-| 30 | LA-004 | 公開前 | pending | Sol T4 | LA-003 | - | RBAC・監査・データ分離 |
-| 31 | LA-005 | 公開前 | pending | Sol T4 -> Terra | LA-003, LS-006 | - | job所有者・永続化 |
-| 32 | LO-001 | 公開前 | pending | Terra T3 | LA-003 | - | 構造化ログ |
-| 33 | LO-002 | 公開前 | pending | Terra T3 | LR-003, LA-004 | - | CI・本番artifact |
-| 34 | LA-006 | 公開前 | pending | Sol T4 -> Terra | LA-003, LO-002 | - | バックアップ・復元確認 |
-| 35 | LO-003 | P1 | pending | Terra T3 | LM-005, LO-001 | - | 監視・費用表示 |
-| 36 | LP-001 | 販売後 | deferred | Sol T4 | LA-004, SM-001 | - | 課金・契約 |
+| 30 | LA-004 | 公開前 | pending | Sol T4 | LA-003 | - | 単一組織内のRBAC・監査 |
+| 31 | LA-007 | 公開前 | pending | Sol T4 -> Terra | LA-004 | - | 組織ごとのデータ分離 |
+| 32 | LA-005 | 公開前 | pending | Sol T4 -> Terra | LA-003, LS-006 | - | job所有者・永続化 |
+| 33 | LO-001 | 公開前 | pending | Terra T3 | LA-003 | - | 構造化ログ |
+| 34 | LO-002 | 公開前 | pending | Terra T3 | LR-003, LA-004, LA-007 | - | CI・本番artifact |
+| 35 | LA-006 | 公開前 | pending | Sol T4 -> Terra | LA-003, LO-002 | - | バックアップ・復元確認 |
+| 36 | LO-003 | P1 | pending | Terra T3 | LM-005, LO-001 | - | 監視・費用表示 |
+| 37 | LP-001 | 販売後 | deferred | Sol T4 | LA-007, SM-001 | - | 課金・契約 |
 
 ## Deferred backlog
 
@@ -115,3 +116,4 @@ Baseline:
 | 2026-07-19 | LM-004 | Sol T4 + read-only audit agents + main | complete | 魅力・対象者・動画案を追記専用revisionへ保存し、案件fingerprint・編集競合・再取り込み排他・確認済み最新版・メール使用版固定を実装。OpenAPI・Prisma、91 suites 365 tests、実DB7 suites 26 tests、build成功。ブラウザとport 3000はユーザー指示により未実行 |
 | 2026-07-19 | LM-005 | Terra T3 + Sol read-only audit + main | complete | OpenAI実行前の概算費用をDB台帳へ予約し、月額上限と同時実行をguard。JST当月summary API、日本語429、既存費用backfill、Gemini・ローカル継続を実装。OpenAPI 81 operations、93 suites 380 tests、実DB8 suites 27 tests、build成功。実OpenAI・ブラウザ・port 3000は未使用 |
 | 2026-07-19 | SM-001 | Terra T3 + Sol read-only audit + main | complete | 実送信日時を正本に、送信数・返信率・商談率・受注率・失注理由をDB集計。JST期間、現・過去担当者、取得元、送信後の時系列、重複除外、終了境界、ゼロ件を固定し、連続条件変更の旧応答も遮断。OpenAPI 84 operations、97 suites 393 tests、実DB9 suites 32 tests、Prisma・build成功。ブラウザとport 3000はユーザー指示により未実行 |
+| 2026-07-19 | LA-002 | Sol T4 design agents + main | complete | opaque session、Google OAuth/OIDC、local/test login、current user、Cookie/CSRF、画面/API保護範囲、bootstrap admin、`X-Operator-Email` 廃止順、単一組織制限、LA-003実装順・必須test・rollbackを契約化。コード・DB・OpenAPIは未変更 |

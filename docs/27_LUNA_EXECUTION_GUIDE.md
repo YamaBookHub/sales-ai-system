@@ -495,6 +495,16 @@ Recommended next action:
 - 必須監査: import、分析、生成、編集、レビュー、棄却、承認、queue、send、unsubscribe、user/role変更。
 - 合格: operatorはapprove/queue不可、managerは可、viewerは更新不可。actorは認証userから取得。
 
+### LA-007 組織ごとのデータ分離
+
+- Priority: 公開前
+- Model: Sol design -> Terra implementation / T4
+- Depends on: LA-004
+- 目的: 複数顧客へ提供する前に、Organization、Membership、業務データのorganization scopeを追加し、組織越境をrepositoryとDBで拒否する。
+- 必須: 既存データを既定組織へ移行し、User、Company、Project、Lead、Contact、Mail、Task、Opportunity、分析、監査、検索job、CSV/TSVを同じ組織境界へ揃える。
+- 合格: 全read/write API、一覧、集計、export、jobで他組織データを取得・更新できず、unique制約と並列処理も組織単位で機能することを実DBintegration testで確認する。
+- 注意: LA-007完了までは単一組織専用とし、複数顧客向けproduction公開をしない。
+
 ### LA-005 検索ジョブ所有者と永続化
 
 - Priority: P1
@@ -524,7 +534,7 @@ Recommended next action:
 
 - Priority: P2
 - Model: Terra / T3 / high
-- Depends on: LR-003, LA-004
+- Depends on: LR-003, LA-004, LA-007
 - 目的: verify、migration確認、Docker buildをCIで固定する。
 - 必須: production multi-stage Dockerfile、secretなしtest、migrate deploy手順。
 - 禁止: 本番deployの自動実行。
@@ -541,7 +551,7 @@ Recommended next action:
 
 - Priority: 販売後
 - Model: Sol / T4 / high
-- Depends on: LA-004, SM-001
+- Depends on: LA-007, SM-001
 - 目的: プラン、利用上限、請求、解約、契約終了時のデータ出力・削除を設計・実装する。
 - 開始条件: P0、P1、公開前タスクが完了し、販売プランと決済事業者が決定している。
 - 合格: 契約状態と利用制限、請求イベント、解約、保持期限、削除監査を実DBintegrationで検証する。

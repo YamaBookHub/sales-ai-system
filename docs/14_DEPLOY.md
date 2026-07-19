@@ -6,6 +6,7 @@
 - DBはPostgreSQL、ORMはPrismaである。
 - 現行package scriptsにはAPIのstart、test、Prisma validate/generate/migrate/seedがある。
 - worker、scheduler、Redis、DLQ、production用Dockerfile、`npm run lint`、`npm run start:worker`、`npm run start:scheduler` は未実装である。デプロイ手順に実装済みのscriptとして記載しない。
+- 認証は `37_AUTHENTICATION_CONTRACT.md` で設計済みだが未実装である。LA-003の認証とLA-004のRBAC・監査が完了するまではstaging/productionへ公開しない。組織分離が完了するまでは複数顧客向けに公開しない。
 
 ## 2. 環境変数
 
@@ -114,5 +115,7 @@ npm run test:integration
 - production用Dockerfile、CI verify script、監視、alert webhook
 - 認証、JWT/session、GoogleユーザーOAuth、RBAC
 - Gmail providerの外部API retryと真の冪等送信
+
+認証用の `APP_ENV`、`AUTH_MODE`、session/CSRF secret、Google利用者ログインcredential、bootstrap admin設定はLA-003で実装と同時に `.env.example` と本表へ追加する。Gmail送信用OAuth credentialとは共用しない。
 
 これらは将来要件であり、現行APIのデプロイ手順に存在するものとして扱わない。
