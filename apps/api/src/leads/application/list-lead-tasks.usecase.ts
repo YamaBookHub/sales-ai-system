@@ -5,10 +5,10 @@ import { TASK_REPOSITORY, TaskRepository, TaskScope } from '../domain/task.repos
 export class ListLeadTasksUseCase {
   constructor(@Inject(TASK_REPOSITORY) private readonly tasks: TaskRepository) {}
 
-  async execute(leadId: string, scope: TaskScope = 'active') {
-    if (!(await this.tasks.findLead(leadId))) {
+  async execute(organizationId: string, leadId: string, scope: TaskScope = 'active') {
+    if (!(await this.tasks.findLead(organizationId, leadId))) {
       throw new NotFoundException('Lead not found');
     }
-    return this.tasks.listByLead(leadId, scope);
+    return this.tasks.listByLead(organizationId, leadId, scope);
   }
 }

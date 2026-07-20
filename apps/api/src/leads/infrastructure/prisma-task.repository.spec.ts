@@ -25,10 +25,10 @@ describe('PrismaTaskRepository', () => {
     } as unknown as PrismaService;
     const repository = new PrismaTaskRepository(prisma);
 
-    const result = await repository.listByLead('lead_1', 'active');
+    const result = await repository.listByLead('org_1', 'lead_1', 'active');
 
     expect((prisma.task.findMany as jest.Mock).mock.calls[0][0]).toEqual(expect.objectContaining({
-      where: { leadId: 'lead_1', status: { in: ['todo', 'doing'] } }
+      where: { organizationId: 'org_1', leadId: 'lead_1', status: { in: ['todo', 'doing'] } }
     }));
     expect(result[0]).toMatchObject({ id: 'task_1', leadId: 'lead_1', assignee: { id: 'user_1', name: '担当者' } });
   });
@@ -39,9 +39,9 @@ describe('PrismaTaskRepository', () => {
     } as unknown as PrismaService;
     const repository = new PrismaTaskRepository(prisma);
 
-    await repository.listByLead('lead_1', 'all');
+    await repository.listByLead('org_1', 'lead_1', 'all');
 
-    expect((prisma.task.findMany as jest.Mock).mock.calls[0][0].where).toEqual({ leadId: 'lead_1' });
+    expect((prisma.task.findMany as jest.Mock).mock.calls[0][0].where).toEqual({ organizationId: 'org_1', leadId: 'lead_1' });
   });
 
   it('creates a task and its safe audit entry in one transaction', async () => {
@@ -52,9 +52,10 @@ describe('PrismaTaskRepository', () => {
     const prisma = { $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)) };
     const repository = new PrismaTaskRepository(prisma as any);
 
-    await repository.create({ leadId: 'lead_1', title: 'free text title', description: 'free text body' }, {
+    await repository.create({ organizationId: 'org_1', leadId: 'lead_1', title: 'free text title', description: 'free text body' }, {
       userId: 'user-1',
-      sessionId: 'session-1'
+      sessionId: 'session-1',
+      organizationId: 'org_1'
     });
 
     expect(tx.auditLog.create).toHaveBeenCalledWith({

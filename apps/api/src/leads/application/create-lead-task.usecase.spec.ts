@@ -3,6 +3,7 @@ import { TaskRepository } from '../domain/task.repository';
 import { CreateLeadTaskUseCase } from './create-lead-task.usecase';
 
 describe('CreateLeadTaskUseCase', () => {
+  const actor = { userId: 'user_1', sessionId: 'session_1', organizationId: 'org_1' };
   function createRepository() {
     return {
       findLead: jest.fn(),
@@ -22,15 +23,16 @@ describe('CreateLeadTaskUseCase', () => {
       description: '  返信内容を確認  ',
       dueAt: '2026-07-13T00:00:00.000+09:00',
       assigneeId: 'user_1'
-    });
+    }, actor);
 
     expect(repository.create).toHaveBeenCalledWith({
+      organizationId: 'org_1',
       leadId: 'lead_1',
       title: '資料を送る',
       description: '返信内容を確認',
       dueAt: new Date('2026-07-13T00:00:00.000+09:00'),
       assigneeId: 'user_1'
-    });
+    }, actor);
   });
 
   it('rejects task creation for a terminal lead', async () => {
@@ -38,7 +40,7 @@ describe('CreateLeadTaskUseCase', () => {
     repository.findLead = jest.fn().mockResolvedValue({ id: 'lead_1', status: 'rejected' });
     const useCase = new CreateLeadTaskUseCase(repository);
 
-    await expect(useCase.execute('lead_1', { title: '再連絡' })).rejects.toBeInstanceOf(ConflictException);
+    await expect(useCase.execute('lead_1', { title: '再連絡' }, actor)).rejects.toBeInstanceOf(ConflictException);
     expect(repository.create).not.toHaveBeenCalled();
   });
 });

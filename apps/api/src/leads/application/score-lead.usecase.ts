@@ -8,8 +8,8 @@ import { AuditActor } from '../../audit/audit-actor';
 export class ScoreLeadUseCase {
   constructor(private readonly leads: PrismaLeadRepository) {}
 
-  async execute(id: string, actor?: AuditActor) {
-    const lead = await this.leads.getForScoring(id);
+  async execute(organizationId: string, id: string, actor: AuditActor) {
+    const lead = await this.leads.getForScoring(organizationId, id);
     const leadScore = calculateLeadScore({
       projectAmount: lead.project?.amount,
       supporterCount: lead.project?.supporterCount,
@@ -18,8 +18,6 @@ export class ScoreLeadUseCase {
     });
 
     const priority = priorityForScore(leadScore.totalScore);
-    return actor
-      ? this.leads.recordScore(id, leadScore, priority, actor)
-      : this.leads.recordScore(id, leadScore, priority);
+    return this.leads.recordScore(organizationId, id, leadScore, priority, actor);
   }
 }

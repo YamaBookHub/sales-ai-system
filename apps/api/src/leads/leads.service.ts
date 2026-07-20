@@ -25,6 +25,7 @@ export class LeadsService {
   ) {}
 
   async list(
+    organizationId: string,
     page = 1,
     limit = 20,
     status?: LeadStatus,
@@ -35,7 +36,7 @@ export class LeadsService {
     const normalizedLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 20)));
     const input = { ...filters, status: status ?? filters.status, priority: priority ?? filters.priority };
     const now = new Date();
-    const query = buildLeadListQuery(input, now, normalizedPage, normalizedLimit);
+    const query = buildLeadListQuery(organizationId, input, now, normalizedPage, normalizedLimit);
 
     // The list IDs, aggregate badges, and hydrated newest mail must come from one
     // PostgreSQL snapshot. This avoids both historical-mail false matches and races
@@ -45,8 +46,8 @@ export class LeadsService {
       const pageRows = await tx.$queryRaw<LeadListIdRow[]>(query.pageIds);
       const pageIds = pageRows.map((row) => row.id);
       const items = pageIds.length
-        ? await tx.salesLead.findMany({
-            where: { id: { in: pageIds } },
+          ? await tx.salesLead.findMany({
+            where: { organizationId, id: { in: pageIds } },
             include: leadListInclude
           })
         : [];
@@ -71,12 +72,13 @@ export class LeadsService {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   }
 
-  async listToday(page = 1, limit = 50, now = new Date()) {
+  async listToday(organizationId: string, page = 1, limit = 50, now = new Date()) {
     const normalizedPage = Math.max(1, Math.floor(Number(page) || 1));
     const normalizedLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 50)));
     const endOfToday = tokyoEndOfDay(now);
     const candidates = await this.prisma.salesLead.findMany({
       where: {
+        organizationId,
         OR: [
           { nextActionAt: { lte: endOfToday } },
           { nextFollowUpAt: { lte: endOfToday } },
@@ -95,7 +97,7 @@ export class LeadsService {
           where: { status: { in: ACTIVE_TASK_STATUSES } },
           orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
           take: 1,
-          include: { assignee: { select: { id: true, name: true, email: true } } }
+          include: taskAssigneeInclude
         },
         _count: { select: { tasks: { where: { status: { in: ACTIVE_TASK_STATUSES } } } } },
         mails: {
@@ -135,7 +137,7 @@ export class LeadsService {
     };
   }
 
-  create(dto: CreateLeadDto, actor?: AuditActor) {
+  create(dto: CreateLeadDto, actor: AuditActor) {
     const leadData = compactData({
       source: dto.source ?? 'manual',
       ownerMemo: dto.ownerMemo,
@@ -156,33 +158,39 @@ export class LeadsService {
     });
 
     return this.prisma.$transaction(async (tx) => {
+      const [company, project] = await Promise.all([
+        tx.company.findFirst({ where: { id: dto.companyId, organizationId: actor.organizationId, deletedAt: null }, select: { id: true } }),
+        dto.projectId
+          ? tx.crowdfundingProject.findFirst({ where: { id: dto.projectId, organizationId: actor.organizationId, deletedAt: null }, select: { id: true } })
+          : Promise.resolve(null)
+      ]);
+      if (!company || (dto.projectId && !project)) throw new NotFoundException('Lead relation not found');
       const lead = await tx.salesLead.create({
         data: {
+          organizationId: actor.organizationId,
           companyId: dto.companyId,
           projectId: dto.projectId,
           ...leadData,
           ...applyLeadPolicy(leadData)
         }
       });
-      await ensureOpportunityForLead(tx, lead.id);
-      if (actor) {
-        await tx.auditLog.create({
-          data: {
-            ...actor,
-            action: 'lead.created',
-            entityType: 'SalesLead',
-            entityId: lead.id,
-            after: leadAuditSnapshot(lead)
-          }
-        });
-      }
+      await ensureOpportunityForLead(tx, lead.id, actor.organizationId);
+      await tx.auditLog.create({
+        data: {
+          ...actor,
+          action: 'lead.created',
+          entityType: 'SalesLead',
+          entityId: lead.id,
+          after: leadAuditSnapshot(lead)
+        }
+      });
       return lead;
     });
   }
 
-  async get(id: string) {
-    const lead = await this.prisma.salesLead.findUnique({
-      where: { id },
+  async get(organizationId: string, id: string) {
+    const lead = await this.prisma.salesLead.findFirst({
+      where: { id, organizationId, deletedAt: null },
       include: {
         company: {
           include: {
@@ -207,7 +215,7 @@ export class LeadsService {
           where: { status: { in: ACTIVE_TASK_STATUSES } },
           orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
           take: 1,
-          include: { assignee: { select: { id: true, name: true, email: true } } }
+          include: taskAssigneeInclude
         },
         mails: {
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -225,7 +233,7 @@ export class LeadsService {
     return withTaskSummary(lead);
   }
 
-  async update(id: string, dto: UpdateLeadDto, actor?: AuditActor) {
+  async update(id: string, dto: UpdateLeadDto, actor: AuditActor) {
     const {
       companyName,
       projectTitle,
@@ -312,12 +320,12 @@ export class LeadsService {
     const hasProjectPatch = projectSource !== undefined || Object.keys(projectData).length > 0;
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `lead-detail:${id}`);
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `lead-detail:${actor.organizationId}:${id}`);
       if (hasProjectPatch) {
-        await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `lead-analysis:${id}`);
+        await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `lead-analysis:${actor.organizationId}:${id}`);
       }
-      const lead = await tx.salesLead.findUnique({
-        where: { id },
+      const lead = await tx.salesLead.findFirst({
+        where: { id, organizationId: actor.organizationId, deletedAt: null },
         include: { company: true, project: { include: { platform: true } } }
       });
       if (!lead) {
@@ -335,16 +343,19 @@ export class LeadsService {
 
       const effectiveCompanyName = String(companyData.name ?? lead.company.name);
       const currentLockKeys = lead.project
-        ? projectImportLockKeys(lead.project.url, lead.company.name)
+        ? projectImportLockKeys(actor.organizationId, lead.project.url, lead.company.name)
         : [`project-import:company:${normalizeImportedCompanyName(lead.company.name)}`];
       const nextLockKeys = lead.project
-        ? projectImportLockKeys(String(projectData.url ?? lead.project.url), effectiveCompanyName)
+        ? projectImportLockKeys(actor.organizationId, String(projectData.url ?? lead.project.url), effectiveCompanyName)
         : [`project-import:company:${normalizeImportedCompanyName(effectiveCompanyName)}`];
       for (const lockKey of Array.from(new Set([...currentLockKeys, ...nextLockKeys])).sort()) {
         await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', lockKey);
       }
       if (Object.keys(companyData).length) {
-        await tx.company.update({ where: { id: lead.companyId }, data: companyData });
+        await tx.company.update({
+          where: { organizationId_id: { organizationId: actor.organizationId, id: lead.companyId } },
+          data: companyData
+        });
       }
       if (lead.project && hasProjectPatch) {
         const shouldRefreshPlatform = projectSource !== undefined || projectData.url !== undefined;
@@ -365,12 +376,12 @@ export class LeadsService {
             })
           : null;
         await tx.crowdfundingProject.update({
-          where: { id: lead.project.id },
+          where: { organizationId_id: { organizationId: actor.organizationId, id: lead.project.id } },
           data: { ...projectData, ...(platform ? { platformId: platform.id } : {}) }
         });
       }
       const updated = await tx.salesLead.update({
-        where: { id },
+        where: { organizationId_id: { organizationId: actor.organizationId, id } },
         data: { ...leadData, ...leadPolicy },
         include: {
           company: true,
@@ -378,32 +389,30 @@ export class LeadsService {
           scores: { orderBy: { createdAt: 'desc' }, take: 1 }
         }
       });
-      if (actor) {
-        await tx.auditLog.create({
-          data: {
-            ...actor,
-            action: 'lead.updated',
-            entityType: 'SalesLead',
-            entityId: id,
-            before: leadAuditSnapshot(lead),
-            after: {
-              ...leadAuditSnapshot(updated),
-              changedFields: Array.from(new Set([
-                ...Object.keys(companyData),
-                ...Object.keys(projectData),
-                ...Object.keys(leadData),
-                ...Object.keys(leadPolicy)
-              ])).sort()
-            }
+      await tx.auditLog.create({
+        data: {
+          ...actor,
+          action: 'lead.updated',
+          entityType: 'SalesLead',
+          entityId: id,
+          before: leadAuditSnapshot(lead),
+          after: {
+            ...leadAuditSnapshot(updated),
+            changedFields: Array.from(new Set([
+              ...Object.keys(companyData),
+              ...Object.keys(projectData),
+              ...Object.keys(leadData),
+              ...Object.keys(leadPolicy)
+            ])).sort()
           }
-        });
-      }
+        }
+      });
       return updated;
     });
   }
 
-  async score(id: string, actor?: AuditActor) {
-    return this.scoreLeadUseCase.execute(id, actor);
+  async score(id: string, actor: AuditActor) {
+    return this.scoreLeadUseCase.execute(actor.organizationId, id, actor);
   }
 }
 
@@ -458,6 +467,10 @@ type LeadListIdRow = { id: string };
 
 type LeadListQuery = { stats: Prisma.Sql; pageIds: Prisma.Sql };
 
+const taskAssigneeInclude = {
+  assignee: { select: { user: { select: { id: true, name: true, email: true } } } }
+} as const;
+
 const leadListInclude = {
   company: {
     include: {
@@ -482,7 +495,7 @@ const leadListInclude = {
     where: { status: { in: ACTIVE_TASK_STATUSES } },
     orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
     take: 1,
-    include: { assignee: { select: { id: true, name: true, email: true } } }
+    include: taskAssigneeInclude
   },
   mails: {
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -493,12 +506,13 @@ const leadListInclude = {
 } satisfies Prisma.SalesLeadInclude;
 
 function buildLeadListQuery(
+  organizationId: string,
   input: LeadListFilters,
   now: Date,
   page: number,
   limit: number
 ): LeadListQuery {
-  const ctes = leadListCtes(input, now);
+  const ctes = leadListCtes(organizationId, input, now);
   const orderBy = leadListOrderBy(input.sort, input.sortDirection);
   const offset = (page - 1) * limit;
 
@@ -523,8 +537,8 @@ function buildLeadListQuery(
   };
 }
 
-function leadListCtes(input: LeadListFilters, now: Date): Prisma.Sql {
-  const baseConditions = leadListBaseConditions(input, now);
+function leadListCtes(organizationId: string, input: LeadListFilters, now: Date): Prisma.Sql {
+  const baseConditions = leadListBaseConditions(organizationId, input, now);
   const resultConditions = leadListResultConditions(input);
   const baseWhere = baseConditions.length ? Prisma.join(baseConditions, ' AND ') : Prisma.sql`TRUE`;
   const resultWhere = resultConditions.length ? Prisma.join(resultConditions, ' AND ') : Prisma.sql`TRUE`;
@@ -533,7 +547,8 @@ function leadListCtes(input: LeadListFilters, now: Date): Prisma.Sql {
     latest_mails AS (
       SELECT DISTINCT ON (mail."leadId") mail."leadId", mail."status"
       FROM "OutreachEmail" AS mail
-      WHERE mail."leadId" IS NOT NULL
+      WHERE mail."organizationId" = ${organizationId}::uuid
+        AND mail."leadId" IS NOT NULL
       ORDER BY mail."leadId", mail."createdAt" DESC, mail."id" DESC
     ),
     summary_leads AS (
@@ -555,15 +570,16 @@ function leadListCtes(input: LeadListFilters, now: Date): Prisma.Sql {
           OR EXISTS (
             SELECT 1
             FROM "ContactPerson" AS contact
-            WHERE contact."companyId" = lead."companyId"
+            WHERE contact."organizationId" = lead."organizationId"
+              AND contact."companyId" = lead."companyId"
               AND contact."deletedAt" IS NULL
               AND contact."isUnsubscribed" = FALSE
               AND (contact."email" IS NOT NULL OR contact."inquiryUrl" IS NOT NULL)
           )
         ) AS "hasContact"
       FROM "SalesLead" AS lead
-      INNER JOIN "Company" AS company ON company."id" = lead."companyId"
-      LEFT JOIN "CrowdfundingProject" AS project ON project."id" = lead."projectId"
+      INNER JOIN "Company" AS company ON company."organizationId" = lead."organizationId" AND company."id" = lead."companyId"
+      LEFT JOIN "CrowdfundingProject" AS project ON project."organizationId" = lead."organizationId" AND project."id" = lead."projectId"
       LEFT JOIN "CrowdfundingPlatform" AS platform ON platform."id" = project."platformId"
       LEFT JOIN latest_mails ON latest_mails."leadId" = lead."id"
       WHERE ${baseWhere}
@@ -576,8 +592,8 @@ function leadListCtes(input: LeadListFilters, now: Date): Prisma.Sql {
   `;
 }
 
-function leadListBaseConditions(input: LeadListFilters, now: Date): Prisma.Sql[] {
-  const conditions: Prisma.Sql[] = [];
+function leadListBaseConditions(organizationId: string, input: LeadListFilters, now: Date): Prisma.Sql[] {
+  const conditions: Prisma.Sql[] = [Prisma.sql`lead."organizationId" = ${organizationId}::uuid`, Prisma.sql`lead."deletedAt" IS NULL`];
   if (input.keyword?.trim()) {
     const keyword = `%${input.keyword.trim()}%`;
     conditions.push(Prisma.sql`(
@@ -610,7 +626,8 @@ function leadListResultConditions(input: LeadListFilters): Prisma.Sql[] {
 function nextActionSql(nextAction: Exclude<LeadNextActionFilter, 'any'>, now: Date): Prisma.Sql {
   const hasActiveTask = Prisma.sql`EXISTS (
     SELECT 1 FROM "Task" AS task
-    WHERE task."leadId" = lead."id"
+    WHERE task."organizationId" = lead."organizationId"
+      AND task."leadId" = lead."id"
       AND task."status" IN ('todo'::"TaskStatus", 'doing'::"TaskStatus")
   )`;
   if (nextAction === 'scheduled') {
@@ -622,7 +639,8 @@ function nextActionSql(nextAction: Exclude<LeadNextActionFilter, 'any'>, now: Da
       OR lead."nextFollowUpAt" <= ${now}
       OR EXISTS (
         SELECT 1 FROM "Task" AS task
-        WHERE task."leadId" = lead."id"
+        WHERE task."organizationId" = lead."organizationId"
+          AND task."leadId" = lead."id"
           AND task."status" IN ('todo'::"TaskStatus", 'doing'::"TaskStatus")
           AND task."dueAt" <= ${now}
       )
@@ -698,11 +716,20 @@ function platformBaseUrl(type: PlatformType, projectUrl: string) {
   })[type];
 }
 
-function withTaskSummary<T extends { tasks?: TaskRecord[]; _count?: { tasks: number } }>(lead: T) {
-  const nextTask = lead.tasks?.[0] ? toTaskView(lead.tasks[0]) : null;
+type TaskWithMembership = Omit<TaskRecord, 'assignee'> & {
+  assignee: TaskRecord['assignee'] | { user: NonNullable<TaskRecord['assignee']> };
+};
+
+function withTaskSummary<T extends { tasks?: TaskWithMembership[]; _count?: { tasks: number } }>(lead: T) {
+  const nextTask = lead.tasks?.[0] ? toTaskView(taskRecordFromMembership(lead.tasks[0])) : null;
   const activeTaskCount = lead._count?.tasks || 0;
   const { tasks: _tasks, _count: _count, ...rest } = lead;
   return { ...rest, nextTask, activeTaskCount };
+}
+
+function taskRecordFromMembership(task: TaskWithMembership): TaskRecord {
+  const assignee = task.assignee && 'user' in task.assignee ? task.assignee.user : task.assignee;
+  return { ...task, assignee };
 }
 
 const TODAY_CATEGORIES: TodaySalesCategory[] = [

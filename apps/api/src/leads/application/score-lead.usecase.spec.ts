@@ -18,8 +18,10 @@ describe('ScoreLeadUseCase', () => {
     };
     const useCase = new ScoreLeadUseCase(repository as any);
 
-    await expect(useCase.execute('lead_1')).resolves.toEqual({ id: 'score_1', totalScore: 65 });
+    const actor = { userId: 'user_1', sessionId: 'session_1', organizationId: 'org_1' };
+    await expect(useCase.execute('org_1', 'lead_1', actor)).resolves.toEqual({ id: 'score_1', totalScore: 65 });
     expect(repository.recordScore).toHaveBeenCalledWith(
+      'org_1',
       'lead_1',
       expect.objectContaining({
         amountScore: 15,
@@ -28,7 +30,8 @@ describe('ScoreLeadUseCase', () => {
         urgencyScore: 10,
         totalScore: 65
       }),
-      'medium'
+      'medium',
+      actor
     );
   });
 });

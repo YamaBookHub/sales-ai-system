@@ -13,13 +13,17 @@ export class LeadsController {
   constructor(private readonly leads: LeadsService) {}
 
   @Get()
-  async list(@Query() query: ListLeadsQueryDto) {
-    return ok(await this.leads.list(query.page, query.limit, query.status, query.priority, query));
+  async list(@Query() query: ListLeadsQueryDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.leads.list(principal.organizationId, query.page, query.limit, query.status, query.priority, query));
   }
 
   @Get('today')
-  async listToday(@Query('page') page = '1', @Query('limit') limit = '50') {
-    return ok(await this.leads.listToday(Number(page), Number(limit)));
+  async listToday(
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+    @CurrentUser() principal: AuthenticatedPrincipal
+  ) {
+    return ok(await this.leads.listToday(principal.organizationId, Number(page), Number(limit)));
   }
 
   @Post()
@@ -29,8 +33,8 @@ export class LeadsController {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string) {
-    return ok(await this.leads.get(id));
+  async get(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.leads.get(principal.organizationId, id));
   }
 
   @Patch(':id')

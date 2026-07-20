@@ -1,6 +1,7 @@
 import { LeadsService } from './leads.service';
 
 describe('LeadsService today list', () => {
+  const organizationId = 'org_1';
   const now = new Date('2026-07-18T03:00:00.000Z');
 
   function lead(overrides: Record<string, unknown>) {
@@ -49,8 +50,8 @@ describe('LeadsService today list', () => {
     const prisma = { salesLead: { findMany: jest.fn().mockResolvedValue([reply, overdue]) } };
     const service = new LeadsService(prisma as any, {} as any);
 
-    const firstPage = await service.listToday(1, 1, now);
-    const secondPage = await service.listToday(2, 1, now);
+    const firstPage = await service.listToday(organizationId, 1, 1, now);
+    const secondPage = await service.listToday(organizationId, 2, 1, now);
 
     expect(firstPage).toMatchObject({
       page: 1,
@@ -61,7 +62,7 @@ describe('LeadsService today list', () => {
     });
     expect(secondPage.items).toMatchObject([{ category: 'reply_received', lead: { id: 'lead_reply' }, mail: { id: 'mail_reply' } }]);
     expect(prisma.salesLead.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { OR: expect.any(Array) },
+      where: { organizationId, OR: expect.any(Array) },
       include: expect.objectContaining({ tasks: expect.any(Object), mails: expect.any(Object) })
     }));
   });

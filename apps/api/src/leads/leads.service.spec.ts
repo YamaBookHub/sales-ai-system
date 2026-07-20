@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { LeadsService } from './leads.service';
 
 describe('LeadsService detail editing', () => {
+  const actor = { userId: 'user-1', sessionId: 'session-1', organizationId: 'org-1' };
   const existingLead = {
     id: 'lead-1',
     companyId: 'company-1',
@@ -18,17 +19,24 @@ describe('LeadsService detail editing', () => {
   function setup(lead: any = existingLead) {
     const tx = {
       $executeRawUnsafe: jest.fn().mockResolvedValue(1),
-      company: { update: jest.fn().mockResolvedValue({ id: 'company-1' }) },
+      company: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'company-1' }),
+        update: jest.fn().mockResolvedValue({ id: 'company-1' })
+      },
       crowdfundingPlatform: { upsert: jest.fn().mockResolvedValue({ id: 'platform-1' }) },
-      crowdfundingProject: { update: jest.fn().mockResolvedValue({ id: 'project-1' }) },
+      crowdfundingProject: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'project-1' }),
+        update: jest.fn().mockResolvedValue({ id: 'project-1' })
+      },
       salesLead: {
-        findUnique: jest.fn().mockResolvedValue(lead),
+        findFirst: jest.fn().mockResolvedValue(lead),
         update: jest.fn().mockResolvedValue({
           ...lead,
           brandAnalysisMemo: '人が入力した分析メモ',
           snsAnalysisMemo: '人が入力したSNSメモ'
         })
-      }
+      },
+      auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) }
     };
     const prisma = {
       $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx))
@@ -58,7 +66,7 @@ describe('LeadsService detail editing', () => {
       leadReason: '手動確認済み',
       brandAnalysisMemo: '人が入力した分析メモ',
       snsAnalysisMemo: '人が入力したSNSメモ'
-    });
+    }, actor);
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(tx.company.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -88,7 +96,7 @@ describe('LeadsService detail editing', () => {
     expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(
       1,
       'SELECT pg_advisory_xact_lock(hashtext($1))',
-      'lead-detail:lead-1'
+      'lead-detail:org-1:lead-1'
     );
     jest.useRealTimers();
   });
@@ -106,7 +114,7 @@ describe('LeadsService detail editing', () => {
       ownerMemo: null,
       nextActionAt: null,
       nextFollowUpAt: null
-    });
+    }, actor);
 
     expect(tx.company.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ websiteUrl: null, sourceTotalAmount: null })
@@ -126,7 +134,7 @@ describe('LeadsService detail editing', () => {
       project: null
     });
 
-    await expect(service.update('lead-1', { projectTitle: '保存されない案件名' })).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.update('lead-1', { projectTitle: '保存されない案件名' }, actor)).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(tx.company.update).not.toHaveBeenCalled();
     expect(tx.crowdfundingProject.update).not.toHaveBeenCalled();
@@ -139,7 +147,7 @@ describe('LeadsService detail editing', () => {
     await expect(service.update('lead-1', {
       projectSource: 'makuake',
       projectUrl: 'https://camp-fire.jp/projects/456/view'
-    })).rejects.toBeInstanceOf(BadRequestException);
+    }, actor)).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(tx.crowdfundingProject.update).not.toHaveBeenCalled();
     expect(tx.salesLead.update).not.toHaveBeenCalled();
@@ -158,7 +166,7 @@ describe('LeadsService detail editing', () => {
 
     await service.update('lead-1', {
       projectUrl: 'https://new.example.com/project?id=123'
-    });
+    }, actor);
 
     expect(tx.crowdfundingPlatform.upsert).toHaveBeenCalledWith(expect.objectContaining({
       where: { type_baseUrl: { type: 'other', baseUrl: 'https://new.example.com' } }
@@ -177,14 +185,15 @@ describe('LeadsService detail editing', () => {
       tasks: [],
       _count: { tasks: 0 }
     };
-    const prisma = { salesLead: { findUnique: jest.fn().mockResolvedValue(lead) } };
+    const prisma = { salesLead: { findFirst: jest.fn().mockResolvedValue(lead) } };
     const service = new LeadsService(prisma as any, {} as any);
 
-    await expect(service.get('lead-1')).resolves.toMatchObject({
+    await expect(service.get('org-1', 'lead-1')).resolves.toMatchObject({
       brandAnalysisMemo: lead.brandAnalysisMemo,
       snsAnalysisMemo: lead.snsAnalysisMemo
     });
-    expect(prisma.salesLead.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+    expect(prisma.salesLead.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'lead-1', organizationId: 'org-1', deletedAt: null },
       include: expect.objectContaining({
         company: expect.objectContaining({ include: expect.objectContaining({ contacts: expect.any(Object) }) }),
         mails: expect.objectContaining({ take: 1 })
@@ -196,7 +205,7 @@ describe('LeadsService detail editing', () => {
     const { service, tx } = setup();
     tx.crowdfundingProject.update.mockRejectedValue(new Error('project update failed'));
 
-    await expect(service.update('lead-1', { projectTitle: '失敗する更新', ownerMemo: '保存しない' })).rejects.toThrow('project update failed');
+    await expect(service.update('lead-1', { projectTitle: '失敗する更新', ownerMemo: '保存しない' }, actor)).rejects.toThrow('project update failed');
     expect(tx.salesLead.update).not.toHaveBeenCalled();
   });
 
@@ -214,7 +223,12 @@ describe('LeadsService detail editing', () => {
       nextFollowUpAt: null
     };
     const tx = {
-      salesLead: { create: jest.fn().mockResolvedValue(lead) },
+      company: { findFirst: jest.fn().mockResolvedValue({ id: 'company-1' }) },
+      crowdfundingProject: { findFirst: jest.fn().mockResolvedValue({ id: 'project-1' }) },
+      salesLead: {
+        create: jest.fn().mockResolvedValue(lead),
+        findFirst: jest.fn().mockResolvedValue({ id: 'lead-2', organizationId: 'org-1' })
+      },
       opportunity: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({ id: 'opportunity-1', version: 1 }) },
       opportunityStageHistory: { create: jest.fn().mockResolvedValue({ id: 'history-1' }) },
       auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
@@ -224,8 +238,7 @@ describe('LeadsService detail editing', () => {
     const service = new LeadsService(prisma as any, {} as any);
 
     await service.create({ companyId: 'company-1', projectId: 'project-1', ownerMemo: 'free text memo' }, {
-      userId: 'user-1',
-      sessionId: 'session-1'
+      ...actor
     });
 
     const audit = tx.auditLog.create.mock.calls[0][0].data;

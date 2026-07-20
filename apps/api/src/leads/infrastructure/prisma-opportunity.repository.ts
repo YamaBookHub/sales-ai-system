@@ -24,6 +24,7 @@ import {
 export type OpportunityActor = {
   userId: string | null;
   sessionId?: string | null;
+  organizationId: string;
   role: OpportunityRole;
 };
 
@@ -70,7 +71,7 @@ export type OpportunityReopenRecord = {
 };
 
 const opportunityInclude: Prisma.OpportunityInclude = {
-  owner: { select: { id: true, name: true, email: true } },
+  owner: { select: { user: { select: { id: true, name: true, email: true } } } },
   lead: {
     include: {
       company: true,
@@ -79,7 +80,7 @@ const opportunityInclude: Prisma.OpportunityInclude = {
         where: { status: { in: ['todo', 'doing'] } },
         orderBy: [{ dueAt: 'asc' as const }, { createdAt: 'asc' as const }],
         take: 1,
-        include: { assignee: { select: { id: true, name: true, email: true } } }
+        include: { assignee: { select: { user: { select: { id: true, name: true, email: true } } } } }
       }
     }
   }
@@ -89,13 +90,15 @@ const opportunityInclude: Prisma.OpportunityInclude = {
 export class PrismaOpportunityRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(input: OpportunityListInput) {
+  async list(organizationId: string, input: OpportunityListInput) {
     const page = Math.max(1, input.page || 1);
     const limit = Math.min(100, Math.max(1, input.limit || 20));
     const where: Prisma.OpportunityWhereInput = {
+      organizationId,
       ...(input.stage ? { stage: input.stage } : {}),
       ...(input.ownerId ? { ownerId: input.ownerId } : {}),
       lead: {
+        organizationId,
         deletedAt: null,
         ...(input.source ? { project: { platform: { type: input.source } } } : {})
       },
@@ -112,58 +115,58 @@ export class PrismaOpportunityRepository {
       }),
       this.prisma.opportunity.count({ where })
     ]);
-    return { items, page, limit, total };
+    return { items: items.map(toOpportunityView), page, limit, total };
   }
 
-  async getByLeadId(leadId: string) {
+  async getByLeadId(organizationId: string, leadId: string) {
     const opportunity = await this.prisma.opportunity.findFirst({
-      where: { leadId, lead: { deletedAt: null } },
+      where: { organizationId, leadId, lead: { organizationId, deletedAt: null } },
       include: {
         ...opportunityInclude,
         history: {
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: 10,
-          include: { changedBy: { select: { id: true, name: true, email: true } } }
+          include: { changedBy: { select: { user: { select: { id: true, name: true, email: true } } } } }
         }
       }
     });
-    if (opportunity) return opportunity;
-    await this.assertLeadExists(leadId);
+    if (opportunity) return toOpportunityView(opportunity);
+    await this.assertLeadExists(organizationId, leadId);
     throw new ConflictException('この営業対象の商談情報が未作成です。データ移行状態を確認してください。');
   }
 
-  async listHistory(leadId: string, page = 1, limit = 20) {
+  async listHistory(organizationId: string, leadId: string, page = 1, limit = 20) {
     const opportunity = await this.prisma.opportunity.findFirst({
-      where: { leadId, lead: { deletedAt: null } },
+      where: { organizationId, leadId, lead: { organizationId, deletedAt: null } },
       select: { id: true }
     });
     if (!opportunity) {
-      await this.assertLeadExists(leadId);
+      await this.assertLeadExists(organizationId, leadId);
       throw new ConflictException('この営業対象の商談情報が未作成です。データ移行状態を確認してください。');
     }
     const normalizedPage = Math.max(1, page);
     const normalizedLimit = Math.min(100, Math.max(1, limit));
-    const where = { opportunityId: opportunity.id };
+    const where = { organizationId, opportunityId: opportunity.id };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.opportunityStageHistory.findMany({
         where,
         skip: (normalizedPage - 1) * normalizedLimit,
         take: normalizedLimit,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        include: { changedBy: { select: { id: true, name: true, email: true } } }
+        include: { changedBy: { select: { user: { select: { id: true, name: true, email: true } } } } }
       }),
       this.prisma.opportunityStageHistory.count({ where })
     ]);
-    return { items, page: normalizedPage, limit: normalizedLimit, total };
+    return { items: items.map(toHistoryView), page: normalizedPage, limit: normalizedLimit, total };
   }
 
   updateDetails(leadId: string, input: OpportunityDetailsInput, actor: OpportunityActor) {
     return this.prisma.$transaction(async (tx) => {
-      const current = await this.lockedOpportunity(tx, leadId);
+      const current = await this.lockedOpportunity(tx, actor.organizationId, leadId);
       assertExpectedVersion(current.version, input.expectedVersion, current.stage);
       const ownsOpportunity = !current.ownerId || current.ownerId === actor.userId;
       if (!canEditOpportunityFields(actor.role, ownsOpportunity)) throw new ForbiddenException('この商談を編集する権限がありません。');
-      if (input.ownerId && !(await activeUserExists(tx, input.ownerId))) {
+      if (input.ownerId && !(await activeMembershipExists(tx, actor.organizationId, input.ownerId))) {
         throw new BadRequestException('担当者が存在しないか、無効です。');
       }
       if (input.probability !== undefined && !validPercentage(input.probability)) {
@@ -175,7 +178,7 @@ export class PrismaOpportunityRepository {
 
       const before = opportunityAuditSnapshot(current);
       const updated = await tx.opportunity.update({
-        where: { id: current.id },
+        where: { organizationId_id: { organizationId: actor.organizationId, id: current.id } },
         data: {
           ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
           ...(input.probability !== undefined ? { probability: input.probability } : {}),
@@ -188,6 +191,7 @@ export class PrismaOpportunityRepository {
       });
       await tx.auditLog.create({
         data: {
+          organizationId: actor.organizationId,
           userId: actor.userId,
           sessionId: actor.sessionId ?? null,
           action: 'opportunity.updated',
@@ -197,15 +201,18 @@ export class PrismaOpportunityRepository {
           after: opportunityAuditSnapshot(updated)
         }
       });
-      return updated;
+      return toOpportunityView(updated);
     });
   }
 
   transition(leadId: string, input: OpportunityTransitionRecord, actor: OpportunityActor) {
     return this.prisma.$transaction(async (tx) => {
-      const current = await this.lockedOpportunity(tx, leadId);
-      const duplicate = await idempotentHistory(tx, current.id, input.operationKey, transitionRequestSnapshot(input, false));
-      if (duplicate) return tx.opportunity.findUniqueOrThrow({ where: { id: current.id }, include: opportunityInclude });
+      const current = await this.lockedOpportunity(tx, actor.organizationId, leadId);
+      const duplicate = await idempotentHistory(tx, actor.organizationId, current.id, input.operationKey, transitionRequestSnapshot(input, false));
+      if (duplicate) return toOpportunityView(await tx.opportunity.findUniqueOrThrow({
+        where: { organizationId_id: { organizationId: actor.organizationId, id: current.id } },
+        include: opportunityInclude
+      }));
       assertExpectedVersion(current.version, input.expectedVersion, current.stage);
       if (isTerminalOpportunityStage(input.toStage) && !input.reason?.trim()) {
         throw new BadRequestException('受注・失注・対象外へ変更する理由を入力してください。');
@@ -227,9 +234,12 @@ export class PrismaOpportunityRepository {
 
   reopen(leadId: string, input: OpportunityReopenRecord, actor: OpportunityActor) {
     return this.prisma.$transaction(async (tx) => {
-      const current = await this.lockedOpportunity(tx, leadId);
-      const duplicate = await idempotentHistory(tx, current.id, input.operationKey, transitionRequestSnapshot(input, true));
-      if (duplicate) return tx.opportunity.findUniqueOrThrow({ where: { id: current.id }, include: opportunityInclude });
+      const current = await this.lockedOpportunity(tx, actor.organizationId, leadId);
+      const duplicate = await idempotentHistory(tx, actor.organizationId, current.id, input.operationKey, transitionRequestSnapshot(input, true));
+      if (duplicate) return toOpportunityView(await tx.opportunity.findUniqueOrThrow({
+        where: { organizationId_id: { organizationId: actor.organizationId, id: current.id } },
+        include: opportunityInclude
+      }));
       assertExpectedVersion(current.version, input.expectedVersion, current.stage);
       const result = evaluateOpportunityReopen({
         currentStage: current.stage,
@@ -242,28 +252,41 @@ export class PrismaOpportunityRepository {
     });
   }
 
-  private async lockedOpportunity(tx: Prisma.TransactionClient, leadId: string) {
-    await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `opportunity:${leadId}`);
-    const opportunity = await tx.opportunity.findFirst({ where: { leadId, lead: { deletedAt: null } } });
+  private async lockedOpportunity(tx: Prisma.TransactionClient, organizationId: string, leadId: string) {
+    await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `opportunity:${organizationId}:${leadId}`);
+    const opportunity = await tx.opportunity.findFirst({ where: { organizationId, leadId, lead: { organizationId, deletedAt: null } } });
     if (opportunity) return opportunity;
-    const lead = await tx.salesLead.findFirst({ where: { id: leadId, deletedAt: null }, select: { id: true } });
+    const lead = await tx.salesLead.findFirst({ where: { id: leadId, organizationId, deletedAt: null }, select: { id: true } });
     if (!lead) throw new NotFoundException('Lead not found');
     throw new ConflictException('この営業対象の商談情報が未作成です。データ移行状態を確認してください。');
   }
 
-  private async assertLeadExists(leadId: string) {
-    const lead = await this.prisma.salesLead.findFirst({ where: { id: leadId, deletedAt: null }, select: { id: true } });
+  private async assertLeadExists(organizationId: string, leadId: string) {
+    const lead = await this.prisma.salesLead.findFirst({ where: { id: leadId, organizationId, deletedAt: null }, select: { id: true } });
     if (!lead) throw new NotFoundException('Lead not found');
   }
 }
 
-export async function ensureOpportunityForLead(tx: Prisma.TransactionClient, leadId: string) {
-  await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `opportunity:${leadId}`);
-  const existing = await tx.opportunity.findUnique({ where: { leadId } });
+export async function ensureOpportunityForLead(
+  tx: Prisma.TransactionClient,
+  leadId: string,
+  organizationId?: string
+) {
+  const lead = await tx.salesLead.findFirst({
+    where: { id: leadId, ...(organizationId ? { organizationId } : {}), deletedAt: null },
+    select: { id: true, organizationId: true }
+  });
+  if (!lead) throw new NotFoundException('Lead not found');
+  const scopedOrganizationId = lead.organizationId;
+  await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `opportunity:${scopedOrganizationId}:${leadId}`);
+  const existing = await tx.opportunity.findUnique({
+    where: { organizationId_leadId: { organizationId: scopedOrganizationId, leadId } }
+  });
   if (existing) return existing;
-  const opportunity = await tx.opportunity.create({ data: { leadId } });
+  const opportunity = await tx.opportunity.create({ data: { organizationId: scopedOrganizationId, leadId } });
   await tx.opportunityStageHistory.create({
     data: {
+      organizationId: scopedOrganizationId,
       opportunityId: opportunity.id,
       fromStage: null,
       toStage: 'uncontacted',
@@ -280,10 +303,20 @@ export async function ensureOpportunityForLead(tx: Prisma.TransactionClient, lea
 
 export async function progressOpportunityInTransaction(
   tx: Prisma.TransactionClient,
-  input: { leadId: string; toStage: 'contacted' | 'replied' | 'meeting'; sourceId: string; operationKey: string }
+  input: {
+    leadId: string;
+    organizationId?: string;
+    toStage: 'contacted' | 'replied' | 'meeting';
+    sourceId: string;
+    operationKey: string;
+  }
 ) {
-  const opportunity = await ensureOpportunityForLead(tx, input.leadId);
-  const existing = await tx.opportunityStageHistory.findUnique({ where: { operationKey: input.operationKey } });
+  const opportunity = await ensureOpportunityForLead(tx, input.leadId, input.organizationId);
+  const existing = await tx.opportunityStageHistory.findUnique({
+    where: {
+      organizationId_operationKey: { organizationId: opportunity.organizationId, operationKey: input.operationKey }
+    }
+  });
   if (existing) return opportunity;
   if (!shouldProgress(opportunity.stage, input.toStage)) return opportunity;
   const result = evaluateOpportunityTransition({
@@ -293,7 +326,7 @@ export async function progressOpportunityInTransaction(
   });
   if (!result.ok) return opportunity;
   const updated = await tx.opportunity.update({
-    where: { id: opportunity.id },
+    where: { organizationId_id: { organizationId: opportunity.organizationId, id: opportunity.id } },
     data: {
       stage: input.toStage,
       probability: result.probability,
@@ -303,6 +336,7 @@ export async function progressOpportunityInTransaction(
   });
   await tx.opportunityStageHistory.create({
     data: {
+      organizationId: opportunity.organizationId,
       opportunityId: opportunity.id,
       fromStage: opportunity.stage,
       toStage: input.toStage,
@@ -350,9 +384,14 @@ async function persistTransition(
   } else if (reopen || input.toStage === 'excluded') {
     Object.assign(data, { wonAmount: null, wonAt: null, lostAt: null, lossReason: null, lossReasonDetail: null });
   }
-  const updated = await tx.opportunity.update({ where: { id: current.id }, data, include: opportunityInclude });
+  const updated = await tx.opportunity.update({
+    where: { organizationId_id: { organizationId: actor.organizationId, id: current.id } },
+    data,
+    include: opportunityInclude
+  });
   await tx.opportunityStageHistory.create({
     data: {
+      organizationId: actor.organizationId,
       opportunityId: current.id,
       fromStage: current.stage,
       toStage: input.toStage,
@@ -368,14 +407,18 @@ async function persistTransition(
     }
   });
   if (terminal) {
-    await tx.salesLead.update({ where: { id: current.leadId }, data: { nextActionAt: null, nextFollowUpAt: null } });
+    await tx.salesLead.update({
+      where: { organizationId_id: { organizationId: actor.organizationId, id: current.leadId } },
+      data: { nextActionAt: null, nextFollowUpAt: null }
+    });
     await tx.task.updateMany({
-      where: { leadId: current.leadId, status: { in: ['todo', 'doing'] } },
+      where: { organizationId: actor.organizationId, leadId: current.leadId, status: { in: ['todo', 'doing'] } },
       data: { status: 'cancelled', doneAt: null }
     });
   }
   await tx.auditLog.create({
     data: {
+      organizationId: actor.organizationId,
       userId: actor.userId,
       sessionId: actor.sessionId ?? null,
       action: reopen ? 'opportunity.reopened' : 'opportunity.transitioned',
@@ -385,16 +428,19 @@ async function persistTransition(
       after: opportunityAuditSnapshot(updated)
     }
   });
-  return updated;
+  return toOpportunityView(updated);
 }
 
 async function idempotentHistory(
   tx: Prisma.TransactionClient,
+  organizationId: string,
   opportunityId: string,
   operationKey: string,
   request: Prisma.InputJsonObject
 ) {
-  const history = await tx.opportunityStageHistory.findUnique({ where: { operationKey } });
+  const history = await tx.opportunityStageHistory.findUnique({
+    where: { organizationId_operationKey: { organizationId, operationKey } }
+  });
   if (!history) return null;
   const snapshot = isJsonObject(history.snapshot) ? history.snapshot : null;
   if (
@@ -549,6 +595,35 @@ function nonNegativeInteger(value: number) {
   return Number.isInteger(value) && value >= 0;
 }
 
-async function activeUserExists(tx: Prisma.TransactionClient, id: string) {
-  return Boolean(await tx.user.findFirst({ where: { id, isActive: true, deletedAt: null }, select: { id: true } }));
+async function activeMembershipExists(tx: Prisma.TransactionClient, organizationId: string, userId: string) {
+  return Boolean(await tx.organizationMembership.findFirst({
+    where: {
+      organizationId,
+      userId,
+      isActive: true,
+      user: { isActive: true, deletedAt: null }
+    },
+    select: { id: true }
+  }));
+}
+
+function toOpportunityView<T extends Record<string, any>>(value: T): T {
+  const lead = value.lead
+    ? {
+        ...value.lead,
+        tasks: value.lead.tasks?.map((task: Record<string, any>) => ({
+          ...task,
+          assignee: task.assignee?.user || null
+        }))
+      }
+    : value.lead;
+  return {
+    ...value,
+    owner: value.owner?.user || null,
+    lead
+  };
+}
+
+function toHistoryView<T extends Record<string, any>>(value: T): T {
+  return { ...value, changedBy: value.changedBy?.user || null };
 }

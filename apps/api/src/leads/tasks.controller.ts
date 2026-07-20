@@ -21,8 +21,12 @@ export class TasksController {
   ) {}
 
   @Get('leads/:leadId/tasks')
-  async list(@Param('leadId', new ParseUUIDPipe()) leadId: string, @Query() query: ListTasksQueryDto) {
-    return ok(await this.listLeadTasks.execute(leadId, query.scope || 'active'));
+  async list(
+    @Param('leadId', new ParseUUIDPipe()) leadId: string,
+    @Query() query: ListTasksQueryDto,
+    @CurrentUser() principal: AuthenticatedPrincipal
+  ) {
+    return ok(await this.listLeadTasks.execute(principal.organizationId, leadId, query.scope || 'active'));
   }
 
   @Post('leads/:leadId/tasks')
@@ -46,7 +50,7 @@ export class TasksController {
   }
 
   @Get('task-assignees')
-  async assignees() {
-    return ok(await this.listTaskAssignees.execute());
+  async assignees(@CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.listTaskAssignees.execute(principal.organizationId));
   }
 }

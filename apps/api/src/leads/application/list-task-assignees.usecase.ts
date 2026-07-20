@@ -5,7 +5,7 @@ import { TASK_REPOSITORY, TaskRepository } from '../domain/task.repository';
 export class ListTaskAssigneesUseCase {
   constructor(@Inject(TASK_REPOSITORY) private readonly tasks: TaskRepository) {}
 
-  execute() {
-    return this.tasks.listAssignees();
+  execute(organizationId: string) {
+    return this.tasks.listAssignees(organizationId);
   }
 }

@@ -10,16 +10,16 @@ import {
 @Injectable()
 export class ListOpportunitiesUseCase {
   constructor(private readonly opportunities: PrismaOpportunityRepository) {}
-  execute(query: ListOpportunitiesQueryDto) {
-    return this.opportunities.list(query);
+  execute(organizationId: string, query: ListOpportunitiesQueryDto) {
+    return this.opportunities.list(organizationId, query);
   }
 }
 
 @Injectable()
 export class GetOpportunityUseCase {
   constructor(private readonly opportunities: PrismaOpportunityRepository) {}
-  execute(leadId: string) {
-    return this.opportunities.getByLeadId(leadId);
+  execute(organizationId: string, leadId: string) {
+    return this.opportunities.getByLeadId(organizationId, leadId);
   }
 }
 
@@ -50,7 +50,7 @@ export class ReopenOpportunityUseCase {
 @Injectable()
 export class ListOpportunityHistoryUseCase {
   constructor(private readonly opportunities: PrismaOpportunityRepository) {}
-  execute(leadId: string, page = 1, limit = 20) {
-    return this.opportunities.listHistory(leadId, page, limit);
+  execute(organizationId: string, leadId: string, page = 1, limit = 20) {
+    return this.opportunities.listHistory(organizationId, leadId, page, limit);
   }
 }

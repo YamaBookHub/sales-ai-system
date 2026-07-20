@@ -13,34 +13,44 @@ import {
 import { AuditActor } from '../../audit/audit-actor';
 
 const taskInclude = {
-  assignee: { select: { id: true, name: true, email: true } }
+  // Taskの担当者は組織メンバーとして紐付く。画面には従来どおりUserの表示名とメールを返す。
+  assignee: { select: { user: { select: { id: true, name: true, email: true } } } }
 } as const;
 
 @Injectable()
 export class PrismaTaskRepository implements TaskRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findLead(id: string): Promise<TaskLead | null> {
-    return this.prisma.salesLead.findUnique({ where: { id }, select: { id: true, status: true } });
+  findLead(organizationId: string, id: string): Promise<TaskLead | null> {
+    return this.prisma.salesLead.findFirst({
+      where: { id, organizationId, deletedAt: null },
+      select: { id: true, status: true }
+    });
   }
 
-  async listByLead(leadId: string, scope: TaskScope): Promise<TaskView[]> {
+  async listByLead(organizationId: string, leadId: string, scope: TaskScope): Promise<TaskView[]> {
     const tasks = await this.prisma.task.findMany({
-      where: { leadId, ...(scope === 'active' ? { status: { in: ACTIVE_TASK_STATUSES } } : {}) },
+      where: {
+        organizationId,
+        leadId,
+        ...(scope === 'active' ? { status: { in: ACTIVE_TASK_STATUSES } } : {})
+      },
       orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
       include: taskInclude
     });
-    return (tasks as TaskRecord[]).sort(activeTaskOrder).map(toTaskView);
+    return tasks.map(toTaskRecord).sort(activeTaskOrder).map(toTaskView);
   }
 
-  findTask(id: string): Promise<TaskRecord | null> {
-    return this.prisma.task.findUnique({ where: { id }, include: taskInclude }) as Promise<TaskRecord | null>;
+  async findTask(organizationId: string, id: string): Promise<TaskRecord | null> {
+    const task = await this.prisma.task.findFirst({ where: { id, organizationId }, include: taskInclude });
+    return task ? toTaskRecord(task) : null;
   }
 
-  async create(input: CreateTaskRecord, actor?: AuditActor): Promise<TaskView> {
+  async create(input: CreateTaskRecord, actor: AuditActor): Promise<TaskView> {
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
         data: {
+          organizationId: input.organizationId,
           leadId: input.leadId,
           title: input.title,
           description: input.description,
@@ -49,57 +59,86 @@ export class PrismaTaskRepository implements TaskRepository {
         },
         include: taskInclude
       });
-      if (actor) {
-        await tx.auditLog.create({
-          data: {
-            ...actor,
-            action: 'task.created',
-            entityType: 'Task',
-            entityId: task.id,
-            after: { taskId: task.id, leadId: task.leadId, assigneeId: task.assigneeId, status: task.status }
-          }
-        });
-      }
-      return toTaskView(task as TaskRecord);
+      await tx.auditLog.create({
+        data: {
+          ...actor,
+          action: 'task.created',
+          entityType: 'Task',
+          entityId: task.id,
+          after: { taskId: task.id, leadId: task.leadId, assigneeId: task.assigneeId, status: task.status }
+        }
+      });
+      return toTaskView(toTaskRecord(task));
     });
   }
 
-  async update(id: string, input: UpdateTaskRecord, actor?: AuditActor): Promise<TaskView> {
+  async update(organizationId: string, id: string, input: UpdateTaskRecord, actor: AuditActor): Promise<TaskView> {
     return this.prisma.$transaction(async (tx) => {
-      const task = await tx.task.update({ where: { id }, data: input, include: taskInclude });
-      if (actor) {
-        await tx.auditLog.create({
-          data: {
-            ...actor,
-            action: 'task.updated',
-            entityType: 'Task',
-            entityId: task.id,
-            after: {
-              taskId: task.id,
-              leadId: task.leadId,
-              assigneeId: task.assigneeId,
-              status: task.status,
-              changedFields: Object.keys(input).sort()
-            }
+      const task = await tx.task.update({
+        where: { organizationId_id: { organizationId, id } },
+        data: input,
+        include: taskInclude
+      });
+      await tx.auditLog.create({
+        data: {
+          ...actor,
+          action: 'task.updated',
+          entityType: 'Task',
+          entityId: task.id,
+          after: {
+            taskId: task.id,
+            leadId: task.leadId,
+            assigneeId: task.assigneeId,
+            status: task.status,
+            changedFields: Object.keys(input).sort()
           }
-        });
-      }
-      return toTaskView(task as TaskRecord);
+        }
+      });
+      return toTaskView(toTaskRecord(task));
     });
   }
 
-  findAssignee(id: string): Promise<TaskAssignee | null> {
-    return this.prisma.user.findFirst({
-      where: { id, isActive: true },
-      select: { id: true, name: true, email: true }
+  async findAssignee(organizationId: string, id: string): Promise<TaskAssignee | null> {
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: {
+        organizationId,
+        userId: id,
+        isActive: true,
+        user: { isActive: true, deletedAt: null }
+      },
+      select: { user: { select: { id: true, name: true, email: true } } }
     });
+    return membership?.user || null;
   }
 
-  listAssignees(): Promise<TaskAssignee[]> {
-    return this.prisma.user.findMany({
-      where: { isActive: true },
-      orderBy: [{ name: 'asc' }, { email: 'asc' }],
-      select: { id: true, name: true, email: true }
+  async listAssignees(organizationId: string): Promise<TaskAssignee[]> {
+    const memberships = await this.prisma.organizationMembership.findMany({
+      where: {
+        organizationId,
+        isActive: true,
+        user: { isActive: true, deletedAt: null }
+      },
+      orderBy: [{ user: { name: 'asc' } }, { user: { email: 'asc' } }],
+      select: { user: { select: { id: true, name: true, email: true } } }
     });
+    return memberships.map((membership) => membership.user);
   }
+}
+
+function toTaskRecord(task: {
+  id: string;
+  leadId: string | null;
+  title: string;
+  description: string | null;
+  status: TaskRecord['status'];
+  dueAt: Date | null;
+  doneAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  assignee: { user: TaskAssignee } | TaskAssignee | null;
+}): TaskRecord {
+  return {
+    ...task,
+    assignee: task.assignee && 'user' in task.assignee ? task.assignee.user : task.assignee
+  };
 }

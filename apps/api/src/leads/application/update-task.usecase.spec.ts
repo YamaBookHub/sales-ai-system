@@ -3,6 +3,7 @@ import { TaskRepository } from '../domain/task.repository';
 import { UpdateTaskUseCase } from './update-task.usecase';
 
 describe('UpdateTaskUseCase', () => {
+  const actor = { userId: 'user_1', sessionId: 'session_1', organizationId: 'org_1' };
   it('sets doneAt when moving a task to done', async () => {
     const repository = {
       findTask: jest.fn().mockResolvedValue({
@@ -21,12 +22,13 @@ describe('UpdateTaskUseCase', () => {
     } as unknown as TaskRepository;
     const useCase = new UpdateTaskUseCase(repository);
 
-    await useCase.execute('task_1', { status: 'done' });
+    await useCase.execute('task_1', { status: 'done' }, actor);
 
     const updateCall = (repository.update as jest.Mock).mock.calls[0];
-    expect(updateCall[0]).toBe('task_1');
-    expect(updateCall[1].status).toBe('done');
-    expect(updateCall[1].doneAt).toBeInstanceOf(Date);
+    expect(updateCall[0]).toBe('org_1');
+    expect(updateCall[1]).toBe('task_1');
+    expect(updateCall[2].status).toBe('done');
+    expect(updateCall[2].doneAt).toBeInstanceOf(Date);
   });
 
   it('rejects reopening directly into doing', async () => {
@@ -47,7 +49,7 @@ describe('UpdateTaskUseCase', () => {
     } as unknown as TaskRepository;
     const useCase = new UpdateTaskUseCase(repository);
 
-    await expect(useCase.execute('task_1', { status: 'doing' })).rejects.toBeInstanceOf(ConflictException);
+    await expect(useCase.execute('task_1', { status: 'doing' }, actor)).rejects.toBeInstanceOf(ConflictException);
     expect(repository.update).not.toHaveBeenCalled();
   });
 });

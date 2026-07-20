@@ -8,9 +8,9 @@ import { AuditActor } from '../../audit/audit-actor';
 export class PrismaLeadRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getForScoring(id: string) {
-    const lead = await this.prisma.salesLead.findUnique({
-      where: { id },
+  async getForScoring(organizationId: string, id: string) {
+    const lead = await this.prisma.salesLead.findFirst({
+      where: { id, organizationId, deletedAt: null },
       include: {
         project: true
       }
@@ -23,39 +23,44 @@ export class PrismaLeadRepository {
     return lead;
   }
 
-  async recordScore(leadId: string, leadScore: LeadScoreResult, priority?: LeadPriority, actor?: AuditActor) {
+  async recordScore(
+    organizationId: string,
+    leadId: string,
+    leadScore: LeadScoreResult,
+    priority: LeadPriority | undefined,
+    actor: AuditActor
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const score = await tx.leadScore.create({
         data: {
+          organizationId,
           leadId,
           ...leadScore
         }
       });
 
       const lead = await tx.salesLead.update({
-        where: { id: leadId },
+        where: { organizationId_id: { organizationId, id: leadId } },
         data: {
           score: leadScore.totalScore,
           ...(priority ? { priority } : {})
         }
       });
-      if (actor) {
-        await tx.auditLog.create({
-          data: {
-            ...actor,
-            action: 'lead.scored',
-            entityType: 'SalesLead',
-            entityId: leadId,
-            after: {
-              leadId,
-              scoreId: score.id,
-              totalScore: lead.score,
-              priority: lead.priority,
-              scoreComponents: ['amountScore', 'supporterScore', 'urgencyScore', 'fitScore', 'activityScore']
-            }
+      await tx.auditLog.create({
+        data: {
+          ...actor,
+          action: 'lead.scored',
+          entityType: 'SalesLead',
+          entityId: leadId,
+          after: {
+            leadId,
+            scoreId: score.id,
+            totalScore: lead.score,
+            priority: lead.priority,
+            scoreComponents: ['amountScore', 'supporterScore', 'urgencyScore', 'fitScore', 'activityScore']
           }
-        });
-      }
+        }
+      });
 
       return score;
     });

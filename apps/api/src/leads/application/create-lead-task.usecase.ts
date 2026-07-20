@@ -14,25 +14,26 @@ export type CreateLeadTaskInput = {
 export class CreateLeadTaskUseCase {
   constructor(@Inject(TASK_REPOSITORY) private readonly tasks: TaskRepository) {}
 
-  async execute(leadId: string, input: CreateLeadTaskInput, actor?: AuditActor) {
-    const lead = await this.tasks.findLead(leadId);
+  async execute(leadId: string, input: CreateLeadTaskInput, actor: AuditActor) {
+    const lead = await this.tasks.findLead(actor.organizationId, leadId);
     if (!lead) throw new NotFoundException('Lead not found');
     if (!canCreateTaskForLead(lead.status)) throw new ConflictException('Cannot create a task for a terminal lead');
 
     const title = input.title.trim();
     if (!title) throw new BadRequestException('Task title is required');
-    if (input.assigneeId && !(await this.tasks.findAssignee(input.assigneeId))) {
+    if (input.assigneeId && !(await this.tasks.findAssignee(actor.organizationId, input.assigneeId))) {
       throw new BadRequestException('Assignee is not active or does not exist');
     }
 
     const record: CreateTaskRecord = {
+      organizationId: actor.organizationId,
       leadId,
       title,
       description: input.description?.trim() || undefined,
       dueAt: parseDate(input.dueAt),
       assigneeId: input.assigneeId
     };
-    return actor ? this.tasks.create(record, actor) : this.tasks.create(record);
+    return this.tasks.create(record, actor);
   }
 }
 

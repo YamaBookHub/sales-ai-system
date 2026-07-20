@@ -33,13 +33,13 @@ export class OpportunitiesController {
   ) {}
 
   @Get('opportunities')
-  async list(@Query() query: ListOpportunitiesQueryDto) {
-    return ok(await this.listOpportunities.execute(query));
+  async list(@Query() query: ListOpportunitiesQueryDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.listOpportunities.execute(principal.organizationId, query));
   }
 
   @Get('leads/:leadId/opportunity')
-  async get(@Param('leadId', new ParseUUIDPipe()) leadId: string) {
-    return ok(await this.getOpportunity.execute(leadId));
+  async get(@Param('leadId', new ParseUUIDPipe()) leadId: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.getOpportunity.execute(principal.organizationId, leadId));
   }
 
   @Patch('leads/:leadId/opportunity')
@@ -75,9 +75,10 @@ export class OpportunitiesController {
   @Get('leads/:leadId/opportunity/history')
   async history(
     @Param('leadId', new ParseUUIDPipe()) leadId: string,
-    @Query() query: ListOpportunityHistoryQueryDto
+    @Query() query: ListOpportunityHistoryQueryDto,
+    @CurrentUser() principal: AuthenticatedPrincipal
   ) {
-    return ok(await this.listHistory.execute(leadId, query.page, query.limit));
+    return ok(await this.listHistory.execute(principal.organizationId, leadId, query.page, query.limit));
   }
 }
 

@@ -8,6 +8,7 @@ export type TaskScope = 'active' | 'all';
 export type TaskLead = { id: string; status: LeadStatus };
 export type TaskAssignee = { id: string; name: string | null; email: string };
 export type CreateTaskRecord = {
+  organizationId: string;
   leadId: string;
   title: string;
   description?: string;
@@ -24,11 +25,11 @@ export type UpdateTaskRecord = {
 };
 
 export interface TaskRepository {
-  findLead(id: string): Promise<TaskLead | null>;
-  listByLead(leadId: string, scope: TaskScope): Promise<TaskView[]>;
-  findTask(id: string): Promise<TaskRecord | null>;
-  create(input: CreateTaskRecord, actor?: AuditActor): Promise<TaskView>;
-  update(id: string, input: UpdateTaskRecord, actor?: AuditActor): Promise<TaskView>;
-  findAssignee(id: string): Promise<TaskAssignee | null>;
-  listAssignees(): Promise<TaskAssignee[]>;
+  findLead(organizationId: string, id: string): Promise<TaskLead | null>;
+  listByLead(organizationId: string, leadId: string, scope: TaskScope): Promise<TaskView[]>;
+  findTask(organizationId: string, id: string): Promise<TaskRecord | null>;
+  create(input: CreateTaskRecord, actor: AuditActor): Promise<TaskView>;
+  update(organizationId: string, id: string, input: UpdateTaskRecord, actor: AuditActor): Promise<TaskView>;
+  findAssignee(organizationId: string, id: string): Promise<TaskAssignee | null>;
+  listAssignees(organizationId: string): Promise<TaskAssignee[]>;
 }

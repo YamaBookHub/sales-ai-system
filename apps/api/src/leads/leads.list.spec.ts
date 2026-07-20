@@ -21,6 +21,7 @@ type Stats = {
 };
 
 describe('LeadsService list', () => {
+  const organizationId = 'org_1';
   const fixture = Array.from({ length: 201 }, (_, index) => lead(index + 1));
   const stableCreatedAtOrder = fixture.map((item) => item.id).reverse();
 
@@ -29,7 +30,7 @@ describe('LeadsService list', () => {
     const received: string[] = [];
 
     for (let page = 1; page <= 21; page += 1) {
-      const result = await service.list(page, 10);
+      const result = await service.list(organizationId, page, 10);
       received.push(...result.items.map((item) => item.id));
       expect(result.total).toBe(201);
     }
@@ -40,7 +41,7 @@ describe('LeadsService list', () => {
       isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead
     });
     expect(salesLead.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: { id: { in: stableCreatedAtOrder.slice(200) } },
+      where: { organizationId, id: { in: stableCreatedAtOrder.slice(200) } },
       include: expect.objectContaining({
         mails: {
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -61,7 +62,7 @@ describe('LeadsService list', () => {
       stats: { total: 50, summaryTotal: 201, noContact: 10, draft: 20, review: 10, queued: 5 }
     });
 
-    await service.list(2, 25, undefined, undefined, {
+    await service.list(organizationId, 2, 25, undefined, undefined, {
       keyword: 'needle',
       source: 'campfire',
       contactState: 'none',
@@ -93,7 +94,7 @@ describe('LeadsService list', () => {
   ])('uses the allowlisted %s ordering in PostgreSQL', async (sort, field) => {
     const { service, queryRaw } = setup({ fixture, orderedIds: stableCreatedAtOrder });
 
-    await service.list(1, 20, undefined, undefined, { sort: sort as any, sortDirection: 'asc' });
+    await service.list(organizationId, 1, 20, undefined, undefined, { sort: sort as any, sortDirection: 'asc' });
 
     const pageQuery = queryRaw.mock.calls.map(([query]) => sqlText(query)).find((text) => text.includes('SELECT "id"'));
     expect(pageQuery).toContain(`ORDER BY ${field} ASC NULLS LAST, "id" ASC`);
@@ -102,7 +103,7 @@ describe('LeadsService list', () => {
   it('sorts priority by low, medium, high rank instead of enum text', async () => {
     const { service, queryRaw } = setup({ fixture, orderedIds: stableCreatedAtOrder });
 
-    await service.list(1, 20, undefined, undefined, { sort: 'priority', sortDirection: 'asc' });
+    await service.list(organizationId, 1, 20, undefined, undefined, { sort: 'priority', sortDirection: 'asc' });
 
     const pageQuery = queryRaw.mock.calls.map(([query]) => sqlText(query)).find((text) => text.includes('SELECT "id"'));
     expect(pageQuery).toContain('ORDER BY CASE "priority"');
@@ -115,7 +116,7 @@ describe('LeadsService list', () => {
   it('falls back to a safe created-at sort when list() is called outside DTO validation', async () => {
     const { service, queryRaw } = setup({ fixture, orderedIds: stableCreatedAtOrder });
 
-    await service.list(1, 20, undefined, undefined, { sort: 'drop table' as any, sortDirection: 'desc' });
+    await service.list(organizationId, 1, 20, undefined, undefined, { sort: 'drop table' as any, sortDirection: 'desc' });
 
     const sql = queryRaw.mock.calls.map(([query]) => sqlText(query)).join('\n');
     expect(sql).toContain('ORDER BY "createdAt" DESC NULLS LAST, "id" DESC');

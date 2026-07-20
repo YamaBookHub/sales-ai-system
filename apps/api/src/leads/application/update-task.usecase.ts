@@ -16,10 +16,10 @@ export type UpdateTaskInput = {
 export class UpdateTaskUseCase {
   constructor(@Inject(TASK_REPOSITORY) private readonly tasks: TaskRepository) {}
 
-  async execute(taskId: string, input: UpdateTaskInput, actor?: AuditActor) {
-    const current = await this.tasks.findTask(taskId);
+  async execute(taskId: string, input: UpdateTaskInput, actor: AuditActor) {
+    const current = await this.tasks.findTask(actor.organizationId, taskId);
     if (!current) throw new NotFoundException('Task not found');
-    if (input.assigneeId && !(await this.tasks.findAssignee(input.assigneeId))) {
+    if (input.assigneeId && !(await this.tasks.findAssignee(actor.organizationId, input.assigneeId))) {
       throw new BadRequestException('Assignee is not active or does not exist');
     }
 
@@ -38,7 +38,7 @@ export class UpdateTaskUseCase {
       patch.status = input.status;
       patch.doneAt = transition.doneAt;
     }
-    return actor ? this.tasks.update(taskId, patch, actor) : this.tasks.update(taskId, patch);
+    return this.tasks.update(actor.organizationId, taskId, patch, actor);
   }
 }
 

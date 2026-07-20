@@ -1,7 +1,7 @@
 import { PrismaOpportunityRepository } from './prisma-opportunity.repository';
 
 describe('PrismaOpportunityRepository audit writes', () => {
-  const actor = { userId: 'user-1', sessionId: 'session-1', role: 'manager' as const };
+  const actor = { userId: 'user-1', sessionId: 'session-1', organizationId: 'org-1', role: 'manager' as const };
 
   function opportunity(overrides: Record<string, unknown> = {}) {
     return {
