@@ -11,7 +11,10 @@ paths:
   /:
     get:
       summary: Local URL search dashboard HTML
+      x-permission: workspace.read
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Dashboard HTML
           content:
@@ -20,7 +23,10 @@ paths:
   /leads-view:
     get:
       summary: Leads dashboard HTML
+      x-permission: workspace.read
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Dashboard HTML
           content:
@@ -29,7 +35,10 @@ paths:
   /mail-workspace:
     get:
       summary: Mail workspace HTML
+      x-permission: workspace.read
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Dashboard HTML
           content:
@@ -38,7 +47,10 @@ paths:
   /today:
     get:
       summary: Today dashboard HTML
+      x-permission: workspace.read
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Dashboard HTML
           content:
@@ -47,7 +59,10 @@ paths:
   /sales-performance:
     get:
       summary: Sales performance dashboard HTML
+      x-permission: workspace.read
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Dashboard HTML
           content:
@@ -56,7 +71,10 @@ paths:
   /replies:
     get:
       summary: Reply inbox dashboard HTML
+      x-permission: workspace.read
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Dashboard HTML
           content:
@@ -122,7 +140,10 @@ paths:
   /api/auth/me:
     get:
       summary: Get the authenticated user and the in-memory CSRF token
+      x-permission: workspace.read
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Current authenticated user
           content:
@@ -133,6 +154,7 @@ paths:
   /api/auth/logout:
     post:
       summary: Revoke the current session
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       responses:
@@ -145,6 +167,117 @@ paths:
           $ref: '#/components/responses/AuthenticationRequired'
         '403':
           $ref: '#/components/responses/CsrfRejected'
+  /api/admin/users:
+    get:
+      summary: List users for administrator management
+      x-permission: user.manage
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [admin, manager, operator, viewer]
+        - name: isActive
+          in: query
+          schema: { type: boolean }
+      responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '200':
+          description: Paginated user list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminUserListResponse' }
+    post:
+      summary: Create a pre-registered user
+      x-permission: user.manage
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAdminUserRequest' }
+      responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '201':
+          description: Created user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+  /api/admin/users/{id}:
+    patch:
+      summary: Update a user's role, name, or active state
+      x-permission: user.manage
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAdminUserRequest' }
+      responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+  /api/admin/users/{id}/revoke-sessions:
+    post:
+      summary: Revoke all active sessions for a user
+      x-permission: user.manage
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '201':
+          description: Session revocation result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RevokeUserSessionsResponse' }
+  /api/admin/audit-logs:
+    get:
+      summary: List audit log entries for administrators
+      x-permission: audit.read
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: userId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: action
+          in: query
+          schema: { type: string }
+        - name: entityType
+          in: query
+          schema: { type: string }
+        - name: entityId
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '200':
+          description: Paginated audit log entries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminAuditLogListResponse' }
   /health:
     get:
       summary: Health check
@@ -158,7 +291,10 @@ paths:
   /api/navigation-summary:
     get:
       summary: Navigation counters
+      x-permission: workspace.read
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Navigation summary
           content:
@@ -167,6 +303,7 @@ paths:
   /api/reports/sales-performance:
     get:
       summary: Aggregate sales performance for a sent-lead cohort
+      x-permission: reports.read
       parameters:
         - name: from
           in: query
@@ -187,6 +324,8 @@ paths:
             type: string
             enum: [campfire, makuake, green_funding, other, manual]
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Database-backed cohort metrics
           content:
@@ -197,7 +336,10 @@ paths:
   /api/reports/sales-performance/owners:
     get:
       summary: List current and historical opportunity owners represented in performance data
+      x-permission: reports.read
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Performance owner options, including inactive owners
           content:
@@ -219,10 +361,13 @@ paths:
   /api/companies:
     get:
       summary: List companies
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Company list
           content:
@@ -230,6 +375,7 @@ paths:
               schema: { $ref: '#/components/schemas/ApiResponse' }
     post:
       summary: Create company
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -238,6 +384,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateCompanyRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Company response
           content:
@@ -246,6 +394,7 @@ paths:
   /api/companies/{id}/block:
     post:
       summary: Block a company
+      x-permission: compliance.manage
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
@@ -255,6 +404,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/BlockCompanyRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Company response
           content:
@@ -263,9 +414,12 @@ paths:
   /api/companies/{companyId}/contacts:
     get:
       summary: List active contacts for a company
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/CompanyId'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Contact list
           content:
@@ -275,6 +429,7 @@ paths:
           description: Company not found
     post:
       summary: Create a contact for a company
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/CompanyId'
         - $ref: '#/components/parameters/CsrfToken'
@@ -284,6 +439,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateContactRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Created contact
           content:
@@ -294,6 +451,7 @@ paths:
   /api/contacts/{id}:
     patch:
       summary: Update an active contact
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
@@ -303,6 +461,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/UpdateContactRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Updated contact
           content:
@@ -313,10 +473,13 @@ paths:
   /api/contacts/{id}/archive:
     post:
       summary: Archive an active contact
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Archived contact
           content:
@@ -327,10 +490,13 @@ paths:
   /api/contacts/{id}/unsubscribe:
     post:
       summary: Mark an active contact as unsubscribed
+      x-permission: compliance.manage
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Unsubscribed contact
           content:
@@ -341,6 +507,7 @@ paths:
   /api/projects:
     get:
       summary: List crowdfunding projects
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
@@ -348,6 +515,8 @@ paths:
           in: query
           schema: { $ref: '#/components/schemas/ProjectStatus' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Project list
           content:
@@ -355,6 +524,7 @@ paths:
               schema: { $ref: '#/components/schemas/ApiResponse' }
     post:
       summary: Create crowdfunding project
+      x-permission: prospecting.execute
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -363,6 +533,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateProjectRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Project response
           content:
@@ -371,6 +543,7 @@ paths:
   /api/projects/import/campfire:
     post:
       summary: Import a CAMPFIRE project
+      x-permission: prospecting.execute
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -379,6 +552,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ImportCampfireProjectRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Import response
           content:
@@ -387,6 +562,7 @@ paths:
   /api/projects/import:
     post:
       summary: Import a project from a supported source
+      x-permission: prospecting.execute
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -395,6 +571,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ImportProjectRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Import response
           content:
@@ -403,6 +581,7 @@ paths:
   /api/projects/bulk-import:
     post:
       summary: Bulk import projects
+      x-permission: prospecting.execute
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -411,6 +590,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/BulkImportProjectsRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Bulk import summary
           content:
@@ -419,7 +600,10 @@ paths:
   /api/projects/categories/campfire:
     get:
       summary: List CAMPFIRE categories
+      x-permission: workspace.read
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Category response
           content:
@@ -428,6 +612,7 @@ paths:
   /api/projects/categories:
     get:
       summary: List categories for a source
+      x-permission: workspace.read
       parameters:
         - name: source
           in: query
@@ -435,6 +620,8 @@ paths:
             type: string
             default: campfire
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Category response
           content:
@@ -443,6 +630,7 @@ paths:
   /api/projects/search/campfire:
     post:
       summary: Search CAMPFIRE project candidates
+      x-permission: prospecting.execute
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -451,6 +639,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/SearchCampfireProjectsRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Search response
           content:
@@ -459,6 +649,7 @@ paths:
   /api/projects/search:
     post:
       summary: Search project candidates by source
+      x-permission: prospecting.execute
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -467,6 +658,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/SearchProjectsRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Search response
           content:
@@ -475,6 +668,7 @@ paths:
   /api/projects/search-jobs:
     post:
       summary: Start an asynchronous project search job
+      x-permission: prospecting.execute
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -483,6 +677,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/SearchProjectsRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Search job response
           content:
@@ -491,9 +687,12 @@ paths:
   /api/projects/search-jobs/{id}:
     get:
       summary: Get a project search job
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/Id'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Search job response
           content:
@@ -502,10 +701,13 @@ paths:
   /api/projects/search-jobs/{id}/cancel:
     post:
       summary: Cancel a project search job
+      x-permission: prospecting.execute
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Search job response
           content:
@@ -514,6 +716,7 @@ paths:
   /api/leads:
     get:
       summary: List sales leads
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/LeadLimit'
@@ -551,6 +754,8 @@ paths:
           description: Defaults to `desc` for `createdAt` and `asc` for other sort fields.
           schema: { type: string, enum: [asc, desc] }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Lead list. `data.summary` is calculated after source, status, priority, and nextAction filters, before contactState and mailStatus summary selections.
           content:
@@ -563,6 +768,7 @@ paths:
                       data: { $ref: '#/components/schemas/LeadListData' }
     post:
       summary: Create a sales lead
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -571,6 +777,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateLeadRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Lead response
           content:
@@ -579,6 +787,7 @@ paths:
   /api/opportunities:
     get:
       summary: List opportunities
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/OpportunityLimit'
@@ -604,6 +813,8 @@ paths:
           in: query
           schema: { type: string, format: date-time }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Paginated opportunity list
           content:
@@ -612,9 +823,12 @@ paths:
   /api/leads/{leadId}/opportunity:
     get:
       summary: Get the opportunity for a lead
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/LeadId'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Opportunity with recent history
           content:
@@ -624,6 +838,7 @@ paths:
           description: Lead not found
     patch:
       summary: Update opportunity details with optimistic locking
+      x-permission: opportunity.write
       parameters:
         - $ref: '#/components/parameters/LeadId'
         - $ref: '#/components/parameters/CsrfToken'
@@ -633,6 +848,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/UpdateOpportunityRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Updated opportunity
           content:
@@ -643,6 +860,7 @@ paths:
   /api/leads/{leadId}/opportunity/transitions:
     post:
       summary: Transition an opportunity
+      x-permission: opportunity.write
       parameters:
         - $ref: '#/components/parameters/LeadId'
         - $ref: '#/components/parameters/CsrfToken'
@@ -652,6 +870,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/TransitionOpportunityRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Transitioned opportunity
           content:
@@ -664,6 +884,7 @@ paths:
   /api/leads/{leadId}/opportunity/reopen:
     post:
       summary: Reopen a lost or excluded opportunity
+      x-permission: opportunity.reopen
       parameters:
         - $ref: '#/components/parameters/LeadId'
         - $ref: '#/components/parameters/CsrfToken'
@@ -673,6 +894,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ReopenOpportunityRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Reopened opportunity
           content:
@@ -683,11 +906,14 @@ paths:
   /api/leads/{leadId}/opportunity/history:
     get:
       summary: List opportunity stage history
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/LeadId'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/OpportunityLimit'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Paginated append-only history
           content:
@@ -696,10 +922,13 @@ paths:
   /api/leads/today:
     get:
       summary: List today's actionable sales leads
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Paginated today and overdue work with category counts
           content:
@@ -708,9 +937,12 @@ paths:
   /api/leads/{id}:
     get:
       summary: Get a sales lead
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/Id'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Lead response
           content:
@@ -718,6 +950,7 @@ paths:
               schema: { $ref: '#/components/schemas/ApiResponse' }
     patch:
       summary: Update a sales lead
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
@@ -727,6 +960,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/UpdateLeadRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Lead response
           content:
@@ -735,10 +970,13 @@ paths:
   /api/leads/{id}/score:
     post:
       summary: Recalculate lead score
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Score response
           content:
@@ -747,6 +985,7 @@ paths:
   /api/leads/{leadId}/tasks:
     get:
       summary: List tasks for a lead
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/LeadId'
         - name: scope
@@ -756,6 +995,8 @@ paths:
             enum: [active, all]
             default: active
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Task list response
           content:
@@ -763,6 +1004,7 @@ paths:
               schema: { $ref: '#/components/schemas/ApiResponse' }
     post:
       summary: Create a task for a lead
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/LeadId'
         - $ref: '#/components/parameters/CsrfToken'
@@ -772,6 +1014,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateTaskRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Task response
           content:
@@ -780,6 +1024,7 @@ paths:
   /api/tasks/{taskId}:
     patch:
       summary: Update a task
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/TaskId'
         - $ref: '#/components/parameters/CsrfToken'
@@ -789,6 +1034,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/UpdateTaskRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Task response
           content:
@@ -797,7 +1044,10 @@ paths:
   /api/task-assignees:
     get:
       summary: List active task assignees
+      x-permission: workspace.read
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Assignee response
           content:
@@ -806,6 +1056,7 @@ paths:
   /api/mails:
     get:
       summary: List mails
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
@@ -813,6 +1064,8 @@ paths:
           in: query
           schema: { $ref: '#/components/schemas/EmailStatus' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Mail list
           content:
@@ -821,6 +1074,7 @@ paths:
   /api/mails/draft:
     post:
       summary: Create a mail draft
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -829,6 +1083,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateMailDraftRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Mail response
           content:
@@ -837,11 +1093,14 @@ paths:
   /api/mails/templates:
     get:
       summary: List active mail templates
+      x-permission: workspace.read
       parameters:
         - name: channel
           in: query
           schema: { type: string }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Template response
           content:
@@ -849,6 +1108,7 @@ paths:
               schema: { $ref: '#/components/schemas/ApiResponse' }
     post:
       summary: Save or update a mail template
+      x-permission: template.manage
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -857,6 +1117,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/SaveMailTemplateRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Template response
           content:
@@ -865,9 +1127,12 @@ paths:
   /api/mails/templates/{key}:
     get:
       summary: Get a mail template by key
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/TemplateKey'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Template response
           content:
@@ -876,6 +1141,7 @@ paths:
   /api/mails/templates/import:
     post:
       summary: Import mail templates
+      x-permission: template.manage
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -884,6 +1150,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ImportMailTemplatesRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Template import response
           content:
@@ -892,6 +1160,7 @@ paths:
   /api/mails/{id}:
     patch:
       summary: Update mail subject or body
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
@@ -901,6 +1170,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/UpdateMailRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Mail response
           content:
@@ -909,9 +1180,12 @@ paths:
   /api/mails/{id}/consistency:
     get:
       summary: Check draft consistency
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/Id'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Consistency response
           content:
@@ -920,9 +1194,12 @@ paths:
   /api/mails/{id}/checklist:
     get:
       summary: Get mail checklist
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/Id'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Checklist response
           content:
@@ -930,6 +1207,7 @@ paths:
               schema: { $ref: '#/components/schemas/ApiResponse' }
     patch:
       summary: Update mail checklist
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
@@ -939,6 +1217,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/UpdateMailChecklistRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Checklist response
           content:
@@ -947,10 +1227,13 @@ paths:
   /api/mails/{id}/request-review:
     post:
       summary: Request mail review
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Mail response
           content:
@@ -959,10 +1242,13 @@ paths:
   /api/mails/{id}/request-rereview:
     post:
       summary: Request mail re-review
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Mail response
           content:
@@ -971,10 +1257,13 @@ paths:
   /api/mails/{id}/approve:
     post:
       summary: Approve a mail
+      x-permission: mail.review
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Mail response
           content:
@@ -983,6 +1272,7 @@ paths:
   /api/mails/{id}/reject:
     post:
       summary: Reject a mail
+      x-permission: mail.review
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
@@ -992,6 +1282,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/RejectMailRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Mail response
           content:
@@ -1000,10 +1292,13 @@ paths:
   /api/mails/{id}/queue:
     post:
       summary: Queue an approved mail
+      x-permission: mail.queue
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Mail response
           content:
@@ -1012,6 +1307,7 @@ paths:
   /api/mails/{id}/mark-sent:
     post:
       summary: Mark a mail as sent after manual recovery
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
@@ -1021,6 +1317,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/MarkMailSentRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Mail response
           content:
@@ -1029,10 +1327,13 @@ paths:
   /api/mails/{id}/send:
     post:
       summary: Send a queued mail through the configured provider
+      x-permission: mail.send
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Mail response
           content:
@@ -1041,6 +1342,7 @@ paths:
   /api/mails/{id}/replies:
     post:
       summary: Record a reply for a mail
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
@@ -1050,6 +1352,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateMailReplyRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Reply response
           content:
@@ -1058,10 +1362,13 @@ paths:
   /api/mails/{id}/retry:
     post:
       summary: Retry a mail workflow
+      x-permission: mail.queue
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Mail response
           content:
@@ -1070,10 +1377,13 @@ paths:
   /api/mails/{id}/cancel:
     post:
       summary: Cancel a mail
+      x-permission: mail.queue
       parameters:
         - $ref: '#/components/parameters/Id'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Mail response
           content:
@@ -1082,9 +1392,12 @@ paths:
   /api/mails/threads/{gmailThreadId}:
     get:
       summary: Get a Gmail thread
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/GmailThreadId'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Thread response
           content:
@@ -1093,6 +1406,7 @@ paths:
   /api/replies:
     get:
       summary: List reply inbox items
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/ReplyLimit'
@@ -1118,6 +1432,8 @@ paths:
             type: string
             enum: [asc, desc]
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Reply inbox response
           content:
@@ -1126,7 +1442,10 @@ paths:
   /api/ai/usage-summary:
     get:
       summary: Get the current OpenAI monthly budget usage
+      x-permission: ai.cost.read
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: OpenAI monthly budget usage summary
           content:
@@ -1141,6 +1460,7 @@ paths:
   /api/ai/leads/{leadId}/generate-mail:
     post:
       summary: Generate a mail draft for a lead
+      x-permission: analysis.execute
       parameters:
         - $ref: '#/components/parameters/LeadId'
         - $ref: '#/components/parameters/CsrfToken'
@@ -1150,6 +1470,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/GenerateMailRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: AI response
           content:
@@ -1160,6 +1482,7 @@ paths:
   /api/ai/leads/{leadId}/email-draft:
     post:
       summary: Generate a mail draft alias for a lead
+      x-permission: analysis.execute
       parameters:
         - $ref: '#/components/parameters/LeadId'
         - $ref: '#/components/parameters/CsrfToken'
@@ -1169,6 +1492,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/GenerateMailRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: AI response
           content:
@@ -1179,9 +1504,12 @@ paths:
   /api/ai/leads/{leadId}/analysis:
     get:
       summary: Get structured lead analysis and revision history
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/LeadId'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Structured lead analysis response
           content:
@@ -1195,6 +1523,7 @@ paths:
                         $ref: '#/components/schemas/LeadAnalysisResponse'
     patch:
       summary: Save a structured lead analysis draft revision
+      x-permission: analysis.execute
       parameters:
         - $ref: '#/components/parameters/LeadId'
         - $ref: '#/components/parameters/CsrfToken'
@@ -1204,6 +1533,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/LeadAnalysisRevisionRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Saved structured lead analysis draft
           content:
@@ -1220,6 +1551,7 @@ paths:
   /api/ai/leads/{leadId}/analysis/confirm:
     post:
       summary: Confirm a structured lead analysis revision
+      x-permission: analysis.execute
       parameters:
         - $ref: '#/components/parameters/LeadId'
         - $ref: '#/components/parameters/CsrfToken'
@@ -1229,6 +1561,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/LeadAnalysisRevisionRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Confirmed structured lead analysis revision
           content:
@@ -1245,10 +1579,13 @@ paths:
   /api/ai/leads/{leadId}/analyze:
     post:
       summary: Analyze a lead
+      x-permission: analysis.execute
       parameters:
         - $ref: '#/components/parameters/LeadId'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: AI response
           content:
@@ -1257,10 +1594,13 @@ paths:
   /api/ai/mails/{mailId}/polish:
     post:
       summary: Polish a mail
+      x-permission: analysis.execute
       parameters:
         - $ref: '#/components/parameters/MailId'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: AI response
           content:
@@ -1271,10 +1611,13 @@ paths:
   /api/ai/mails/{mailId}/semantic-consistency:
     post:
       summary: Check mail semantic consistency
+      x-permission: analysis.execute
       parameters:
         - $ref: '#/components/parameters/MailId'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: AI response
           content:
@@ -1285,9 +1628,12 @@ paths:
   /api/ai/leads/{leadId}/generations:
     get:
       summary: List AI generations for a lead
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/LeadId'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: AI generation response
           content:
@@ -1296,10 +1642,13 @@ paths:
   /api/ai/replies/{replyId}/classify:
     post:
       summary: Classify a reply
+      x-permission: analysis.execute
       parameters:
         - $ref: '#/components/parameters/ReplyId'
         - $ref: '#/components/parameters/CsrfToken'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: AI response
           content:
@@ -1320,6 +1669,7 @@ paths:
   /api/t/links:
     post:
       summary: Create a tracked link
+      x-permission: records.write
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -1328,6 +1678,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateTrackedLinkRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Tracking link response
           content:
@@ -1336,9 +1688,12 @@ paths:
   /api/t/mails/{emailId}/engagement:
     get:
       summary: Get mail material engagement
+      x-permission: workspace.read
       parameters:
         - $ref: '#/components/parameters/EmailId'
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '200':
           description: Engagement response
           content:
@@ -1359,6 +1714,7 @@ paths:
   /api/unsubscribe:
     post:
       summary: Mark a contact or email as unsubscribed
+      x-permission: compliance.manage
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -1367,6 +1723,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/UnsubscribeRequest' }
       responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
         '201':
           description: Unsubscribe response
           content:
@@ -1387,6 +1745,11 @@ components:
           schema: { $ref: '#/components/schemas/ApiResponse' }
     CsrfRejected:
       description: Origin or CSRF token validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiResponse' }
+    AuthorizationDenied:
+      description: The authenticated user does not have the permission required for this operation
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiResponse' }
@@ -1491,11 +1854,15 @@ components:
           properties:
             user:
               type: object
-              required: [id, email, role]
+              required: [id, email, role, permissions]
               properties:
                 id: { type: string, format: uuid }
                 email: { type: string, format: email }
                 role: { type: string, enum: [admin, manager, operator, viewer] }
+                permissions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Permission'
             csrfToken: { type: string }
             absoluteExpiresAt: { type: string, format: date-time }
         meta:
@@ -1504,6 +1871,123 @@ components:
           nullable: true
           allOf:
             - $ref: '#/components/schemas/ErrorResponse'
+    Permission:
+      type: string
+      description: Server-enforced capability returned for the current role
+      enum:
+        - workspace.read
+        - reports.read
+        - ai.cost.read
+        - prospecting.execute
+        - records.write
+        - analysis.execute
+        - compliance.manage
+        - mail.review
+        - mail.queue
+        - mail.send
+        - template.manage
+        - opportunity.write
+        - opportunity.reopen
+        - user.manage
+        - audit.read
+    AdminUser:
+      type: object
+      required: [id, email, role, isActive, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string, nullable: true }
+        role: { type: string, enum: [admin, manager, operator, viewer] }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CreateAdminUserRequest:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        name: { type: string, nullable: true, maxLength: 120 }
+        role: { type: string, enum: [admin, manager, operator, viewer] }
+        isActive: { type: boolean, default: true }
+    UpdateAdminUserRequest:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120, nullable: true }
+        role: { type: string, enum: [admin, manager, operator, viewer] }
+        isActive: { type: boolean }
+    AdminUserListData:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUser'
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    AdminUserListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminUserListData'
+    RevokeUserSessionsResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [userId, revokedSessionCount]
+              properties:
+                userId: { type: string, format: uuid }
+                revokedSessionCount: { type: integer, minimum: 0 }
+    AuditLogUser:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, nullable: true }
+    AuditLogEntry:
+      type: object
+      required: [id, action, entityType, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid, nullable: true }
+        sessionId: { type: string, format: uuid, nullable: true }
+        action: { type: string }
+        entityType: { type: string }
+        entityId: { type: string, nullable: true }
+        before: { nullable: true }
+        after: { nullable: true }
+        ipHash: { type: string, nullable: true }
+        userAgent: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        user:
+          allOf:
+            - $ref: '#/components/schemas/AuditLogUser'
+          nullable: true
+    AdminAuditLogListData:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogEntry'
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    AdminAuditLogListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminAuditLogListData'
     SalesPerformanceResponse:
       type: object
       required: [data, meta, error]

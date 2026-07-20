@@ -408,7 +408,7 @@ Recommended next action:
 - 目的: 外部で手動送信したメールについて、送信日、手段、宛先、使用文面を履歴として残す。
 - 現状: `mark-sent` API、`sentAt`、`EmailEvent(sent)`、手動送信済みUIが実装済み。
 - 合格: 手動送信記録後も件名・本文・宛先・送信手段を再表示でき、Leadがcontactedへ遷移する。
-- 注意: 操作ユーザーはLA-004でAuditLogへ追加する。自動送信は有効にしない。
+- 注意: 操作ユーザーはLA-004でAuditLogへ追加済み。自動送信は有効にしない。
 
 ### SO-002 返信・次回対応の完成
 
@@ -491,9 +491,12 @@ Recommended next action:
 - Priority: P1
 - Model: Sol / T4
 - Depends on: LA-003
+- 状態: complete（2026-07-20）
 - 目的: operator/manager/admin/viewer権限と重要操作AuditLogを実装する。
+- 完了: 15 permission、fail-closed metadata、`/api/auth/me.permissions`、admin user/audit API、メール権限制限、actor/session付きAuditLog、最後のadmin/self-lockout防止。
 - 必須監査: import、分析、生成、編集、レビュー、棄却、承認、queue、send、unsubscribe、user/role変更。
-- 合格: operatorはapprove/queue不可、managerは可、viewerは更新不可。actorは認証userから取得。
+- 合格: operatorはapprove/queue不可、managerは可、viewerは更新不可。actorは認証userから取得。詳細契約は `docs/38_RBAC_AUDIT_CONTRACT.md`。
+- 証跡: `apps/api/src/auth/permission-policy.spec.ts`、`apps/api/src/auth/rbac.guard.spec.ts`、`apps/api/src/auth/controller-permissions.contract.spec.ts`、users/audit service tests、OpenAPIの`x-permission`/403契約。
 
 ### LA-007 組織ごとのデータ分離
 

@@ -14,4 +14,5 @@ APIキー管理、個人情報、営業先情報、GitHub公開時の注意点�
 - local loginはloopbackだけで有効で、固定した既存active user以外を選べない。
 - Gmail送信用OAuthと利用者ログイン用Google OAuthは別credentialとして管理する。
 - `SESSION_SECRETS` と `CSRF_SECRET` はstaging/productionで32文字以上とし、Git・画面・通常logへ出さない。
-- role別の更新制限、全重要操作監査、組織別データ分離はLA-004/LA-007で行うため、それまでは外部公開しない。
+- role別の更新制限と全重要操作監査はLA-004で実装済み。組織別データ分離はLA-007で行うため、それまでは複数顧客向けに外部公開しない。
+- roleは `viewer`、`operator`、`manager`、`admin` の4種、permissionは15種とし、全保護operationに明示的なmetadataを要求する。詳細は `docs/38_RBAC_AUDIT_CONTRACT.md` を参照する。

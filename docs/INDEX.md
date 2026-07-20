@@ -44,6 +44,7 @@
 | 35 | 35_OPPORTUNITY_PIPELINE_CONTRACT.md | 商談状態・履歴・権限・移行・集計契約 | 作成済み |
 | 36 | 36_STRUCTURED_LEAD_ANALYSIS_CONTRACT.md | 案件別の構造化分析・確認・履歴・メール固定契約 | 作成済み |
 | 37 | 37_AUTHENTICATION_CONTRACT.md | session・Googleログイン・保護範囲・header廃止・local開発の認証契約 | 作成済み |
+| 38 | 38_RBAC_AUDIT_CONTRACT.md | role・permission・管理API・重要操作監査・公開前境界のRBAC契約 | 作成済み |
 
 ## 付属仕様
 - `../prisma/schema.prisma`

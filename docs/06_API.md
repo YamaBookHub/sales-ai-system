@@ -13,6 +13,8 @@
 - ブラウザ認証はserver管理のopaque session Cookieを使う。JWTや任意の利用者headerは使用しない。
 - 認証済みのPOST/PATCH/DELETEは、同一originに加えて `GET /api/auth/me` が返す `csrfToken` を `X-CSRF-Token` headerで送る。
 - 認証エラーは401、CSRF・利用停止・許可されていないログインは403。保護画面の未認証アクセスは `/login` へredirectする。
+- 認証済みoperationはroleに対応するpermissionを要求する。OpenAPIの`x-permission`を正本とし、metadataがない保護operationはfail closedで拒否する。権限不足は403で、レスポンスは既存の`{ data, meta, error }` wrapperを維持する。
+- permissionは `workspace.read`、`reports.read`、`ai.cost.read`、`prospecting.execute`、`records.write`、`analysis.execute`、`compliance.manage`、`mail.review`、`mail.queue`、`mail.send`、`template.manage`、`opportunity.write`、`opportunity.reopen`、`user.manage`、`audit.read` の15種である。role表と操作割当は `docs/38_RBAC_AUDIT_CONTRACT.md` を参照する。
 
 ## 認証
 
@@ -22,10 +24,22 @@
 | GET | `/api/auth/google/start` | 公開 | Google OAuth/OIDC開始 |
 | GET | `/api/auth/google/callback` | 公開 | callback検証とsession発行 |
 | POST | `/api/auth/local-login` | local限定公開 | 固定した既存active userのsession発行 |
-| GET | `/api/auth/me` | 必須 | current user、CSRF token、session絶対期限 |
+| GET | `/api/auth/me` | 必須 | current user、role別permissions、CSRF token、session絶対期限 |
 | POST | `/api/auth/logout` | 必須 + CSRF | current session失効 |
 
 local loginは `APP_ENV=local`、`AUTH_MODE=local`、loopback origin、`AUTH_DEV_USER_EMAIL` の既存active userという全条件を要求し、requestから利用者を選択できない。
+
+### 管理API
+
+| Method | Path | permission | Query / Body |
+|---|---|---|---|
+| GET | `/api/admin/users` | `user.manage` | `page`, `limit`, `role`, `isActive` |
+| POST | `/api/admin/users` | `user.manage` | `CreateAdminUserDto` |
+| PATCH | `/api/admin/users/{id}` | `user.manage` | `UpdateAdminUserDto` |
+| POST | `/api/admin/users/{id}/revoke-sessions` | `user.manage` | - |
+| GET | `/api/admin/audit-logs` | `audit.read` | `page`, `limit`, `userId`, `action`, `entityType`, `entityId`, `from`, `to` |
+
+利用者のrole/active変更は最後のadminとself-lockoutを保護し、security変更時は対象sessionを失効させる。AuditLogの本文・AI入力・secretはAPIから返さない。
 
 ## 画面・health
 

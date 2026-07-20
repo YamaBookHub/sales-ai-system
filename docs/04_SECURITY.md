@@ -2,7 +2,7 @@
 
 ## 1. 現在の位置づけ
 
-この文書は現行コードの安全境界を記載する。認証は実装済みだが、role別RBACと組織分離は未完成であるため、認証だけで外部公開可能とは扱わない。
+この文書は現行コードの安全境界を記載する。認証と単一組織内のrole別RBAC・重要操作監査は実装済みである。組織分離はLA-007で行うため、これだけで複数顧客向け外部公開可能とは扱わない。
 
 ## 2. 実装済みの安全境界
 
@@ -57,11 +57,14 @@
 - default denyのauthentication guard、inactive user拒否、Origin/CSRF検証
 - `X-Operator-Email` と利用者の自動作成・再有効化の廃止
 - import、分析、メールworkflow、商談、配信停止等への認証済みactor伝播
+- `admin` / `manager` / `operator` / `viewer` によるpermission enforcement
+- 全保護operationのfail-closed metadataと403
+- 重要操作のactor/session付きAuditLogとadmin監査一覧
+- `/api/auth/me` のrole別permissions
+- 最後のadmin保護、self-lockout防止、role/active変更時のsession失効
 
 ### 未実装
 
-- `admin` / `manager` / `operator` / `viewer` による全routeのRBAC enforcement
-- すべての重要操作の完全なAuditLog
 - 組織ごとのデータ分離
 
 したがって、role enumと認証の存在だけで「RBAC・複数組織対応済み」と書かない。
@@ -71,15 +74,15 @@
 ## 4. 監査と個人情報
 
 - `AuditLog` modelと、project import・seedなど一部操作の記録は実装済み。
-- import、分析、生成、編集、review、承認、queue、send記録、unsubscribe、商談操作のactor伝播または監査は実装済み。user/role変更を含む全操作監査はLA-004で完成させる。
+- import、分析、生成、編集、review、承認、queue、send記録、unsubscribe、商談操作、user/role変更のactor伝播または監査はLA-004で実装済み。AuditLogは業務履歴と別に正本として保持する。
 - `EmailEvent` はメールworkflowと追跡イベントの履歴に使う。これだけで全操作の監査を満たすとは扱わない。
 - IPはschema上 `ipHash` で保存できる。平文IPの保存、保管期間、User-Agent、メール本文とAI入力の扱いは運用・法務確認が必要である。
 - AIは実績、数値、制度、日付、社名、成果保証を創作しない。未知の情報は未知として扱う。
 
 ## 5. 未実装・将来要件
 
-- role別RBAC
-- 認証userと拒否操作を結びつける完全なAuditLog
+- 組織別RBACとデータ分離（LA-007）
+- job所有者と複数instance間の停止権限（LA-005）
 - worker、Redis、scheduler、DLQ、rate limit、外部providerの真の冪等性
 - 重要操作の完全なAuditLog、監視、運用上のsecret rotation、本番hardening
 

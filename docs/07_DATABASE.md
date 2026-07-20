@@ -50,6 +50,12 @@
 Relation: `AuditLog[]`, `Task[]`, 承認者としての `OutreachEmail[]`。
 Index: `[role, isActive]`。
 
+### 3.1.1 RBAC・session監査
+
+`UserRole`は `admin`、`manager`、`operator`、`viewer` の4値を持つ。認証済みrequestのactorは`User.id`と`UserSession.id`から確定し、request bodyや任意headerから利用者を選択しない。
+
+`AuditLog`は重要操作の正本であり、`sessionId String? @db.Uuid` を持つ。既存migration/seed行ではsessionIdがnullでもよい。検索用indexは `[userId, createdAt]`、`[sessionId, createdAt]`、`[action, createdAt]` を持つ。`before`/`after`は安全な最小snapshotに限定し、メール本文、AI入力、token、secretを保存しない。
+
 ### 3.2 `CrowdfundingPlatform`
 
 | フィールド | 型 / default |
@@ -447,6 +453,7 @@ Relation: `SalesLead?`, `User?`。Index: `[status, dueAt]`, `leadId`, `assigneeI
 |---|---|
 | `id` | `String @id @default(uuid()) @db.Uuid` |
 | `userId` | `String? @db.Uuid` |
+| `sessionId` | `String? @db.Uuid` |
 | `action` | `String` |
 | `entityType` | `String` |
 | `entityId` | `String?` |
@@ -456,7 +463,7 @@ Relation: `SalesLead?`, `User?`。Index: `[status, dueAt]`, `leadId`, `assigneeI
 | `userAgent` | `String?` |
 | `createdAt` | `DateTime @default(now())` |
 
-Relation: `User?`。Index: `[entityType, entityId]`, `action`, `createdAt`。
+Relation: `User?`。Index: `[entityType, entityId]`, `action`, `createdAt`, `[userId, createdAt]`, `[sessionId, createdAt]`, `[action, createdAt]`。
 
 ## 4. 実装済み・未実装・将来要件
 
@@ -465,20 +472,20 @@ Relation: `User?`。Index: `[entityType, entityId]`, `action`, `createdAt`。
 - 上記enum/modelと、対応するmigration 7件が存在する。
 - CAMPFIRE/Makuakeのproject取得・正規化・import、Company/Lead保存、重複URLと `[companyId, projectId]` の制約を利用した重複防止がある。
 - Leadのscore計算、Task、AI分析・メール下書き・返信分類、MailTemplate、MailChecklistItem、TrackedLink/LinkClickがAPIから利用できる。
-- `EmailEvent` はメール状態遷移、送信claim、追跡イベントの履歴に使われる。`AuditLog` はproject importやseedなど一部の操作で記録される。
+- `EmailEvent` はメール状態遷移、送信claim、追跡イベントの履歴に使われる。`AuditLog` は重要操作をactor/session付きで記録し、業務履歴とは別の監査正本として扱う。
 - AI生成メールは `draft` として保存し、実送信は人間のreview/承認/checklistを通過したメールに限定する。
 - `Company.isBlocked`、`ContactPerson.isUnsubscribed`、正規化送信先、既存送信履歴をまとめて検査する共通guardを、下書き・レビュー・手動送信記録・実送信へ適用済み。
 
 ### 4.2 未実装または未完了
 
-- `UserSession`、`User.googleSubject`、opaque Cookie session、current user、Google OAuth/OIDC、認証guardは実装済み。role別RBACと組織scopeは未実装。
+- `UserSession`、`User.googleSubject`、opaque Cookie session、current user、Google OAuth/OIDC、認証guard、単一組織内のrole別RBACは実装済み。組織scopeは未実装。
 - Redis、共有queue、worker、scheduler、DLQ、送信予約の自動実行に対応するmodel/module/scriptはない。
 - `OutreachEmail` のprovider送信はGmail OAuthの最小実装のみ。provider側の真の冪等性、外部APIの一般的retry方針、送信監査の詳細化は未完了。
-- すべての重要操作をcurrent userに紐づけたAuditLogへ記録する仕組みは未実装。
+- すべての重要操作をcurrent user/sessionに紐づけたAuditLogへ記録する仕組みはLA-004で実装済み。監査本文にはメール本文、AI入力、token、secretを保存しない。
 
 ### 4.3 将来要件
 
-- 認証済みprincipalを使うRBACと全操作監査。
+- Organization、Membership、組織単位のRBACと全read/write/export/jobのscope（LA-007）。
 - worker/Redis/DLQを含む共有queueと、本番送信を再開する場合のrate limit・retry・冪等性。
 - 面談、提案、契約、請求、SNS分析、収集job履歴などの専用model。現時点ではschemaに追加しない。
 
@@ -490,7 +497,7 @@ Relation: `User?`。Index: `[entityType, entityId]`, `action`, `createdAt`。
 
 ## 6. Migrationと運用
 
-現在のmigrationは次の7件である。
+現在のmigrationは次の11件である。
 
 - `20260708000000_init`
 - `20260709000000_mail_checklist`
@@ -499,5 +506,10 @@ Relation: `User?`。Index: `[entityType, entityId]`, `action`, `createdAt`。
 - `20260711000000_project_source_metrics`
 - `20260712000000_mail_templates`
 - `20260718000000_contact_eligibility_destination`
+- `20260718010000_opportunity_pipeline`
+- `20260719000000_structured_lead_analysis`
+- `20260719120000_openai_budget_guard`
+- `20260720000000_authentication_sessions`
+- `20260720090000_rbac_audit_session`
 
 検証は `npm run prisma:validate` を使用する。開発DBへの反映は既存の `npm run prisma:migrate`、client生成は `npm run prisma:generate` を使用する。本番のmigration deploy専用scriptはまだpackage scriptsにないため、未実装のscript名を前提にしない。
