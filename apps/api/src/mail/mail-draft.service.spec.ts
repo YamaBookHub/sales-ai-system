@@ -56,6 +56,7 @@ describe('MailService draft creation', () => {
         }),
         count: jest.fn().mockResolvedValue(1)
       },
+      auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit_1' }) },
       $executeRawUnsafe: jest.fn().mockResolvedValue(1)
     };
     const prisma = {
@@ -113,6 +114,26 @@ describe('MailService draft creation', () => {
       })
     );
     expect(tx.outreachEmail.create.mock.calls[0][0].data.body).not.toBe('TODO: AI-generated draft body will be inserted here.');
+  });
+
+  it('audits a successful manual draft without storing the manual body', async () => {
+    const { service, tx } = createService();
+
+    await service.createDraft({
+      leadId: lead.id,
+      analysisRevisionId,
+      templateKey: 'normal',
+      manualInstruction: '手動で作成した本文'
+    }, '11111111-1111-4111-8111-111111111111');
+
+    expect(tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'mail.created',
+        entityType: 'OutreachEmail',
+        entityId: 'mail_manual'
+      })
+    });
+    expect(JSON.stringify(tx.auditLog.create.mock.calls[0][0])).not.toContain('手動で作成した本文');
   });
 
   it('returns only the generated OutreachEmail when manual instruction is omitted', async () => {

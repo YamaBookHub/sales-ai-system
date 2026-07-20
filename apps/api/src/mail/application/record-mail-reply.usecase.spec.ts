@@ -15,6 +15,7 @@ describe('RecordMailReplyUseCase', () => {
         create: jest.fn().mockResolvedValue({ id: 'reply_1' })
       },
       emailEvent: { create: jest.fn().mockResolvedValue({ id: 'event_1' }) },
+      auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit_1' }) },
       contactPerson: {
         update: jest.fn().mockResolvedValue({ id: 'contact_1' }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 })
@@ -98,6 +99,23 @@ describe('RecordMailReplyUseCase', () => {
       classification: { category: 'meeting_request' },
       task: { id: 'task_1' }
     });
+  });
+
+  it('audits a manually recorded reply without storing its sender or body', async () => {
+    const { useCase, tx } = createSubject();
+
+    await useCase.execute('mail_1', {
+      fromEmail: 'contact@example.com',
+      body: 'ぜひZoomで打ち合わせしたいです。候補日をください。',
+      receivedAt
+    }, '11111111-1111-4111-8111-111111111111');
+
+    expect(tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ action: 'mail.reply_recorded', entityId: 'mail_1' })
+    });
+    const serialized = JSON.stringify(tx.auditLog.create.mock.calls[0][0]);
+    expect(serialized).not.toContain('contact@example.com');
+    expect(serialized).not.toContain('ぜひZoomで打ち合わせしたいです。');
   });
 
   it('persists unsubscribe, clears follow-up dates, and does not create a task', async () => {

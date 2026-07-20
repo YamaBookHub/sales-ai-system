@@ -4,6 +4,7 @@ import { classifyReplyText } from '../../ai/domain/reply-classifier';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateMailReplyDto } from '../mail.dto';
 import { progressOpportunityInTransaction } from '../../leads/infrastructure/prisma-opportunity.repository';
+import { mailAuditState, recordMailAudit } from '../infrastructure/mail-audit';
 
 const TERMINAL_CATEGORIES: ReplyCategory[] = ['unsubscribe', 'not_interested'];
 
@@ -114,6 +115,15 @@ export class RecordMailReplyUseCase {
             taskId: task?.id ?? null,
             ...(userId ? { actorUserId: userId } : {})
           }
+        }
+      });
+      await recordMailAudit(tx, userId, 'mail.reply_recorded', email.id, {
+        before: mailAuditState(email),
+        after: {
+          ...mailAuditState(email),
+          replyCategory: classification.category,
+          replyConfidence: classification.confidence,
+          taskCreated: Boolean(task)
         }
       });
 

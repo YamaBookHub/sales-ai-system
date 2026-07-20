@@ -16,6 +16,7 @@ import { requireLatestConfirmedAnalysis } from '../ai/application/confirmed-anal
 import { DEFAULT_CHECKLIST_ITEMS } from './mail-checklist.defaults';
 import { resolveMailRecipient } from './infrastructure/contact-recipient.resolver';
 import { assertLeadContactEligible } from './infrastructure/contact-eligibility.reader';
+import { changedMailFields, checklistAuditSummary, mailAuditState, recordMailAudit } from './infrastructure/mail-audit';
 import {
   CreateMailDraftDto,
   CreateMailReplyDto,
@@ -176,18 +177,31 @@ export class MailService {
         where: { id: currentLead.id },
         data: { status: 'drafted' }
       });
+      await recordMailAudit(tx, userId, 'mail.created', email.id, {
+        after: mailAuditState(email)
+      });
 
       return email;
     });
   }
 
   update(id: string, dto: UpdateMailDto, userId: string | null = null) {
-    return this.prisma.outreachEmail.update({
-      where: { id },
-      data: {
-        ...dto,
-        events: { create: { type: 'reviewed', payload: { edited: true, ...(userId ? { actorUserId: userId } : {}) } } }
-      }
+    return this.prisma.$transaction(async (tx) => {
+      const before = await tx.outreachEmail.findUnique({ where: { id } });
+      if (!before) throw new NotFoundException('Mail not found');
+      const edit = changedMailFields(before, dto);
+      const email = await tx.outreachEmail.update({
+        where: { id },
+        data: {
+          ...dto,
+          events: { create: { type: 'reviewed', payload: { edited: true, ...(userId ? { actorUserId: userId } : {}) } } }
+        }
+      });
+      await recordMailAudit(tx, userId, 'mail.edited', id, {
+        before: mailAuditState(before),
+        after: { ...mailAuditState(email), ...edit }
+      });
+      return email;
     });
   }
 
@@ -232,12 +246,21 @@ export class MailService {
   }
 
   cancel(id: string, userId: string | null = null) {
-    return this.prisma.outreachEmail.update({
-      where: { id },
-      data: {
-        status: 'cancelled',
-        events: { create: { type: 'cancelled', payload: userId ? { actorUserId: userId } : undefined } }
-      }
+    return this.prisma.$transaction(async (tx) => {
+      const before = await tx.outreachEmail.findUnique({ where: { id } });
+      if (!before) throw new NotFoundException('Mail not found');
+      const email = await tx.outreachEmail.update({
+        where: { id },
+        data: {
+          status: 'cancelled',
+          events: { create: { type: 'cancelled', payload: userId ? { actorUserId: userId } : undefined } }
+        }
+      });
+      await recordMailAudit(tx, userId, 'mail.cancelled', id, {
+        before: mailAuditState(before),
+        after: mailAuditState(email)
+      });
+      return email;
     });
   }
 
@@ -261,6 +284,8 @@ export class MailService {
     const items = dto.items.length ? dto.items : DEFAULT_CHECKLIST_ITEMS.map((item) => ({ ...item, checked: false }));
 
     await this.prisma.$transaction(async (tx) => {
+      const email = await tx.outreachEmail.findUnique({ where: { id: emailId } });
+      if (!email) throw new NotFoundException('Mail not found');
       for (const item of items) {
         await tx.mailChecklistItem.upsert({
           where: { emailId_key: { emailId, key: item.key } },
@@ -291,6 +316,10 @@ export class MailService {
             ...(userId ? { actorUserId: userId } : {})
           }
         }
+      });
+      await recordMailAudit(tx, userId, 'mail.checklist_updated', emailId, {
+        before: mailAuditState(email),
+        after: { ...mailAuditState(email), ...checklistAuditSummary(items) }
       });
     });
 

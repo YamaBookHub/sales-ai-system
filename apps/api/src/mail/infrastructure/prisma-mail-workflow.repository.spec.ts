@@ -1,7 +1,21 @@
 import { ConflictException } from '@nestjs/common';
-import { PrismaMailWorkflowRepository } from './prisma-mail-workflow.repository';
+import { mailAuditActionForTransition, PrismaMailWorkflowRepository } from './prisma-mail-workflow.repository';
 
 describe('PrismaMailWorkflowRepository', () => {
+  it.each([
+    ['in_review', 'reviewed', undefined, 'mail.review_requested'],
+    ['in_review', 'reviewed', { reReview: true }, 'mail.rereview_requested'],
+    ['rejected', 'rejected', undefined, 'mail.rejected'],
+    ['approved', 'approved', undefined, 'mail.approved'],
+    ['queued', 'queued', undefined, 'mail.queued'],
+    ['queued', 'retried', undefined, 'mail.retried'],
+    ['sent', 'sent', { manual: true }, 'mail.marked_sent'],
+    ['sent', 'sent', undefined, 'mail.sent'],
+    ['failed', 'failed', undefined, 'mail.send_failed']
+  ])('maps %s/%s to the stable %s audit action', (status, eventType, payload, action) => {
+    expect(mailAuditActionForTransition(status as any, eventType as any, payload as any)).toBe(action);
+  });
+
   it('claims queued mail for sending atomically', async () => {
     const tx = {
       outreachEmail: {
@@ -20,6 +34,7 @@ describe('PrismaMailWorkflowRepository', () => {
       emailEvent: {
         create: jest.fn()
       },
+      auditLog: { create: jest.fn() },
       $executeRawUnsafe: jest.fn().mockResolvedValue(1)
     };
     const prisma = {
@@ -56,6 +71,14 @@ describe('PrismaMailWorkflowRepository', () => {
         payload: { idempotencyKey: 'key_1', actorUserId: 'user_1' }
       }
     });
+    expect(tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'user_1',
+        action: 'mail.send_started',
+        entityType: 'OutreachEmail',
+        entityId: 'mail_1'
+      })
+    });
   });
 
   it('rejects claim when mail is not queued anymore', async () => {
@@ -76,6 +99,7 @@ describe('PrismaMailWorkflowRepository', () => {
       emailEvent: {
         create: jest.fn()
       },
+      auditLog: { create: jest.fn() },
       $executeRawUnsafe: jest.fn().mockResolvedValue(1)
     };
     const prisma = {
@@ -86,6 +110,7 @@ describe('PrismaMailWorkflowRepository', () => {
     await expect(repository.claimForSending('mail_1', 'key_1', 'user_1')).rejects.toThrow(ConflictException);
     expect(tx.outreachEmail.findUniqueOrThrow).not.toHaveBeenCalled();
     expect(tx.emailEvent.create).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
   it('records the actor on successful and failed send events', async () => {
@@ -96,7 +121,8 @@ describe('PrismaMailWorkflowRepository', () => {
           .mockResolvedValueOnce({ id: 'mail_1', leadId: null })
           .mockResolvedValueOnce({ id: 'mail_1', leadId: null })
       },
-      salesLead: { update: jest.fn() }
+      salesLead: { update: jest.fn() },
+      auditLog: { create: jest.fn() }
     };
     const prisma = {
       $transaction: jest.fn((callback) => callback(tx))
@@ -151,6 +177,12 @@ describe('PrismaMailWorkflowRepository', () => {
           }
         }
       }
+    });
+    expect(tx.auditLog.create).toHaveBeenNthCalledWith(1, {
+      data: expect.objectContaining({ userId: 'user_1', action: 'mail.sent', entityId: 'mail_1' })
+    });
+    expect(tx.auditLog.create).toHaveBeenNthCalledWith(2, {
+      data: expect.objectContaining({ userId: 'user_1', action: 'mail.send_failed', entityId: 'mail_1' })
     });
   });
 

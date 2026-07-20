@@ -5,6 +5,7 @@ import { DEFAULT_CHECKLIST_ITEMS } from '../mail-checklist.defaults';
 import { leadStatusForEmailStatus } from '../domain/mail-policy';
 import { assertPersistedMailContactEligible } from './contact-eligibility.reader';
 import { progressOpportunityInTransaction } from '../../leads/infrastructure/prisma-opportunity.repository';
+import { mailAuditState, recordMailAudit } from './mail-audit';
 
 @Injectable()
 export class PrismaMailWorkflowRepository {
@@ -49,7 +50,9 @@ export class PrismaMailWorkflowRepository {
     payload?: Prisma.InputJsonObject,
     actorUserId?: string | null
   ) {
-    return this.prisma.$transaction((tx) => this.transitionInTransaction(tx, id, status, eventType, extra, withActor(payload, actorUserId)));
+    return this.prisma.$transaction((tx) => this.transitionInTransaction(
+      tx, id, status, eventType, extra, withActor(payload, actorUserId), actorUserId
+    ));
   }
 
   transitionIfDeliveryAllowed(
@@ -68,7 +71,8 @@ export class PrismaMailWorkflowRepository {
         status,
         eventType,
         { ...destinationFields(destination), ...extra },
-        withActor(payload, actorUserId)
+        withActor(payload, actorUserId),
+        actorUserId
       );
     });
   }
@@ -76,6 +80,7 @@ export class PrismaMailWorkflowRepository {
   async claimForSending(id: string, idempotencyKey: string, actorUserId: string) {
     const email = await this.prisma.$transaction(async (tx) => {
       const destination = await assertPersistedMailContactEligible(tx, id, { lock: true });
+      const before = await tx.outreachEmail.findUnique({ where: { id } });
       const updated = await tx.outreachEmail.updateMany({
         where: { id, status: 'queued' },
         data: { status: 'sending', ...destinationFields(destination) }
@@ -103,6 +108,10 @@ export class PrismaMailWorkflowRepository {
           type: 'sending',
           payload: withActor({ idempotencyKey }, actorUserId)
         }
+      });
+      await recordMailAudit(tx, actorUserId, 'mail.send_started', id, {
+        before: mailAuditState(before),
+        after: mailAuditState(claimedEmail)
       });
 
       return claimedEmail;
@@ -168,7 +177,8 @@ export class PrismaMailWorkflowRepository {
     status: EmailStatus,
     eventType: EmailEventType,
     extra: Record<string, unknown>,
-    payload?: Prisma.InputJsonObject
+    payload?: Prisma.InputJsonObject,
+    actorUserId?: string | null
   ) {
     const current = await tx.outreachEmail.findUnique({
       where: { id },
@@ -205,9 +215,32 @@ export class PrismaMailWorkflowRepository {
       });
     }
 
+    await recordMailAudit(tx, actorUserId, mailAuditActionForTransition(status, eventType, payload), id, {
+      before: mailAuditState(current),
+      after: mailAuditState(email)
+    });
+
     return email;
   }
 
+}
+
+export function mailAuditActionForTransition(
+  status: EmailStatus,
+  eventType: EmailEventType,
+  payload?: Prisma.InputJsonObject
+) {
+  if (status === 'in_review' && eventType === 'reviewed') {
+    return payload?.reReview === true ? 'mail.rereview_requested' : 'mail.review_requested';
+  }
+  if (status === 'approved') return 'mail.approved';
+  if (status === 'rejected') return 'mail.rejected';
+  if (status === 'queued' && eventType === 'retried') return 'mail.retried';
+  if (status === 'queued') return 'mail.queued';
+  if (status === 'sent' && payload?.manual === true) return 'mail.marked_sent';
+  if (status === 'sent') return 'mail.sent';
+  if (status === 'failed') return 'mail.send_failed';
+  return 'mail.send_failed';
 }
 
 function destinationFields(destination: { type: string; value: string; key: string } | null) {
