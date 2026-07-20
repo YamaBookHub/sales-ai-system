@@ -12,21 +12,48 @@ describe('LeadsService detail editing integration', () => {
   let leadId: string;
   let companyId: string;
   let projectId: string;
+  let organizationId: string;
+  let userId: string;
+  let sessionId: string;
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const projectUrl = `https://camp-fire.jp/projects/lead-edit-${suffix}/view`;
+  const actor = () => ({ userId, sessionId, organizationId });
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl } } });
     await prisma.$connect();
+    const organization = await prisma.organization.create({
+      data: { slug: `lead-edit-${suffix}`, name: `営業リスト編集テスト ${suffix}` }
+    });
+    const user = await prisma.user.create({
+      data: { email: `lead-edit-${suffix}@example.test`, name: '統合テスト担当者' }
+    });
+    organizationId = organization.id;
+    userId = user.id;
+    await prisma.organizationMembership.create({
+      data: { organizationId, userId, role: 'admin' }
+    });
+    const session = await prisma.userSession.create({
+      data: {
+        organizationId,
+        userId,
+        tokenHash: `token-${suffix}`,
+        csrfTokenHash: `csrf-${suffix}`,
+        absoluteExpiresAt: new Date('2030-01-01T00:00:00.000Z'),
+        idleExpiresAt: new Date('2030-01-01T00:00:00.000Z')
+      }
+    });
+    sessionId = session.id;
     const platform = await prisma.crowdfundingPlatform.upsert({
       where: { type_baseUrl: { type: 'campfire', baseUrl: 'https://camp-fire.jp' } },
       update: { isActive: true },
       create: { type: 'campfire', name: 'CAMPFIRE', baseUrl: 'https://camp-fire.jp' }
     });
-    const company = await prisma.company.create({ data: { name: `編集前会社 ${suffix}` } });
+    const company = await prisma.company.create({ data: { organizationId, name: `編集前会社 ${suffix}` } });
     const project = await prisma.crowdfundingProject.create({
       data: {
         platformId: platform.id,
+        organizationId,
         companyId: company.id,
         title: '編集前案件',
         url: projectUrl,
@@ -36,7 +63,7 @@ describe('LeadsService detail editing integration', () => {
       }
     });
     const lead = await prisma.salesLead.create({
-      data: { companyId: company.id, projectId: project.id, source: 'campfire' }
+      data: { organizationId, companyId: company.id, projectId: project.id, source: 'campfire' }
     });
     companyId = company.id;
     projectId = project.id;
@@ -46,14 +73,25 @@ describe('LeadsService detail editing integration', () => {
   });
 
   afterAll(async () => {
-    if (leadId) {
-      await prisma.aiGeneration.deleteMany({ where: { leadId } });
-      await prisma.leadScore.deleteMany({ where: { leadId } });
-      await prisma.salesLead.delete({ where: { id: leadId } });
+    if (!prisma) return;
+    try {
+      if (!organizationId) return;
+      await prisma.auditLog.deleteMany({ where: { organizationId } });
+      await prisma.leadAnalysisRevision.deleteMany({ where: { organizationId } });
+      await prisma.aiGeneration.deleteMany({ where: { organizationId } });
+      await prisma.leadScore.deleteMany({ where: { organizationId } });
+      await prisma.outreachEmail.deleteMany({ where: { organizationId } });
+      await prisma.contactPerson.deleteMany({ where: { organizationId } });
+      await prisma.salesLead.deleteMany({ where: { organizationId } });
+      await prisma.crowdfundingProject.deleteMany({ where: { organizationId } });
+      await prisma.company.deleteMany({ where: { organizationId } });
+      await prisma.userSession.deleteMany({ where: { organizationId } });
+      await prisma.organizationMembership.deleteMany({ where: { organizationId } });
+      if (userId) await prisma.user.delete({ where: { id: userId } });
+      if (organizationId) await prisma.organization.delete({ where: { id: organizationId } });
+    } finally {
+      await prisma.$disconnect();
     }
-    if (projectId) await prisma.crowdfundingProject.delete({ where: { id: projectId } });
-    if (companyId) await prisma.company.delete({ where: { id: companyId } });
-    await prisma.$disconnect();
   });
 
   it('round-trips manual company, project, lead, and analysis edits and preserves them after analysis', async () => {
@@ -89,9 +127,9 @@ describe('LeadsService detail editing integration', () => {
       ownerMemo: '担当者が入力した営業メモ',
       brandAnalysisMemo: '担当者が入力した商品の魅力メモ',
       snsAnalysisMemo: '担当者が入力したSNSの見せ方'
-    });
+    }, actor());
 
-    const saved = await service.get(leadId);
+    const saved = await service.get(organizationId, leadId);
     expect(saved).toMatchObject({
       status: 'qualified',
       priority: 'high',
@@ -116,8 +154,8 @@ describe('LeadsService detail editing integration', () => {
       }
     });
 
-    await analyzeLead.execute(leadId);
-    await expect(service.get(leadId)).resolves.toMatchObject({
+    await analyzeLead.execute(leadId, actor());
+    await expect(service.get(organizationId, leadId)).resolves.toMatchObject({
       ownerMemo: '担当者が入力した営業メモ',
       brandAnalysisMemo: '担当者が入力した商品の魅力メモ',
       snsAnalysisMemo: '担当者が入力したSNSの見せ方'
@@ -129,8 +167,8 @@ describe('LeadsService detail editing integration', () => {
       projectEndDate: null,
       contactEmail: null,
       ownerMemo: null
-    });
-    await expect(service.get(leadId)).resolves.toMatchObject({
+    }, actor());
+    await expect(service.get(organizationId, leadId)).resolves.toMatchObject({
       contactEmail: null,
       ownerMemo: null,
       company: { websiteUrl: null },
@@ -158,11 +196,12 @@ describe('LeadsService detail editing integration', () => {
       hasContact: boolean;
       mails: Array<{ status: 'draft' | 'sent'; createdAt: Date }>;
     }) => {
-      const company = await prisma.company.create({ data: { name: `一覧SQL ${label} ${listSuffix}` } });
+      const company = await prisma.company.create({ data: { organizationId, name: `一覧SQL ${label} ${listSuffix}` } });
       fixtureCompanyIds.push(company.id);
       const project = await prisma.crowdfundingProject.create({
         data: {
           platformId: (await prisma.crowdfundingPlatform.findFirstOrThrow({ where: { type: 'campfire' } })).id,
+          organizationId,
           companyId: company.id,
           title: `一覧SQL ${label} ${listSuffix}`,
           url: `https://camp-fire.jp/projects/list-${label}-${listSuffix}/view`,
@@ -173,17 +212,18 @@ describe('LeadsService detail editing integration', () => {
         }
       });
       fixtureProjectIds.push(project.id);
-      const lead = await prisma.salesLead.create({ data: { companyId: company.id, projectId: project.id, source: 'campfire' } });
+      const lead = await prisma.salesLead.create({ data: { organizationId, companyId: company.id, projectId: project.id, source: 'campfire' } });
       fixtureLeadIds.push(lead.id);
       if (hasContact) {
         const contact = await prisma.contactPerson.create({
-          data: { companyId: company.id, email: `${label}-${listSuffix}@example.com`, isPrimary: true }
+          data: { organizationId, companyId: company.id, email: `${label}-${listSuffix}@example.com`, isPrimary: true }
         });
         fixtureContactIds.push(contact.id);
       }
       for (const mail of mails) {
         await prisma.outreachEmail.create({
           data: {
+            organizationId,
             companyId: company.id,
             leadId: lead.id,
             status: mail.status,
@@ -216,7 +256,7 @@ describe('LeadsService detail editing integration', () => {
       });
       const noMail = await createFixture({ label: 'no-mail', amount: 300, daysLeft: 10, hasContact: false, mails: [] });
 
-      const base = await service.list(1, 20, undefined, undefined, {
+      const base = await service.list(organizationId, 1, 20, undefined, undefined, {
         keyword: listSuffix,
         source: 'campfire',
         sort: 'amount',
@@ -231,7 +271,7 @@ describe('LeadsService detail editing integration', () => {
       expect(base.items.map((item) => item.id)).toEqual([latestDraft.id, oldDraftNowSent.id, noMail.id]);
       expect(base.items.map((item) => item.mails[0]?.status || null)).toEqual(['draft', 'sent', null]);
 
-      const daysLeftAscending = await service.list(1, 20, undefined, undefined, {
+      const daysLeftAscending = await service.list(organizationId, 1, 20, undefined, undefined, {
         keyword: listSuffix,
         source: 'campfire',
         sort: 'daysLeft',
@@ -239,7 +279,7 @@ describe('LeadsService detail editing integration', () => {
       });
       expect(daysLeftAscending.items.map((item) => item.id)).toEqual([latestDraft.id, noMail.id, oldDraftNowSent.id]);
 
-      const onlyDraft = await service.list(1, 20, undefined, undefined, {
+      const onlyDraft = await service.list(organizationId, 1, 20, undefined, undefined, {
         keyword: listSuffix,
         source: 'campfire',
         mailStatus: 'draft',
@@ -252,14 +292,14 @@ describe('LeadsService detail editing integration', () => {
         items: [{ id: latestDraft.id, mails: [{ status: 'draft' }] }]
       });
 
-      const noMailOnly = await service.list(1, 20, undefined, undefined, {
+      const noMailOnly = await service.list(organizationId, 1, 20, undefined, undefined, {
         keyword: listSuffix,
         source: 'campfire',
         mailStatus: 'none'
       });
       expect(noMailOnly).toMatchObject({ total: 1, items: [{ id: noMail.id, mails: [] }] });
 
-      const contactsOnly = await service.list(1, 20, undefined, undefined, {
+      const contactsOnly = await service.list(organizationId, 1, 20, undefined, undefined, {
         keyword: listSuffix,
         source: 'campfire',
         contactState: 'has',
@@ -268,11 +308,11 @@ describe('LeadsService detail editing integration', () => {
       });
       expect(contactsOnly.items.map((item) => item.id)).toEqual([latestDraft.id, oldDraftNowSent.id]);
     } finally {
-      await prisma.outreachEmail.deleteMany({ where: { leadId: { in: fixtureLeadIds } } });
-      await prisma.contactPerson.deleteMany({ where: { id: { in: fixtureContactIds } } });
-      await prisma.salesLead.deleteMany({ where: { id: { in: fixtureLeadIds } } });
-      await prisma.crowdfundingProject.deleteMany({ where: { id: { in: fixtureProjectIds } } });
-      await prisma.company.deleteMany({ where: { id: { in: fixtureCompanyIds } } });
+      await prisma.outreachEmail.deleteMany({ where: { organizationId, leadId: { in: fixtureLeadIds } } });
+      await prisma.contactPerson.deleteMany({ where: { organizationId, id: { in: fixtureContactIds } } });
+      await prisma.salesLead.deleteMany({ where: { organizationId, id: { in: fixtureLeadIds } } });
+      await prisma.crowdfundingProject.deleteMany({ where: { organizationId, id: { in: fixtureProjectIds } } });
+      await prisma.company.deleteMany({ where: { organizationId, id: { in: fixtureCompanyIds } } });
     }
   });
 
@@ -281,10 +321,12 @@ describe('LeadsService detail editing integration', () => {
     const platform = await prisma.crowdfundingPlatform.findFirstOrThrow({ where: { type: 'campfire' } });
     const companies = Array.from({ length: 201 }, (_, index) => ({
       id: randomUUID(),
+      organizationId,
       name: `ページング会社 ${pageSuffix} ${String(index).padStart(3, '0')}`
     }));
     const projects = companies.map((company, index) => ({
       id: randomUUID(),
+      organizationId,
       platformId: platform.id,
       companyId: company.id,
       title: `ページング案件 ${pageSuffix} ${String(index).padStart(3, '0')}`,
@@ -295,6 +337,7 @@ describe('LeadsService detail editing integration', () => {
     }));
     const leads = projects.map((project, index) => ({
       id: randomUUID(),
+      organizationId,
       companyId: project.companyId,
       projectId: project.id,
       source: 'campfire',
@@ -308,7 +351,7 @@ describe('LeadsService detail editing integration', () => {
 
       const received: string[] = [];
       for (let page = 1; page <= 3; page += 1) {
-        const result = await service.list(page, 100, undefined, undefined, {
+        const result = await service.list(organizationId, page, 100, undefined, undefined, {
           keyword: pageSuffix,
           source: 'campfire',
           sort: 'createdAt',
@@ -321,9 +364,9 @@ describe('LeadsService detail editing integration', () => {
       expect(received).toEqual(leads.map((lead) => lead.id).reverse());
       expect(new Set(received).size).toBe(201);
     } finally {
-      await prisma.salesLead.deleteMany({ where: { id: { in: leads.map((lead) => lead.id) } } });
-      await prisma.crowdfundingProject.deleteMany({ where: { id: { in: projects.map((project) => project.id) } } });
-      await prisma.company.deleteMany({ where: { id: { in: companies.map((company) => company.id) } } });
+      await prisma.salesLead.deleteMany({ where: { organizationId, id: { in: leads.map((lead) => lead.id) } } });
+      await prisma.crowdfundingProject.deleteMany({ where: { organizationId, id: { in: projects.map((project) => project.id) } } });
+      await prisma.company.deleteMany({ where: { organizationId, id: { in: companies.map((company) => company.id) } } });
     }
   });
 });

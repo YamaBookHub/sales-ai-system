@@ -12,9 +12,9 @@ import { mailAuditState, recordMailAudit } from './mail-audit';
 export class PrismaMailWorkflowRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async get(id: string) {
-    const email = await this.prisma.outreachEmail.findUnique({
-      where: { id },
+  async get(id: string, organizationId: string) {
+    const email = await this.prisma.outreachEmail.findFirst({
+      where: { id, organizationId },
       include: {
         lead: {
           select: {
@@ -33,10 +33,10 @@ export class PrismaMailWorkflowRepository {
     return email;
   }
 
-  async checklistComplete(emailId: string) {
-    await this.ensureDefaultChecklist(emailId);
+  async checklistComplete(emailId: string, organizationId: string) {
+    await this.ensureDefaultChecklist(emailId, organizationId);
     const items = await this.prisma.mailChecklistItem.findMany({
-      where: { emailId },
+      where: { organizationId, emailId },
       select: { checked: true }
     });
 
@@ -48,8 +48,8 @@ export class PrismaMailWorkflowRepository {
     status: EmailStatus,
     eventType: EmailEventType,
     extra: Record<string, unknown> = {},
-    payload?: Prisma.InputJsonObject,
-    actor?: AuditActor | null
+    payload: Prisma.InputJsonObject | undefined,
+    actor: AuditActor
   ) {
     return this.prisma.$transaction((tx) => this.transitionInTransaction(
       tx, id, status, eventType, extra, withActor(payload, actor), actor
@@ -61,11 +61,11 @@ export class PrismaMailWorkflowRepository {
     status: EmailStatus,
     eventType: EmailEventType,
     extra: Record<string, unknown> = {},
-    payload?: Prisma.InputJsonObject,
-    actor?: AuditActor | null
+    payload: Prisma.InputJsonObject | undefined,
+    actor: AuditActor
   ) {
     return this.prisma.$transaction(async (tx) => {
-      const destination = await assertPersistedMailContactEligible(tx, id, { lock: true });
+      const destination = await assertPersistedMailContactEligible(tx, id, actor.organizationId, { lock: true });
       return this.transitionInTransaction(
         tx,
         id,
@@ -80,10 +80,10 @@ export class PrismaMailWorkflowRepository {
 
   async claimForSending(id: string, idempotencyKey: string, actor: AuditActor) {
     const email = await this.prisma.$transaction(async (tx) => {
-      const destination = await assertPersistedMailContactEligible(tx, id, { lock: true });
-      const before = await tx.outreachEmail.findUnique({ where: { id } });
+      const destination = await assertPersistedMailContactEligible(tx, id, actor.organizationId, { lock: true });
+      const before = await tx.outreachEmail.findFirst({ where: { id, organizationId: actor.organizationId } });
       const updated = await tx.outreachEmail.updateMany({
-        where: { id, status: 'queued' },
+        where: { id, organizationId: actor.organizationId, status: 'queued' },
         data: { status: 'sending', ...destinationFields(destination) }
       });
 
@@ -91,8 +91,8 @@ export class PrismaMailWorkflowRepository {
         throw new ConflictException('このメールはすでに送信処理中、または送信対象ではありません。');
       }
 
-      const claimedEmail = await tx.outreachEmail.findUniqueOrThrow({
-        where: { id },
+      const claimedEmail = await tx.outreachEmail.findFirstOrThrow({
+        where: { id, organizationId: actor.organizationId },
         include: {
           lead: {
             select: {
@@ -105,6 +105,7 @@ export class PrismaMailWorkflowRepository {
       });
       await tx.emailEvent.create({
         data: {
+          organizationId: actor.organizationId,
           emailId: id,
           type: 'sending',
           payload: withActor({ idempotencyKey }, actor)
@@ -121,8 +122,8 @@ export class PrismaMailWorkflowRepository {
     return email;
   }
 
-  async assertDeliveryAllowed(id: string) {
-    await assertPersistedMailContactEligible(this.prisma, id);
+  async assertDeliveryAllowed(id: string, organizationId: string) {
+    await assertPersistedMailContactEligible(this.prisma, id, organizationId);
   }
 
   markSentAfterSend(
@@ -157,12 +158,13 @@ export class PrismaMailWorkflowRepository {
     return this.transition(id, 'failed', 'failed', { failedReason }, { idempotencyKey, failedReason }, actor);
   }
 
-  private async ensureDefaultChecklist(emailId: string) {
-    const count = await this.prisma.mailChecklistItem.count({ where: { emailId } });
+  private async ensureDefaultChecklist(emailId: string, organizationId: string) {
+    const count = await this.prisma.mailChecklistItem.count({ where: { organizationId, emailId } });
     if (count > 0) return;
 
     await this.prisma.mailChecklistItem.createMany({
       data: DEFAULT_CHECKLIST_ITEMS.map((item) => ({
+        organizationId,
         emailId,
         key: item.key,
         label: item.label,
@@ -178,11 +180,12 @@ export class PrismaMailWorkflowRepository {
     status: EmailStatus,
     eventType: EmailEventType,
     extra: Record<string, unknown>,
-    payload?: Prisma.InputJsonObject,
-    actor?: AuditActor | null
+    payload: Prisma.InputJsonObject | undefined,
+    actor: AuditActor
   ) {
-    const current = await tx.outreachEmail.findUnique({
-      where: { id },
+    const organizationId = actor.organizationId;
+    const current = await tx.outreachEmail.findFirst({
+      where: { id, organizationId },
       select: { status: true }
     });
     if (!current) throw new NotFoundException('Mail not found');
@@ -191,10 +194,11 @@ export class PrismaMailWorkflowRepository {
     }
 
     const email = await tx.outreachEmail.update({
-      where: { id },
+      where: { organizationId_id: { organizationId, id } },
       data: {
         status,
         ...extra,
+        // The nested relation uses the parent email's organizationId.
         events: { create: { type: eventType, payload } }
       }
     });
@@ -202,14 +206,15 @@ export class PrismaMailWorkflowRepository {
     const leadStatus = leadStatusForEmailStatus(status);
     if (leadStatus && email.leadId) {
       await tx.salesLead.update({
-        where: { id: email.leadId },
+        where: { organizationId_id: { organizationId, id: email.leadId } },
         data: { status: leadStatus }
       });
     }
 
     if (status === 'sent' && email.leadId) {
       await progressOpportunityInTransaction(tx, {
-        leadId: email.leadId,
+          leadId: email.leadId,
+          organizationId,
         toStage: 'contacted',
         sourceId: id,
         operationKey: `mail-sent:${id}`

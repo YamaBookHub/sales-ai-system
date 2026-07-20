@@ -6,9 +6,9 @@ import { checkDraftConsistency } from '../../ai/domain/draft-consistency';
 export class CheckMailDraftConsistencyUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(mailId: string) {
-    const email = await this.prisma.outreachEmail.findUnique({
-      where: { id: mailId },
+  async execute(mailId: string, organizationId: string) {
+    const email = await this.prisma.outreachEmail.findFirst({
+      where: { id: mailId, organizationId },
       include: {
         company: true,
         lead: { include: { company: true, project: true } },
@@ -26,7 +26,7 @@ export class CheckMailDraftConsistencyUseCase {
     }
 
     const companies = await this.prisma.company.findMany({
-      where: { deletedAt: null },
+      where: { organizationId, deletedAt: null },
       select: { name: true },
       take: 500
     });

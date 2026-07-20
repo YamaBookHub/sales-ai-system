@@ -11,6 +11,7 @@ import {
 } from '../domain/sales-performance.repository';
 
 export type GetSalesPerformanceInput = {
+  organizationId: string;
   from?: string;
   to?: string;
   ownerId?: string;
@@ -28,6 +29,7 @@ export class GetSalesPerformanceUseCase {
     try {
       const period = resolveSalesPerformancePeriod(input, now);
       const counts = await this.repository.summarize({
+        organizationId: input.organizationId,
         startUtc: period.startUtc,
         endExclusiveUtc: period.endExclusiveUtc,
         ownerId: input.ownerId,

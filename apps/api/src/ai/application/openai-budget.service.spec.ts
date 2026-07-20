@@ -3,6 +3,7 @@ import { OpenAiBudgetService } from './openai-budget.service';
 
 describe('OpenAiBudgetService', () => {
   const originalEnv = { ...process.env };
+  const organizationId = 'org_1';
 
   afterEach(() => {
     process.env = { ...originalEnv };
@@ -33,14 +34,15 @@ describe('OpenAiBudgetService', () => {
     const { service, prisma, tx } = fixture();
 
     await expect(service.execute(
-      { model: 'gpt-5.6-luna', operation: 'mail_polish', requestInput: {}, maxOutputTokens: 100 },
+      { organizationId, model: 'gpt-5.6-luna', operation: 'mail_polish', requestInput: {}, maxOutputTokens: 100 },
       async () => ({ usage: { costUsd: 0.004 } })
     )).resolves.toEqual({ usage: { costUsd: 0.004 } });
 
     expect(tx.aiUsageLedger.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ estimatedCostUsd: 0.01, status: AiUsageStatus.reserved })
+      data: expect.objectContaining({ organizationId, estimatedCostUsd: 0.01, status: AiUsageStatus.reserved })
     }));
     expect(prisma.aiUsageLedger.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { organizationId_id: { organizationId, id: 'reservation-1' } },
       data: expect.objectContaining({ status: AiUsageStatus.completed, actualCostUsd: 0.004 })
     }));
   });
@@ -48,13 +50,13 @@ describe('OpenAiBudgetService', () => {
   it('allows an in-budget request and includes active reservations', async () => {
     process.env.OPENAI_MONTHLY_BUDGET_USD = '1';
     process.env.OPENAI_ESTIMATED_COST_PER_REQUEST_USD = '0.1';
-    const { service } = fixture([
+    const { service, prisma } = fixture([
       { status: AiUsageStatus.completed, estimatedCostUsd: 0.1, actualCostUsd: 0.7 },
       { status: AiUsageStatus.reserved, estimatedCostUsd: 0.1, actualCostUsd: null }
     ]);
 
     await expect(service.execute(
-      { model: 'gpt-5.6-luna', operation: 'mail_polish', requestInput: {}, maxOutputTokens: 100 },
+      { organizationId, model: 'gpt-5.6-luna', operation: 'mail_polish', requestInput: {}, maxOutputTokens: 100 },
       async () => ({ usage: { costUsd: 0.05 } })
     )).resolves.toBeDefined();
   });
@@ -68,7 +70,7 @@ describe('OpenAiBudgetService', () => {
     const run = jest.fn();
 
     await expect(service.execute(
-      { model: 'gpt-5.6-luna', operation: 'semantic_consistency', requestInput: {}, maxOutputTokens: 100 },
+      { organizationId, model: 'gpt-5.6-luna', operation: 'semantic_consistency', requestInput: {}, maxOutputTokens: 100 },
       run
     )).rejects.toThrow('月額予算上限');
     expect(run).not.toHaveBeenCalled();
@@ -79,7 +81,7 @@ describe('OpenAiBudgetService', () => {
     const { service, prisma } = fixture();
 
     await expect(service.execute(
-      { model: 'gpt-5.6-luna', operation: 'mail_polish', requestInput: {}, maxOutputTokens: 100 },
+      { organizationId, model: 'gpt-5.6-luna', operation: 'mail_polish', requestInput: {}, maxOutputTokens: 100 },
       async () => { throw new Error('provider failed'); }
     )).rejects.toThrow('provider failed');
     expect(prisma.aiUsageLedger.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -89,14 +91,17 @@ describe('OpenAiBudgetService', () => {
 
   it('keeps failed or uncertain usage in the monthly spend', async () => {
     process.env.OPENAI_MONTHLY_BUDGET_USD = '1';
-    const { service } = fixture([
+    const { service, prisma } = fixture([
       { status: AiUsageStatus.failed, estimatedCostUsd: 0.2, actualCostUsd: null }
     ]);
 
-    await expect(service.getUsageSummary(new Date('2026-07-19T00:00:00Z'))).resolves.toMatchObject({
+    await expect(service.getUsageSummary(organizationId, new Date('2026-07-19T00:00:00Z'))).resolves.toMatchObject({
       spentUsd: 0.2,
       remainingUsd: 0.8
     });
+    expect(prisma.aiUsageLedger.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ organizationId })
+    }));
   });
 
   it('returns a Japanese usage summary', async () => {
@@ -105,7 +110,7 @@ describe('OpenAiBudgetService', () => {
       { status: AiUsageStatus.completed, estimatedCostUsd: 0.5, actualCostUsd: 1.25 }
     ]);
 
-    await expect(service.getUsageSummary(new Date('2026-07-19T00:00:00Z'))).resolves.toMatchObject({
+    await expect(service.getUsageSummary(organizationId, new Date('2026-07-19T00:00:00Z'))).resolves.toMatchObject({
       month: '2026-07',
       configured: true,
       spentUsd: 1.25,

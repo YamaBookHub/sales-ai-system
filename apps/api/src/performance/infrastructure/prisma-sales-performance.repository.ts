@@ -19,6 +19,7 @@ export class PrismaSalesPerformanceRepository implements SalesPerformanceReposit
     const leadWhere = buildLeadFilter(input);
     const sentEmails = await this.prisma.outreachEmail.findMany({
       where: {
+        organizationId: input.organizationId,
         status: 'sent',
         sentAt: { not: null, gte: input.startUtc, lt: input.endExclusiveUtc },
         events: { some: { type: 'sent' } },
@@ -50,11 +51,12 @@ export class PrismaSalesPerformanceRepository implements SalesPerformanceReposit
 
     const [replies, stageHistory, lostOpportunities] = await Promise.all([
       this.prisma.emailReply.findMany({
-        where: { emailId: { in: emailIds } },
+        where: { organizationId: input.organizationId, emailId: { in: emailIds } },
         select: { emailId: true, receivedAt: true }
       }),
       this.prisma.opportunityStageHistory.findMany({
         where: {
+          organizationId: input.organizationId,
           toStage: { in: ['meeting', 'won'] },
           opportunity: { is: { leadId: { in: leadIds } } }
         },
@@ -65,7 +67,7 @@ export class PrismaSalesPerformanceRepository implements SalesPerformanceReposit
         }
       }),
       this.prisma.opportunity.findMany({
-        where: { leadId: { in: leadIds }, stage: 'lost' },
+        where: { organizationId: input.organizationId, leadId: { in: leadIds }, stage: 'lost' },
         select: { leadId: true, lostAt: true, lossReason: true }
       })
     ]);
@@ -112,22 +114,24 @@ export class PrismaSalesPerformanceRepository implements SalesPerformanceReposit
     };
   }
 
-  async listOwners() {
-    const owners = await this.prisma.user.findMany({
+  async listOwners(organizationId: string) {
+    const memberships = await this.prisma.organizationMembership.findMany({
       where: {
+        organizationId,
         ownedOpportunities: {
           some: { lead: { is: { deletedAt: null } } }
-        }
+        },
+        user: { deletedAt: null }
       },
-      select: { id: true, name: true, email: true, isActive: true, deletedAt: true },
-      orderBy: [{ isActive: 'desc' }, { name: 'asc' }, { email: 'asc' }]
+      include: { user: { select: { id: true, name: true, email: true, isActive: true, deletedAt: true } } },
+      orderBy: [{ isActive: 'desc' }, { displayName: 'asc' }, { user: { email: 'asc' } }]
     });
 
-    return owners.map((owner) => ({
-      id: owner.id,
-      name: owner.name,
-      email: owner.email,
-      isActive: owner.isActive && !owner.deletedAt
+    return memberships.map((membership) => ({
+      id: membership.user.id,
+      name: membership.displayName || membership.user.name,
+      email: membership.user.email,
+      isActive: membership.isActive && membership.user.isActive && !membership.user.deletedAt
     }));
   }
 }
@@ -138,7 +142,7 @@ function occurredAfterFirstSend(leadId: string, occurredAt: Date, firstSentAt: M
 }
 
 function buildLeadFilter(input: SalesPerformanceRepositoryInput): Prisma.SalesLeadWhereInput {
-  const where: Prisma.SalesLeadWhereInput = { deletedAt: null };
+  const where: Prisma.SalesLeadWhereInput = { organizationId: input.organizationId, deletedAt: null };
   if (input.ownerId) where.opportunity = { is: { ownerId: input.ownerId } };
   if (input.source === 'manual') {
     where.projectId = null;

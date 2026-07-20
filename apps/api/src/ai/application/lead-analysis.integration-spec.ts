@@ -7,31 +7,68 @@ const testDatabaseUrl = requireTestDatabaseUrl();
 
 describe('structured lead analysis integration', () => {
   let prisma: PrismaClient;
-  const companyIds: string[] = [];
+  let organizationId: string;
+  let userId: string;
+  let sessionId: string;
+  const actor = () => ({ userId, sessionId, organizationId });
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl } } });
     await prisma.$connect();
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const organization = await prisma.organization.create({
+      data: { slug: `lead-analysis-integration-${suffix}`, name: 'Lead analysis integration' }
+    });
+    organizationId = organization.id;
+    const user = await prisma.user.create({
+      data: { email: `lead-analysis-integration-${suffix}@example.test`, name: 'Integration user' }
+    });
+    userId = user.id;
+    await prisma.organizationMembership.create({
+      data: { organizationId, userId, role: 'admin' }
+    });
+    const session = await prisma.userSession.create({
+      data: {
+        organizationId,
+        userId,
+        tokenHash: `lead-analysis-token-${suffix}`,
+        csrfTokenHash: `lead-analysis-csrf-${suffix}`,
+        absoluteExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        idleExpiresAt: new Date(Date.now() + 60 * 60 * 1000)
+      }
+    });
+    sessionId = session.id;
   });
 
   afterAll(async () => {
-    if (companyIds.length) {
-      await prisma.emailEvent.deleteMany({ where: { email: { companyId: { in: companyIds } } } });
-      await prisma.aiGeneration.deleteMany({ where: { lead: { companyId: { in: companyIds } } } });
-      await prisma.outreachEmail.deleteMany({ where: { companyId: { in: companyIds } } });
-      await prisma.contactPerson.deleteMany({ where: { companyId: { in: companyIds } } });
-      await prisma.salesLead.deleteMany({ where: { companyId: { in: companyIds } } });
-      await prisma.crowdfundingProject.deleteMany({ where: { companyId: { in: companyIds } } });
-      await prisma.company.deleteMany({ where: { id: { in: companyIds } } });
+    if (!prisma) return;
+    try {
+      if (organizationId) {
+        // 子から消して、組織と所属を最後に削除する。
+        await prisma.auditLog.deleteMany({ where: { organizationId } });
+        await prisma.emailEvent.deleteMany({ where: { organizationId } });
+        await prisma.outreachEmail.deleteMany({ where: { organizationId } });
+        await prisma.leadAnalysisRevision.deleteMany({ where: { organizationId } });
+        await prisma.aiGeneration.deleteMany({ where: { organizationId } });
+        await prisma.contactPerson.deleteMany({ where: { organizationId } });
+        await prisma.salesLead.deleteMany({ where: { organizationId } });
+        await prisma.crowdfundingProject.deleteMany({ where: { organizationId } });
+        await prisma.company.deleteMany({ where: { organizationId } });
+        await prisma.userSession.deleteMany({ where: { organizationId } });
+        await prisma.organizationMembership.deleteMany({ where: { organizationId } });
+        await prisma.organization.delete({ where: { id: organizationId } });
+      }
+      if (userId) await prisma.user.delete({ where: { id: userId } });
+    } finally {
+      await prisma.$disconnect();
     }
-    await prisma.$disconnect();
   });
 
   it('analyzes, confirms, and pins the exact revision to a generated draft', async () => {
     const fixture = await createFixture('end-to-end');
     const analysisUseCase = new LeadAnalysisUseCase(prisma as any);
-    const analyzed = await new AnalyzeLeadUseCase(prisma as any).execute(fixture.leadId);
-    const view = await analysisUseCase.get(fixture.leadId);
+    const analyzed = await new AnalyzeLeadUseCase(prisma as any).execute(fixture.leadId, actor());
+    const view = await analysisUseCase.get(fixture.leadId, actor());
 
     expect(view.proposal).toMatchObject({ id: analyzed.analysisRevisionId, version: 1, status: 'draft' });
     expect(view.canGenerateMail).toBe(false);
@@ -42,7 +79,7 @@ describe('structured lead analysis integration', () => {
       appeal: '真空保存で食品の鮮度を保ちやすい点',
       targetUser: '食品の保存状態と収納性を重視する方',
       videoIdea: '真空になる様子と収納前後を短尺動画で比較する'
-    });
+    }, actor());
     const confirmed = confirmedView.confirmed!;
 
     expect(confirmedView.canGenerateMail).toBe(true);
@@ -51,7 +88,7 @@ describe('structured lead analysis integration', () => {
     const generated = await new GenerateMailDraftUseCase(prisma as any).execute(fixture.leadId, {
       templateKey: 'normal',
       analysisRevisionId: confirmed.id
-    });
+    }, actor());
     const storedMail = await prisma.outreachEmail.findUniqueOrThrow({ where: { id: generated.email.id } });
 
     expect(storedMail.analysisRevisionId).toBe(confirmed.id);
@@ -64,15 +101,15 @@ describe('structured lead analysis integration', () => {
   it('rejects stale project data without creating mail or advancing the lead', async () => {
     const fixture = await createFixture('stale');
     const analysisUseCase = new LeadAnalysisUseCase(prisma as any);
-    await new AnalyzeLeadUseCase(prisma as any).execute(fixture.leadId);
-    const draft = await analysisUseCase.get(fixture.leadId);
+    await new AnalyzeLeadUseCase(prisma as any).execute(fixture.leadId, actor());
+    const draft = await analysisUseCase.get(fixture.leadId, actor());
     const confirmedView = await analysisUseCase.confirm(fixture.leadId, {
       expectedVersion: draft.proposal!.version,
       expectedSourceFingerprint: draft.sourceFingerprint,
       appeal: '扱いやすい保存用品である点',
       targetUser: '食品保存を見直したい方',
       videoIdea: '保存手順を短尺動画で見せる'
-    });
+    }, actor());
     await prisma.crowdfundingProject.update({
       where: { id: fixture.projectId },
       data: { description: '案件情報が更新された後の説明' }
@@ -81,7 +118,7 @@ describe('structured lead analysis integration', () => {
     await expect(new GenerateMailDraftUseCase(prisma as any).execute(fixture.leadId, {
       templateKey: 'normal',
       analysisRevisionId: confirmedView.confirmed!.id
-    })).rejects.toThrow('確認済みの最新分析');
+    }, actor())).rejects.toThrow('確認済みの最新分析');
 
     expect(await prisma.outreachEmail.count({ where: { leadId: fixture.leadId } })).toBe(0);
     expect((await prisma.salesLead.findUniqueOrThrow({ where: { id: fixture.leadId } })).status).toBe('qualified');
@@ -90,8 +127,8 @@ describe('structured lead analysis integration', () => {
   it('allows only one append when two editors save the same version concurrently', async () => {
     const fixture = await createFixture('concurrent');
     const analysisUseCase = new LeadAnalysisUseCase(prisma as any);
-    await new AnalyzeLeadUseCase(prisma as any).execute(fixture.leadId);
-    const view = await analysisUseCase.get(fixture.leadId);
+    await new AnalyzeLeadUseCase(prisma as any).execute(fixture.leadId, actor());
+    const view = await analysisUseCase.get(fixture.leadId, actor());
     const request = {
       expectedVersion: view.proposal!.version,
       expectedSourceFingerprint: view.sourceFingerprint,
@@ -101,8 +138,8 @@ describe('structured lead analysis integration', () => {
     };
 
     const results = await Promise.allSettled([
-      analysisUseCase.save(fixture.leadId, request),
-      analysisUseCase.save(fixture.leadId, request)
+      analysisUseCase.save(fixture.leadId, request, actor()),
+      analysisUseCase.save(fixture.leadId, request, actor())
     ]);
 
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
@@ -117,13 +154,13 @@ describe('structured lead analysis integration', () => {
       update: { isActive: true },
       create: { type: 'campfire', name: 'CAMPFIRE', baseUrl: 'https://camp-fire.jp' }
     });
-    const company = await prisma.company.create({ data: { name: `分析テスト ${suffix}` } });
-    companyIds.push(company.id);
+    const company = await prisma.company.create({ data: { organizationId, name: `分析テスト ${suffix}` } });
     await prisma.contactPerson.create({
-      data: { companyId: company.id, email: `${suffix}@example.com`, isPrimary: true }
+      data: { organizationId, companyId: company.id, email: `${suffix}@example.com`, isPrimary: true }
     });
     const project = await prisma.crowdfundingProject.create({
       data: {
+        organizationId,
         platformId: platform.id,
         companyId: company.id,
         title: `真空保存用品 ${suffix}`,
@@ -134,7 +171,7 @@ describe('structured lead analysis integration', () => {
       }
     });
     const lead = await prisma.salesLead.create({
-      data: { companyId: company.id, projectId: project.id, status: 'qualified', sendMethod: 'email' }
+      data: { organizationId, companyId: company.id, projectId: project.id, status: 'qualified', sendMethod: 'email' }
     });
     return { companyId: company.id, projectId: project.id, leadId: lead.id };
   }

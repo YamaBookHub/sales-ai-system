@@ -55,10 +55,10 @@ const REPLY_INBOX_SELECT = Prisma.validator<Prisma.EmailReplySelect>()({
 export class PrismaReplyInboxRepository implements ReplyInboxRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(query: ReplyInboxListQuery = {}): Promise<ReplyInboxListResult> {
+  async list(organizationId: string, query: ReplyInboxListQuery = {}): Promise<ReplyInboxListResult> {
     const page = normalizePage(query.page);
     const limit = normalizeLimit(query.limit);
-    const where = buildReplyInboxWhere(query);
+    const where = buildReplyInboxWhere(organizationId, query);
     const total = await this.prisma.emailReply.count({ where });
 
     if (query.sort === 'priority') {
@@ -66,7 +66,7 @@ export class PrismaReplyInboxRepository implements ReplyInboxRepository {
       const ids = orderedIds.slice((page - 1) * limit, page * limit);
       if (!ids.length) return { items: [], page, limit, total };
       const records = await this.prisma.emailReply.findMany({
-        where: { id: { in: ids } },
+        where: { organizationId, id: { in: ids } },
         select: REPLY_INBOX_SELECT
       });
       return { items: orderByIds(records, ids), page, limit, total };
@@ -104,8 +104,8 @@ export class PrismaReplyInboxRepository implements ReplyInboxRepository {
   }
 }
 
-function buildReplyInboxWhere(query: ReplyInboxListQuery): Prisma.EmailReplyWhereInput {
-  const and: Prisma.EmailReplyWhereInput[] = [];
+function buildReplyInboxWhere(organizationId: string, query: ReplyInboxListQuery): Prisma.EmailReplyWhereInput {
+  const and: Prisma.EmailReplyWhereInput[] = [{ organizationId }];
   if (query.category) and.push({ category: query.category });
   if (query.leadStatus) and.push({ email: { is: { lead: { is: { status: query.leadStatus } } } } });
 

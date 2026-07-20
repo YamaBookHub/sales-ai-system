@@ -30,8 +30,8 @@ export class TrackingController {
   }
 
   @Get('t/mails/:emailId/engagement')
-  async getMailEngagement(@Param('emailId') emailId: string) {
-    return ok(await this.tracking.getMailEngagement(emailId));
+  async getMailEngagement(@Param('emailId') emailId: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.tracking.getMailEngagement(principal.organizationId, emailId));
   }
 
   @Get('t/click/:token')

@@ -2,7 +2,8 @@ import { MailService } from './mail.service';
 
 describe('MailService audit logging', () => {
   const userId = '11111111-1111-4111-8111-111111111111';
-  const actor = { userId, sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
+  const organizationId = '00000000-0000-4000-8000-000000000007';
+  const actor = { userId, sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', organizationId };
   const mail = {
     id: '22222222-2222-4222-8222-222222222222',
     status: 'draft',
@@ -19,7 +20,7 @@ describe('MailService audit logging', () => {
   function createService() {
     const tx = {
       outreachEmail: {
-        findUnique: jest.fn().mockResolvedValue(mail),
+        findFirst: jest.fn().mockResolvedValue(mail),
         update: jest.fn().mockResolvedValue({ ...mail, subject: '更新後の件名', body: '更新後の本文' })
       },
       emailEvent: { create: jest.fn().mockResolvedValue({ id: 'event_1' }) },
@@ -27,7 +28,7 @@ describe('MailService audit logging', () => {
       auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit_1' }) }
     };
     const prisma = {
-      outreachEmail: { findUnique: jest.fn().mockResolvedValue(mail) },
+      outreachEmail: { findFirst: jest.fn().mockResolvedValue(mail) },
       mailChecklistItem: {
         count: jest.fn().mockResolvedValue(1),
         findMany: jest.fn().mockResolvedValue([{ checked: true }]),
@@ -40,7 +41,7 @@ describe('MailService audit logging', () => {
       {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
       {} as any, {} as any, {} as any, {} as any, {} as any
     );
-    return { service, tx };
+    return { service, prisma, tx };
   }
 
   it('records only changed fields and hashes for a successful edit', async () => {
@@ -48,8 +49,15 @@ describe('MailService audit logging', () => {
 
     await service.update(mail.id, { subject: '更新後の件名', body: '更新後の本文' }, actor);
 
+    expect(tx.outreachEmail.findFirst).toHaveBeenCalledWith({
+      where: { id: mail.id, organizationId }
+    });
+    expect(tx.outreachEmail.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { organizationId_id: { organizationId, id: mail.id } }
+    }));
     expect(tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        organizationId,
         userId,
         sessionId: actor.sessionId,
         action: 'mail.edited',
@@ -76,6 +84,7 @@ describe('MailService audit logging', () => {
 
     expect(tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        organizationId,
         userId,
         sessionId: actor.sessionId,
         action: 'mail.checklist_updated',
@@ -86,7 +95,7 @@ describe('MailService audit logging', () => {
 
   it('does not write an audit record when editing fails before the update', async () => {
     const { service, tx } = createService();
-    tx.outreachEmail.findUnique.mockResolvedValue(null);
+    tx.outreachEmail.findFirst.mockResolvedValue(null);
 
     await expect(service.update(mail.id, { subject: '更新後の件名' }, actor)).rejects.toThrow('Mail not found');
     expect(tx.auditLog.create).not.toHaveBeenCalled();
@@ -98,7 +107,13 @@ describe('MailService audit logging', () => {
     await service.cancel(mail.id, actor);
 
     expect(tx.auditLog.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ userId, sessionId: actor.sessionId, action: 'mail.cancelled', entityId: mail.id })
+      data: expect.objectContaining({
+        organizationId,
+        userId,
+        sessionId: actor.sessionId,
+        action: 'mail.cancelled',
+        entityId: mail.id
+      })
     });
     expect(JSON.stringify(tx.auditLog.create.mock.calls[0][0])).not.toContain('秘匿する本文');
   });

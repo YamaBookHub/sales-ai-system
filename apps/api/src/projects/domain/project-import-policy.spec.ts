@@ -45,9 +45,9 @@ describe('project-import-policy', () => {
 
   it('builds stable lock keys from normalized project URLs and company names', () => {
     expect(normalizeImportedCompanyName('  ACME Inc.  ')).toBe('acme inc.');
-    expect(projectImportLockKeys('https://example.com/project/?utm=campaign#top', '  ACME Inc.  ')).toEqual([
-      'project-import:company:acme inc.',
-      'project-import:project:https://example.com/project'
+    expect(projectImportLockKeys('organization-a', 'https://example.com/project/?utm=campaign#top', '  ACME Inc.  ')).toEqual([
+      'project-import:organization-a:company:acme inc.',
+      'project-import:organization-a:project:https://example.com/project'
     ]);
   });
 

@@ -6,12 +6,13 @@ describe('resolveMailRecipient', () => {
       findFirst: jest.fn().mockResolvedValue({ id: 'primary_1', email: 'primary@example.com' })
     };
 
-    await expect(resolveMailRecipient({ contactPerson } as any, 'company_1')).resolves.toEqual({
+    await expect(resolveMailRecipient({ contactPerson } as any, 'company_1', 'organization_1')).resolves.toEqual({
       id: 'primary_1', email: 'primary@example.com'
     });
     expect(contactPerson.findFirst).toHaveBeenCalledWith({
       where: {
         companyId: 'company_1',
+        organizationId: 'organization_1',
         deletedAt: null,
         isUnsubscribed: false,
         email: { not: null }
@@ -30,6 +31,6 @@ describe('resolveMailRecipient', () => {
   it('returns null when every contact is unavailable', async () => {
     const contactPerson = { findFirst: jest.fn().mockResolvedValue(null) };
 
-    await expect(resolveMailRecipient({ contactPerson } as any, 'company_1')).resolves.toBeNull();
+    await expect(resolveMailRecipient({ contactPerson } as any, 'company_1', 'organization_1')).resolves.toBeNull();
   });
 });

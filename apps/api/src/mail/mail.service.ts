@@ -46,9 +46,9 @@ export class MailService {
     private readonly recordMailReply: RecordMailReplyUseCase
   ) {}
 
-  async list(page = 1, limit = 20, status?: EmailStatus) {
+  async list(organizationId: string, page = 1, limit = 20, status?: EmailStatus) {
     const skip = (page - 1) * limit;
-    const where = status ? { status } : {};
+    const where = { organizationId, ...(status ? { status } : {}) };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.outreachEmail.findMany({
         where,
@@ -63,9 +63,10 @@ export class MailService {
     return { items, page, limit, total };
   }
 
-  listTemplates(channel?: string) {
+  listTemplates(organizationId: string, channel?: string) {
     return this.prisma.mailTemplate.findMany({
       where: {
+        organizationId,
         isActive: true,
         ...(channel ? { channel } : {})
       },
@@ -73,16 +74,18 @@ export class MailService {
     });
   }
 
-  getTemplate(key: string) {
-    return this.prisma.mailTemplate.findUnique({ where: { key } });
+  async getTemplate(organizationId: string, key: string) {
+    const template = await this.prisma.mailTemplate.findFirst({ where: { organizationId, key } });
+    if (!template) throw new NotFoundException('Mail template not found');
+    return template;
   }
 
-  saveTemplate(dto: SaveMailTemplateDto, actor: AuditActor | null = null) {
+  saveTemplate(dto: SaveMailTemplateDto, actor: AuditActor) {
     const data = normalizeTemplate(dto);
     return this.prisma.$transaction((tx) => this.saveTemplateInTransaction(tx, data, actor, 'mail_template.saved'));
   }
 
-  async importTemplates(dto: ImportMailTemplatesDto, actor: AuditActor | null = null) {
+  async importTemplates(dto: ImportMailTemplatesDto, actor: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
       const templates = [];
       for (const template of dto.templates) {
@@ -101,22 +104,21 @@ export class MailService {
     });
   }
 
-  async createDraft(dto: CreateMailDraftDto, actor: AuditActor | null = null) {
+  async createDraft(dto: CreateMailDraftDto, actor: AuditActor) {
+    const organizationId = actor.organizationId;
     const manualInstruction = dto.manualInstruction;
     if (!manualInstruction || !manualInstruction.trim()) {
       const generationInput = {
         templateKey: dto.templateKey,
         analysisRevisionId: dto.analysisRevisionId
       };
-      const result = actor
-        ? await this.generateMailDraft.execute(dto.leadId, generationInput, actor)
-        : await this.generateMailDraft.execute(dto.leadId, generationInput);
+      const result = await this.generateMailDraft.execute(dto.leadId, generationInput, actor);
 
       return result.email;
     }
 
-    const lead = await this.prisma.salesLead.findUnique({
-      where: { id: dto.leadId },
+    const lead = await this.prisma.salesLead.findFirst({
+      where: { id: dto.leadId, organizationId },
       include: { company: true, project: { include: { platform: true } } }
     });
 
@@ -125,7 +127,7 @@ export class MailService {
     }
 
     const existingMail = await this.prisma.outreachEmail.findFirst({
-      where: { leadId: lead.id },
+      where: { organizationId, leadId: lead.id },
       orderBy: { createdAt: 'desc' },
       select: { id: true }
     });
@@ -137,23 +139,23 @@ export class MailService {
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
         'SELECT pg_advisory_xact_lock(hashtext($1))',
-        `mail-draft:${lead.id}`
+        `mail-draft:${organizationId}:${lead.id}`
       );
       await tx.$executeRawUnsafe(
         'SELECT pg_advisory_xact_lock(hashtext($1))',
-        `lead-analysis:${lead.id}`
+        `lead-analysis:${organizationId}:${lead.id}`
       );
-      const currentLead = await tx.salesLead.findUnique({
-        where: { id: lead.id },
+      const currentLead = await tx.salesLead.findFirst({
+        where: { id: lead.id, organizationId },
         include: { company: true, project: { include: { platform: true } } }
       });
       if (!currentLead) throw new NotFoundException('Lead not found');
       if (!currentLead.project) throw new ConflictException('この営業対象には案件が紐づいていません。');
       const analysisRevision = await requireLatestConfirmedAnalysis(tx, currentLead, dto.analysisRevisionId);
-      const recipient = await resolveMailRecipient(tx, currentLead.companyId);
+      const recipient = await resolveMailRecipient(tx, currentLead.companyId, organizationId);
       const destination = await assertLeadContactEligible(tx, currentLead, recipient, { lock: true });
       const concurrentMail = await tx.outreachEmail.findFirst({
-        where: { leadId: lead.id },
+        where: { organizationId, leadId: lead.id },
         select: { id: true }
       });
       if (concurrentMail) {
@@ -161,6 +163,7 @@ export class MailService {
       }
       const email = await tx.outreachEmail.create({
         data: {
+          organizationId,
           leadId: currentLead.id,
           companyId: currentLead.companyId,
           contactId: recipient?.id,
@@ -173,12 +176,13 @@ export class MailService {
           subject: `${projectPlatformLabel(currentLead.project)}でのプロジェクトを拝見しご連絡いたしました`,
           body: manualInstruction,
           status: 'draft',
-          events: { create: { type: 'created', payload: actor ? { actorUserId: actor.userId } : undefined } }
+          // The nested relation uses the parent email's organizationId.
+          events: { create: { type: 'created', payload: { actorUserId: actor.userId } } }
         }
       });
 
       await tx.salesLead.update({
-        where: { id: currentLead.id },
+        where: { organizationId_id: { organizationId, id: currentLead.id } },
         data: { status: 'drafted' }
       });
       await recordMailAudit(tx, actor, 'mail.created', email.id, {
@@ -189,16 +193,17 @@ export class MailService {
     });
   }
 
-  update(id: string, dto: UpdateMailDto, actor: AuditActor | null = null) {
+  update(id: string, dto: UpdateMailDto, actor: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
-      const before = await tx.outreachEmail.findUnique({ where: { id } });
+      const before = await tx.outreachEmail.findFirst({ where: { id, organizationId: actor.organizationId } });
       if (!before) throw new NotFoundException('Mail not found');
       const edit = changedMailFields(before, dto);
       const email = await tx.outreachEmail.update({
-        where: { id },
+        where: { organizationId_id: { organizationId: actor.organizationId, id } },
         data: {
           ...dto,
-          events: { create: { type: 'reviewed', payload: { edited: true, ...(actor ? { actorUserId: actor.userId } : {}) } } }
+          // The nested relation uses the parent email's organizationId.
+          events: { create: { type: 'reviewed', payload: { edited: true, actorUserId: actor.userId } } }
         }
       });
       await recordMailAudit(tx, actor, 'mail.edited', id, {
@@ -209,31 +214,31 @@ export class MailService {
     });
   }
 
-  requestReview(id: string, actor: AuditActor | null = null) {
+  requestReview(id: string, actor: AuditActor) {
     return this.requestMailReview.execute(id, actor);
   }
 
-  checkDraftConsistency(id: string) {
-    return this.checkMailDraftConsistency.execute(id);
+  checkDraftConsistency(id: string, organizationId: string) {
+    return this.checkMailDraftConsistency.execute(id, organizationId);
   }
 
-  requestReReview(id: string, actor: AuditActor | null = null) {
+  requestReReview(id: string, actor: AuditActor) {
     return this.requestMailReReview.execute(id, actor);
   }
 
-  approve(id: string, actor: AuditActor | null = null) {
+  approve(id: string, actor: AuditActor) {
     return this.approveMail.execute(id, actor);
   }
 
-  reject(id: string, dto: RejectMailDto, actor: AuditActor | null = null) {
+  reject(id: string, dto: RejectMailDto, actor: AuditActor) {
     return this.rejectMail.execute(id, dto, actor);
   }
 
-  queue(id: string, actor: AuditActor | null = null) {
+  queue(id: string, actor: AuditActor) {
     return this.queueMail.execute(id, actor);
   }
 
-  markSent(id: string, dto: MarkMailSentDto, actor: AuditActor | null = null) {
+  markSent(id: string, dto: MarkMailSentDto, actor: AuditActor) {
     return this.markMailSent.execute(id, dto, actor);
   }
 
@@ -241,23 +246,24 @@ export class MailService {
     return this.sendQueuedMail.execute(id, actor);
   }
 
-  async recordReply(id: string, dto: CreateMailReplyDto, actor: AuditActor | null = null) {
-    return actor ? this.recordMailReply.execute(id, dto, actor) : this.recordMailReply.execute(id, dto);
+  async recordReply(id: string, dto: CreateMailReplyDto, actor: AuditActor) {
+    return this.recordMailReply.execute(id, dto, actor);
   }
 
-  retry(id: string, actor: AuditActor | null = null) {
+  retry(id: string, actor: AuditActor) {
     return this.retryMail.execute(id, actor);
   }
 
-  cancel(id: string, actor: AuditActor | null = null) {
+  cancel(id: string, actor: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
-      const before = await tx.outreachEmail.findUnique({ where: { id } });
+      const before = await tx.outreachEmail.findFirst({ where: { id, organizationId: actor.organizationId } });
       if (!before) throw new NotFoundException('Mail not found');
       const email = await tx.outreachEmail.update({
-        where: { id },
+        where: { organizationId_id: { organizationId: actor.organizationId, id } },
         data: {
           status: 'cancelled',
-          events: { create: { type: 'cancelled', payload: actor ? { actorUserId: actor.userId } : undefined } }
+          // The nested relation uses the parent email's organizationId.
+          events: { create: { type: 'cancelled', payload: { actorUserId: actor.userId } } }
         }
       });
       await recordMailAudit(tx, actor, 'mail.cancelled', id, {
@@ -268,11 +274,11 @@ export class MailService {
     });
   }
 
-  async getChecklist(emailId: string) {
-    await this.get(emailId);
-    await this.ensureDefaultChecklist(emailId);
+  async getChecklist(emailId: string, organizationId: string) {
+    await this.get(emailId, organizationId);
+    await this.ensureDefaultChecklist(emailId, organizationId);
     const items = await this.prisma.mailChecklistItem.findMany({
-      where: { emailId },
+      where: { organizationId, emailId },
       orderBy: { createdAt: 'asc' }
     });
 
@@ -282,23 +288,25 @@ export class MailService {
     };
   }
 
-  async updateChecklist(emailId: string, dto: UpdateMailChecklistDto, actor: AuditActor | null = null) {
-    await this.get(emailId);
+  async updateChecklist(emailId: string, dto: UpdateMailChecklistDto, actor: AuditActor) {
+    const organizationId = actor.organizationId;
+    await this.get(emailId, organizationId);
     const now = new Date();
     const items = dto.items.length ? dto.items : DEFAULT_CHECKLIST_ITEMS.map((item) => ({ ...item, checked: false }));
 
     await this.prisma.$transaction(async (tx) => {
-      const email = await tx.outreachEmail.findUnique({ where: { id: emailId } });
+      const email = await tx.outreachEmail.findFirst({ where: { id: emailId, organizationId } });
       if (!email) throw new NotFoundException('Mail not found');
       for (const item of items) {
         await tx.mailChecklistItem.upsert({
-          where: { emailId_key: { emailId, key: item.key } },
+          where: { organizationId_emailId_key: { organizationId, emailId, key: item.key } },
           update: {
             label: item.label,
             checked: item.checked,
             checkedAt: item.checked ? now : null
           },
           create: {
+            organizationId,
             emailId,
             key: item.key,
             label: item.label,
@@ -310,6 +318,7 @@ export class MailService {
 
       await tx.emailEvent.create({
         data: {
+          organizationId,
           emailId,
           type: 'reviewed',
           payload: {
@@ -317,7 +326,7 @@ export class MailService {
             complete: items.every((item) => item.checked),
             checkedCount: items.filter((item) => item.checked).length,
             totalCount: items.length,
-            ...(actor ? { actorUserId: actor.userId } : {})
+            actorUserId: actor.userId
           }
         }
       });
@@ -327,29 +336,32 @@ export class MailService {
       });
     });
 
-    return this.getChecklist(emailId);
+    return this.getChecklist(emailId, organizationId);
   }
 
-  async getThread(gmailThreadId: string) {
-    const emails = await this.prisma.outreachEmail.findMany({ where: { gmailThreadId } });
-    const replies = await this.prisma.emailReply.findMany({ where: { email: { gmailThreadId } } });
+  async getThread(gmailThreadId: string, organizationId: string) {
+    const emails = await this.prisma.outreachEmail.findMany({ where: { organizationId, gmailThreadId } });
+    if (!emails.length) {
+      throw new NotFoundException('Mail thread not found');
+    }
+    const replies = await this.prisma.emailReply.findMany({ where: { organizationId, email: { organizationId, gmailThreadId } } });
     return { gmailThreadId, emails, replies };
   }
 
   private async saveTemplateInTransaction(
     tx: Prisma.TransactionClient,
     data: ReturnType<typeof normalizeTemplate>,
-    actor: AuditActor | null,
+    actor: AuditActor,
     action: 'mail_template.saved' | 'mail_template.imported'
   ) {
-    const before = await tx.mailTemplate.findUnique({
-      where: { key: data.key },
+    const before = await tx.mailTemplate.findFirst({
+      where: { organizationId: actor.organizationId, key: data.key },
       select: { id: true, key: true, channel: true, isActive: true }
     });
     const template = await tx.mailTemplate.upsert({
-      where: { key: data.key },
+      where: { organizationId_key: { organizationId: actor.organizationId, key: data.key } },
       update: data,
-      create: data
+      create: { organizationId: actor.organizationId, ...data }
     });
 
     await recordMailAudit(tx, actor, action, template.id, {
@@ -360,8 +372,8 @@ export class MailService {
     return template;
   }
 
-  private async get(id: string) {
-    const email = await this.prisma.outreachEmail.findUnique({ where: { id } });
+  private async get(id: string, organizationId: string) {
+    const email = await this.prisma.outreachEmail.findFirst({ where: { id, organizationId } });
 
     if (!email) {
       throw new NotFoundException('Mail not found');
@@ -370,12 +382,13 @@ export class MailService {
     return email;
   }
 
-  private async ensureDefaultChecklist(emailId: string) {
-    const count = await this.prisma.mailChecklistItem.count({ where: { emailId } });
+  private async ensureDefaultChecklist(emailId: string, organizationId: string) {
+    const count = await this.prisma.mailChecklistItem.count({ where: { organizationId, emailId } });
     if (count > 0) return;
 
     await this.prisma.mailChecklistItem.createMany({
       data: DEFAULT_CHECKLIST_ITEMS.map((item) => ({
+        organizationId,
         emailId,
         key: item.key,
         label: item.label,

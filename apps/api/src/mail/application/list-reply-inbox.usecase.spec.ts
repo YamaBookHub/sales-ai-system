@@ -39,9 +39,9 @@ describe('ListReplyInboxUseCase', () => {
     };
     const useCase = new ListReplyInboxUseCase(repository as any);
 
-    const result = await useCase.execute({ category: 'need_info', limit: 20 });
+    const result = await useCase.execute({ category: 'need_info', limit: 20 }, 'org_1');
 
-    expect(repository.list).toHaveBeenCalledWith({ category: 'need_info', limit: 20 });
+    expect(repository.list).toHaveBeenCalledWith('org_1', { category: 'need_info', limit: 20 });
     expect(result).toMatchObject({ page: 1, limit: 20, total: 1 });
     expect(result.items[0]).toMatchObject({
       id: 'reply_1',

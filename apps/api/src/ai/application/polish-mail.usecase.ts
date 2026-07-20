@@ -14,9 +14,10 @@ export class PolishMailUseCase {
     private readonly aiClient: AiClientService
   ) {}
 
-  async execute(mailId: string, model?: SelectableAiModel, actor: AuditActor | null = null) {
-    const email = await this.prisma.outreachEmail.findUnique({
-      where: { id: mailId },
+  async execute(mailId: string, model: SelectableAiModel | undefined, actor: AuditActor) {
+    const organizationId = actor.organizationId;
+    const email = await this.prisma.outreachEmail.findFirst({
+      where: { id: mailId, organizationId },
       include: {
         analysisRevision: true,
         lead: { include: { company: true, project: { include: { platform: true } } } }
@@ -46,23 +47,25 @@ export class PolishMailUseCase {
       templateKey: email.templateKey || 'normal',
       tone: 'low_sales_pressure'
     });
-    const draft = await this.aiClient.createSalesMailDraft(aiInput, model);
+    const draft = await this.aiClient.createSalesMailDraft(aiInput, model, organizationId);
     const provider = aiProviderForModel(draft.model);
 
     const result = await this.prisma.$transaction(async (tx) => {
       const updatedEmail = await tx.outreachEmail.update({
-        where: { id: email.id },
+        where: { organizationId_id: { organizationId, id: email.id } },
         data: {
           subject: draft.subject,
           body: draft.body,
           status: 'draft',
           failedReason: null,
-          events: { create: { type: 'generated', payload: { source: `${provider}_polish`, model: draft.model, ...(actor ? { actorUserId: actor.userId } : {}) } } }
+          // 親メールの組織IDをネスト作成するイベントへ自動伝播させる。
+          events: { create: { type: 'generated', payload: { source: `${provider}_polish`, model: draft.model, actorUserId: actor.userId } } }
         }
       });
 
       const aiGeneration = await tx.aiGeneration.create({
         data: {
+          organizationId,
           leadId: lead.id,
           emailId: updatedEmail.id,
           type: 'email_draft',
@@ -84,19 +87,18 @@ export class PolishMailUseCase {
         }
       });
 
-      if (actor) {
-        await tx.auditLog.create({
-          data: {
-            userId: actor.userId,
-            sessionId: actor.sessionId,
-            action: 'mail.polished',
-            entityType: 'OutreachEmail',
-            entityId: updatedEmail.id,
-            before: { status: email.status },
-            after: { status: updatedEmail.status, model: draft.model, provider }
-          }
-        });
-      }
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          userId: actor.userId,
+          sessionId: actor.sessionId,
+          action: 'mail.polished',
+          entityType: 'OutreachEmail',
+          entityId: updatedEmail.id,
+          before: { status: email.status },
+          after: { status: updatedEmail.status, model: draft.model, provider }
+        }
+      });
 
       return { email: updatedEmail, aiGeneration };
     });

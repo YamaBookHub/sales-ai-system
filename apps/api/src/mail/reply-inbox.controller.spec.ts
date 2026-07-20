@@ -7,13 +7,14 @@ describe('ReplyInboxController', () => {
     const useCase = { execute: jest.fn().mockResolvedValue({ items: [], page: 1, limit: 20, total: 0 }) };
     const controller = new ReplyInboxController(useCase as any);
     const query = { limit: 20 } as any;
+    const principal = { userId: 'user_1', sessionId: 'session_1', organizationId: 'org_1' } as any;
 
-    await expect(controller.list(query)).resolves.toEqual({
+    await expect(controller.list(query, principal)).resolves.toEqual({
       data: { items: [], page: 1, limit: 20, total: 0 },
       meta: null,
       error: null
     });
-    expect(useCase.execute).toHaveBeenCalledWith(query);
+    expect(useCase.execute).toHaveBeenCalledWith(query, 'org_1');
     expect(Reflect.getMetadata(PATH_METADATA, ReplyInboxController)).toBe('api/replies');
     expect(Reflect.getMetadata(PATH_METADATA, ReplyInboxController.prototype.list)).toBe('/');
     expect(Reflect.getMetadata(METHOD_METADATA, ReplyInboxController.prototype.list)).toBe(RequestMethod.GET);

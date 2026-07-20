@@ -24,6 +24,7 @@ export class RbacGuard implements CanActivate {
       try {
         await this.prisma.auditLog.create({
           data: {
+            organizationId: principal.organizationId,
             userId: principal.userId,
             sessionId: principal.sessionId,
             action: 'authorization.denied',

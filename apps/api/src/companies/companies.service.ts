@@ -7,20 +7,22 @@ import { AuditActor } from '../audit/audit-actor';
 export class CompaniesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(page = 1, limit = 20) {
+  async list(organizationId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
+    const where = { organizationId, deletedAt: null };
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.company.findMany({ skip, take: limit, orderBy: { createdAt: 'desc' } }),
-      this.prisma.company.count()
+      this.prisma.company.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      this.prisma.company.count({ where })
     ]);
 
     return { items, page, limit, total };
   }
 
-  create(dto: CreateCompanyDto, actor?: AuditActor) {
+  create(dto: CreateCompanyDto, actor: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
       const company = await tx.company.create({
         data: {
+          organizationId: actor.organizationId,
           name: dto.name,
           normalizedName: dto.name.trim().toLowerCase(),
           websiteUrl: dto.websiteUrl,
@@ -29,43 +31,42 @@ export class CompaniesService {
           memo: dto.memo
         }
       });
-      if (actor) {
-        await tx.auditLog.create({
-          data: {
-            ...actor,
-            action: 'company.created',
-            entityType: 'Company',
-            entityId: company.id,
-            after: { companyId: company.id, isBlocked: false }
-          }
-        });
-      }
+      await tx.auditLog.create({
+        data: {
+          ...actor,
+          action: 'company.created',
+          entityType: 'Company',
+          entityId: company.id,
+          after: { companyId: company.id, isBlocked: false }
+        }
+      });
       return company;
     });
   }
 
-  block(id: string, dto: BlockCompanyDto, actor?: AuditActor) {
+  block(id: string, dto: BlockCompanyDto, actor: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
-      const current = await tx.company.findUniqueOrThrow({ where: { id }, select: { isBlocked: true } });
+      const current = await tx.company.findFirstOrThrow({
+        where: { id, organizationId: actor.organizationId, deletedAt: null },
+        select: { isBlocked: true }
+      });
       const company = await tx.company.update({
-        where: { id },
+        where: { organizationId_id: { organizationId: actor.organizationId, id } },
         data: {
           isBlocked: true,
           blockedReason: dto.blockedReason ?? 'blocked_by_user'
         }
       });
-      if (actor) {
-        await tx.auditLog.create({
-          data: {
-            ...actor,
-            action: 'company.blocked',
-            entityType: 'Company',
-            entityId: company.id,
-            before: { isBlocked: current.isBlocked },
-            after: { isBlocked: true, changedFields: ['isBlocked', 'blockedReason'] }
-          }
-        });
-      }
+      await tx.auditLog.create({
+        data: {
+          ...actor,
+          action: 'company.blocked',
+          entityType: 'Company',
+          entityId: company.id,
+          before: { isBlocked: current.isBlocked },
+          after: { isBlocked: true, changedFields: ['isBlocked', 'blockedReason'] }
+        }
+      });
       return company;
     });
   }

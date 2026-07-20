@@ -11,11 +11,15 @@ describe('authenticated session flow contract', () => {
     email: 'admin@example.com',
     googleSubject: null,
     name: 'Admin',
-    role: 'admin',
     isActive: true,
     deletedAt: null,
     createdAt: new Date(),
     updatedAt: new Date()
+  };
+  const organization = { id: 'org-1', slug: 'default', name: '既定組織', isActive: true };
+  const membership = {
+    id: 'membership-1', organizationId: organization.id, userId: user.id, displayName: 'Admin',
+    role: 'admin', isActive: true, createdAt: new Date(), updatedAt: new Date(), user, organization
   };
   const config: AuthConfig = {
     appEnvironment: 'test',
@@ -26,7 +30,8 @@ describe('authenticated session flow contract', () => {
     csrfSecret: 'test-csrf-secret',
     cookieName: 'sales_ai_session',
     cookieSecure: false,
-    localLoginEnabled: false
+    localLoginEnabled: false,
+    organizationSlug: 'default'
   };
 
   function setup() {
@@ -36,6 +41,10 @@ describe('authenticated session flow contract', () => {
         findUnique: jest.fn(({ where }: any) => Promise.resolve(
           where.id === user.id || where.email === user.email ? user : null
         ))
+      },
+      organizationMembership: {
+        findUnique: jest.fn().mockResolvedValue(membership),
+        findFirst: jest.fn().mockResolvedValue(membership)
       }
     };
     const sessions = {
@@ -45,7 +54,9 @@ describe('authenticated session flow contract', () => {
           ...input,
           revokedAt: null,
           lastSeenAt: new Date(),
-          user
+          user,
+          organization,
+          membership
         };
         return Promise.resolve(storedSession);
       }),
@@ -77,7 +88,7 @@ describe('authenticated session flow contract', () => {
 
   it('issues a test session, exposes me, logs out, and rejects token reuse', async () => {
     const { controller, guard, service, sessions } = setup();
-    const issued = await service.issueTestSession(user.id);
+    const issued = await service.issueTestSession(user.id, organization.id);
     const getRequest: any = {
       method: 'GET',
       headers: { cookie: `${config.cookieName}=${issued.token}` }
@@ -89,8 +100,10 @@ describe('authenticated session flow contract', () => {
         user: {
           id: user.id,
           email: user.email,
-          role: user.role,
-          permissions: permissionsForRole(user.role as any)
+          organizationId: organization.id,
+          organizationSlug: organization.slug,
+          role: membership.role,
+          permissions: permissionsForRole(membership.role as any)
         },
         csrfToken: issued.csrfToken,
         absoluteExpiresAt: issued.absoluteExpiresAt

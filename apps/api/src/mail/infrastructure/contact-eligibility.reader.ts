@@ -20,6 +20,7 @@ type DeliveryReader = Prisma.TransactionClient | {
 
 type LeadDeliverySubject = {
   id: string;
+  organizationId: string;
   companyId: string;
   contactEmail?: string | null;
   contactFormUrl?: string | null;
@@ -43,14 +44,14 @@ export async function assertLeadContactEligible(
   options: { lock?: boolean } = {}
 ) {
   const destination = leadDestination(lead, recipient);
-  if (options.lock) await lockDeliveryDestination(reader, lead.companyId, destination);
+  if (options.lock) await lockDeliveryDestination(reader, lead.organizationId, lead.companyId, destination);
 
   const [registeredContactCount, activeContactCount, priorDeliveries] = await Promise.all([
-    reader.contactPerson.count({ where: { companyId: lead.companyId, deletedAt: null } }),
+    reader.contactPerson.count({ where: { companyId: lead.companyId, organizationId: lead.organizationId, deletedAt: null } }),
     reader.contactPerson.count({
-      where: { companyId: lead.companyId, deletedAt: null, isUnsubscribed: false }
+      where: { companyId: lead.companyId, organizationId: lead.organizationId, deletedAt: null, isUnsubscribed: false }
     }),
-    findPriorDeliveries(reader, lead.companyId, destination)
+    findPriorDeliveries(reader, lead.organizationId, lead.companyId, destination)
   ]);
 
   assertMailDeliveryAllowed({
@@ -75,10 +76,11 @@ export async function assertLeadContactEligible(
 export async function assertPersistedMailContactEligible(
   reader: DeliveryReader,
   id: string,
+  organizationId: string,
   options: { lock?: boolean } = {}
 ) {
-  const email = await reader.outreachEmail.findUnique({
-    where: { id },
+  const email = await reader.outreachEmail.findFirst({
+    where: { id, organizationId },
     select: {
       id: true,
       companyId: true,
@@ -104,12 +106,13 @@ export async function assertPersistedMailContactEligible(
   if (!email) throw new NotFoundException('Mail not found');
 
   const destination = mailDestination(email);
-  if (options.lock) await lockDeliveryDestination(reader, email.companyId, destination);
+  if (options.lock) await lockDeliveryDestination(reader, organizationId, email.companyId, destination);
 
   const legacyMatchedContact = !email.contactId && email.toEmail
     ? await reader.contactPerson.findFirst({
       where: {
         companyId: email.companyId,
+        organizationId,
         email: { equals: email.toEmail, mode: 'insensitive' },
         OR: [{ deletedAt: { not: null } }, { isUnsubscribed: true }]
       },
@@ -119,13 +122,13 @@ export async function assertPersistedMailContactEligible(
 
   const [registeredContactCount, activeContactCount, priorDeliveries] = !email.contactId
     ? await Promise.all([
-      reader.contactPerson.count({ where: { companyId: email.companyId, deletedAt: null } }),
+      reader.contactPerson.count({ where: { companyId: email.companyId, organizationId, deletedAt: null } }),
       reader.contactPerson.count({
-        where: { companyId: email.companyId, deletedAt: null, isUnsubscribed: false }
+        where: { companyId: email.companyId, organizationId, deletedAt: null, isUnsubscribed: false }
       }),
-      findPriorDeliveries(reader, email.companyId, destination, email.id)
+      findPriorDeliveries(reader, organizationId, email.companyId, destination, email.id)
     ])
-    : [0, 0, await findPriorDeliveries(reader, email.companyId, destination, email.id)];
+    : [0, 0, await findPriorDeliveries(reader, organizationId, email.companyId, destination, email.id)];
 
   const snapshot: MailDeliverySnapshot = {
     company: email.company,
@@ -143,6 +146,7 @@ export async function assertPersistedMailContactEligible(
 
 async function findPriorDeliveries(
   reader: DeliveryReader,
+  organizationId: string,
   companyId: string,
   destination: MailDeliveryDestination,
   currentMailId?: string
@@ -175,6 +179,7 @@ async function findPriorDeliveries(
 
   const records = await reader.outreachEmail.findMany({
     where: {
+      organizationId,
       ...(currentMailId ? { id: { not: currentMailId } } : {}),
       OR: [
         { status: { in: RESERVED_DELIVERY_STATUSES } },
@@ -210,6 +215,7 @@ async function findPriorDeliveries(
 
 async function lockDeliveryDestination(
   reader: DeliveryReader,
+  organizationId: string,
   companyId: string,
   destination: MailDeliveryDestination
 ) {
@@ -219,7 +225,7 @@ async function lockDeliveryDestination(
   for (const key of lockKeys) {
     await reader.$executeRawUnsafe(
       'SELECT pg_advisory_xact_lock(hashtext($1))',
-      `contact-eligibility:${key}`
+      `contact-eligibility:${organizationId}:${key}`
     );
   }
 }

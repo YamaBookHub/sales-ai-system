@@ -11,6 +11,7 @@ export type AuthConfig = {
   cookieName: string;
   cookieSecure: boolean;
   localLoginEnabled: boolean;
+  organizationSlug: string;
   devUserEmail?: string;
   google?: {
     clientId: string;
@@ -48,6 +49,7 @@ export function readAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig
   }
 
   const devUserEmail = normalizeOptionalEmail(env.AUTH_DEV_USER_EMAIL);
+  const organizationSlug = normalizeOrganizationSlug(env.AUTH_ORGANIZATION_SLUG);
   if (authMode === 'local' && !devUserEmail) {
     throw new Error('AUTH_DEV_USER_EMAIL is required when AUTH_MODE is local.');
   }
@@ -62,9 +64,18 @@ export function readAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig
     cookieName: productionLike ? '__Host-sales_ai_session' : 'sales_ai_session',
     cookieSecure: productionLike,
     localLoginEnabled: appEnvironment === 'local' && authMode === 'local',
+    organizationSlug,
     devUserEmail,
     google: authMode === 'google' ? readGoogleConfig(env) : undefined
   };
+}
+
+function normalizeOrganizationSlug(value: string | undefined): string {
+  const normalized = (value || 'default').trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(normalized)) {
+    throw new Error('AUTH_ORGANIZATION_SLUG must be a valid organization slug.');
+  }
+  return normalized;
 }
 
 export function isLoopbackHost(host: string): boolean {

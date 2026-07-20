@@ -2,6 +2,7 @@ import { NavigationSummaryService } from './navigation-summary.service';
 
 describe('NavigationSummaryService', () => {
   it('calculates the same actionable counts for every page', async () => {
+    const organizationId = 'organization_1';
     const prisma = {
       salesLead: {
         findMany: jest.fn().mockResolvedValue([
@@ -30,14 +31,24 @@ describe('NavigationSummaryService', () => {
       },
       outreachEmail: { count: jest.fn().mockResolvedValue(4) },
       emailReply: { count: jest.fn().mockResolvedValue(2) }
-    } as never;
-    const service = new NavigationSummaryService(prisma);
+    };
+    const service = new NavigationSummaryService(prisma as never);
 
-    await expect(service.getSummary(new Date('2026-07-12T03:00:00.000Z'))).resolves.toEqual({
+    await expect(service.getSummary(organizationId, new Date('2026-07-12T03:00:00.000Z'))).resolves.toEqual({
       today: 2,
       replies: 2,
       leads: 3,
       mail: 4
     });
+    expect(prisma.salesLead.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { organizationId, deletedAt: null },
+      select: expect.objectContaining({
+        tasks: expect.objectContaining({ where: { organizationId, status: { in: ['todo', 'doing'] } } })
+      })
+    }));
+    expect(prisma.outreachEmail.count).toHaveBeenCalledWith({
+      where: { organizationId, status: { in: ['draft', 'in_review', 'approved', 'queued'] } }
+    });
+    expect(prisma.emailReply.count).toHaveBeenCalledWith({ where: { organizationId } });
   });
 });

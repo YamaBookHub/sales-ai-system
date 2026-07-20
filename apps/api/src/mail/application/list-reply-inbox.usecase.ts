@@ -7,8 +7,8 @@ import { PrismaReplyInboxRepository } from '../infrastructure/prisma-reply-inbox
 export class ListReplyInboxUseCase {
   constructor(private readonly replies: PrismaReplyInboxRepository) {}
 
-  async execute(query: ReplyInboxListQuery = {}) {
-    const result = await this.replies.list(query);
+  async execute(query: ReplyInboxListQuery = {}, organizationId: string) {
+    const result = await this.replies.list(organizationId, query);
     return {
       items: result.items.map(buildReplyInboxViewModel),
       page: result.page,

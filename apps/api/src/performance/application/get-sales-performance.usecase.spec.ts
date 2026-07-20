@@ -23,6 +23,7 @@ describe('GetSalesPerformanceUseCase', () => {
     });
 
     const result = await usecase.execute({
+      organizationId: 'org_1',
       from: '2026-07-01',
       to: '2026-07-31',
       ownerId: '11111111-1111-4111-8111-111111111111',
@@ -30,6 +31,7 @@ describe('GetSalesPerformanceUseCase', () => {
     }, new Date('2026-08-01T00:00:00.000Z'));
 
     expect(repository.summarize).toHaveBeenCalledWith({
+      organizationId: 'org_1',
       startUtc: new Date('2026-06-30T15:00:00.000Z'),
       endExclusiveUtc: new Date('2026-07-31T15:00:00.000Z'),
       ownerId: '11111111-1111-4111-8111-111111111111',
@@ -40,7 +42,7 @@ describe('GetSalesPerformanceUseCase', () => {
   });
 
   it('returns a Japanese validation error before accessing the database', async () => {
-    await expect(usecase.execute({ from: '2026-07-02', to: '2026-07-01' }))
+    await expect(usecase.execute({ organizationId: 'org_1', from: '2026-07-02', to: '2026-07-01' }))
       .rejects.toThrow(BadRequestException);
     expect(repository.summarize).not.toHaveBeenCalled();
   });

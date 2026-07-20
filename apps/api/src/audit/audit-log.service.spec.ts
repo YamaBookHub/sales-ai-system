@@ -16,6 +16,7 @@ describe('AuditLogService', () => {
   it('records only supplied safe audit metadata', async () => {
     prisma.auditLog.create.mockResolvedValue({ id: 'audit-1' });
     await service.record({
+      organizationId: 'org-1',
       userId: 'user-1',
       sessionId: 'session-1',
       action: 'lead.updated',
@@ -26,6 +27,7 @@ describe('AuditLogService', () => {
     expect(prisma.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         userId: 'user-1',
+        organizationId: 'org-1',
         sessionId: 'session-1',
         action: 'lead.updated',
         entityType: 'SalesLead',
@@ -38,6 +40,7 @@ describe('AuditLogService', () => {
   it('redacts sensitive metadata before recording it', async () => {
     prisma.auditLog.create.mockResolvedValue({ id: 'audit-1' });
     await service.record({
+      organizationId: 'org-1',
       userId: 'user-1',
       action: 'opportunity.updated',
       entityType: 'Opportunity',
@@ -65,19 +68,21 @@ describe('AuditLogService', () => {
     prisma.$transaction.mockResolvedValue([[
       {
         id: 'audit-2',
+        actor: null,
         before: { status: 'draft', ownerMemo: '社外秘', contactEmail: 'person@example.com', lossReasonDetail: '顧客固有の事情' },
         after: { status: 'approved', projectUrl: 'https://example.com/private', changedFields: ['status'] }
       }
     ], 1]);
-    const result = await service.list(0, 1000, { action: 'mail.approved', entityId: 'mail-1' });
+    const result = await service.list('org-1', 0, 1000, { action: 'mail.approved', entityId: 'mail-1' });
     expect(prisma.auditLog.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { action: 'mail.approved', entityId: 'mail-1' },
+      where: { organizationId: 'org-1', action: 'mail.approved', entityId: 'mail-1' },
       skip: 0,
       take: 100
     }));
     expect(result).toEqual({
       items: [{
         id: 'audit-2',
+        user: null,
         before: { status: 'draft', ownerMemo: '[redacted]', contactEmail: '[redacted]', lossReasonDetail: '[redacted]' },
         after: { status: 'approved', projectUrl: '[redacted]', changedFields: ['status'] }
       }],

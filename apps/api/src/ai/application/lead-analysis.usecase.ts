@@ -15,20 +15,22 @@ import {
 export class LeadAnalysisUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async get(leadId: string) {
-    const lead = await this.prisma.salesLead.findUnique({ where: { id: leadId }, include: { project: true } });
+  async get(leadId: string, actor: AuditActor) {
+    const organizationId = actor.organizationId;
+    const lead = await this.prisma.salesLead.findFirst({ where: { id: leadId, organizationId }, include: { project: true } });
     if (!lead) throw new NotFoundException('Lead not found');
     if (!lead.project) throw new ConflictException('この営業対象には案件が紐づいていません。');
 
     const fingerprint = projectSourceFingerprint(lead.project);
     const [history, latestConfirmed] = await Promise.all([
       this.prisma.leadAnalysisRevision.findMany({
-        where: { leadId },
+        where: { organizationId, leadId },
         orderBy: [{ version: 'desc' }, { createdAt: 'desc' }],
         take: 20
       }),
       this.prisma.leadAnalysisRevision.findFirst({
         where: {
+          organizationId,
           leadId,
           projectId: lead.project.id,
           status: 'confirmed',
@@ -40,23 +42,24 @@ export class LeadAnalysisUseCase {
     return buildAnalysisView(lead.project, history, latestConfirmed);
   }
 
-  save(leadId: string, dto: UpdateLeadAnalysisDto, actor: AuditActor | null = null) {
+  save(leadId: string, dto: UpdateLeadAnalysisDto, actor: AuditActor) {
     return this.append(leadId, dto, false, actor);
   }
 
-  confirm(leadId: string, dto: UpdateLeadAnalysisDto, actor: AuditActor | null = null) {
+  confirm(leadId: string, dto: UpdateLeadAnalysisDto, actor: AuditActor) {
     return this.append(leadId, dto, true, actor);
   }
 
-  private async append(leadId: string, dto: UpdateLeadAnalysisDto, confirm: boolean, actor: AuditActor | null) {
+  private async append(leadId: string, dto: UpdateLeadAnalysisDto, confirm: boolean, actor: AuditActor) {
+    const organizationId = actor.organizationId;
     await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `lead-analysis:${leadId}`);
-      const lead = await tx.salesLead.findUnique({ where: { id: leadId }, include: { project: true } });
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `lead-analysis:${organizationId}:${leadId}`);
+      const lead = await tx.salesLead.findFirst({ where: { id: leadId, organizationId }, include: { project: true } });
       if (!lead) throw new NotFoundException('Lead not found');
       if (!lead.project) throw new ConflictException('この営業対象には案件が紐づいていません。');
 
       const latest = await tx.leadAnalysisRevision.findFirst({
-        where: { leadId },
+        where: { organizationId, leadId },
         orderBy: [{ version: 'desc' }, { createdAt: 'desc' }]
       });
       const currentVersion = latest?.version || 0;
@@ -79,6 +82,7 @@ export class LeadAnalysisUseCase {
       const keepsGeneration = Boolean(latest && latest.projectId === lead.project.id && latest.sourceFingerprint === fingerprint);
       const revision = await tx.leadAnalysisRevision.create({
         data: {
+          organizationId,
           leadId,
           projectId: lead.project.id,
           sourceGenerationId: keepsGeneration ? latest?.sourceGenerationId : null,
@@ -97,6 +101,7 @@ export class LeadAnalysisUseCase {
       if (actor) {
         await tx.auditLog.create({
           data: {
+            organizationId,
             userId: actor.userId,
             sessionId: actor.sessionId,
             action: confirm ? 'analysis.confirmed' : 'analysis.edited',
@@ -113,7 +118,7 @@ export class LeadAnalysisUseCase {
         });
       }
     });
-    return this.get(leadId);
+    return this.get(leadId, actor);
   }
 }
 

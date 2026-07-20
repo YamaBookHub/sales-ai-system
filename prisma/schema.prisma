@@ -166,40 +166,98 @@ model User {
   email         String    @unique
   googleSubject String?   @unique
   name          String?
-  role          UserRole  @default(operator)
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
 
-  audits                  AuditLog[]
-  tasks                   Task[]
-  approvals               OutreachEmail[]           @relation("MailApprover")
-  ownedOpportunities      Opportunity[]             @relation("OpportunityOwner")
-  opportunityStageChanges OpportunityStageHistory[] @relation("OpportunityStageChanger")
-  leadAnalysisChanges     LeadAnalysisRevision[]    @relation("LeadAnalysisChanger")
-  sessions                UserSession[]
+  memberships OrganizationMembership[]
+  sessions    UserSession[]
 
-  @@index([role, isActive])
+  @@index([isActive])
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  slug      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships             OrganizationMembership[]
+  sessions                UserSession[]
+  companies               Company[]
+  contacts                ContactPerson[]
+  projects                CrowdfundingProject[]
+  leads                   SalesLead[]
+  leadScores              LeadScore[]
+  mails                   OutreachEmail[]
+  mailTemplates           MailTemplate[]
+  mailChecklistItems      MailChecklistItem[]
+  emailEvents             EmailEvent[]
+  emailReplies            EmailReply[]
+  trackedLinks            TrackedLink[]
+  linkClicks              LinkClick[]
+  mailAttachments         MailAttachment[]
+  aiGenerations           AiGeneration[]
+  aiUsageLedgers          AiUsageLedger[]
+  leadAnalysisRevisions   LeadAnalysisRevision[]
+  tasks                   Task[]
+  opportunities           Opportunity[]
+  opportunityStageHistory OpportunityStageHistory[]
+  auditLogs               AuditLog[]
+
+  @@index([isActive])
+}
+
+model OrganizationMembership {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String   @db.Uuid
+  displayName    String?
+  role           UserRole @default(operator)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization            Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                    User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions                UserSession[]
+  audits                  AuditLog[]                @relation("AuditActorMembership")
+  assignedTasks           Task[]                    @relation("TaskAssigneeMembership")
+  approvedMails           OutreachEmail[]           @relation("MailApproverMembership")
+  ownedOpportunities      Opportunity[]             @relation("OpportunityOwnerMembership")
+  opportunityStageChanges OpportunityStageHistory[] @relation("OpportunityStageChangerMembership")
+  leadAnalysisChanges     LeadAnalysisRevision[]    @relation("LeadAnalysisChangerMembership")
+
+  @@unique([organizationId, userId])
+  @@index([userId, isActive])
+  @@index([organizationId, role, isActive])
 }
 
 model UserSession {
-  id            String    @id @default(uuid()) @db.Uuid
-  userId        String    @db.Uuid
-  tokenHash     String    @unique
-  csrfTokenHash String
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @db.Uuid
+  userId            String    @db.Uuid
+  tokenHash         String    @unique
+  csrfTokenHash     String
   absoluteExpiresAt DateTime
-  idleExpiresAt DateTime
-  lastSeenAt    DateTime  @default(now())
-  revokedAt     DateTime?
-  ipHash        String?
-  userAgentHash String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  idleExpiresAt     DateTime
+  lastSeenAt        DateTime  @default(now())
+  revokedAt         DateTime?
+  ipHash            String?
+  userAgentHash     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership   OrganizationMembership @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Cascade)
+  auditLogs    AuditLog[]
 
-  @@index([userId, revokedAt])
+  @@unique([organizationId, id])
+  @@index([organizationId, userId, revokedAt])
   @@index([absoluteExpiresAt])
   @@index([idleExpiresAt])
 }
@@ -220,6 +278,7 @@ model CrowdfundingPlatform {
 
 model Company {
   id                   String    @id @default(uuid()) @db.Uuid
+  organizationId       String    @db.Uuid
   name                 String
   normalizedName       String?
   websiteUrl           String?
@@ -236,18 +295,21 @@ model Company {
   updatedAt            DateTime  @updatedAt
   deletedAt            DateTime?
 
-  contacts ContactPerson[]
-  projects CrowdfundingProject[]
-  leads    SalesLead[]
-  mails    OutreachEmail[]
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  contacts     ContactPerson[]
+  projects     CrowdfundingProject[]
+  leads        SalesLead[]
+  mails        OutreachEmail[]
 
-  @@index([name])
-  @@index([normalizedName])
-  @@index([isBlocked])
+  @@unique([organizationId, id])
+  @@index([organizationId, name])
+  @@index([organizationId, normalizedName])
+  @@index([organizationId, isBlocked])
 }
 
 model ContactPerson {
   id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
   companyId      String    @db.Uuid
   name           String?
   email          String?
@@ -260,20 +322,23 @@ model ContactPerson {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  company Company         @relation(fields: [companyId], references: [id])
-  mails   OutreachEmail[]
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company      Company         @relation(fields: [organizationId, companyId], references: [organizationId, id])
+  mails        OutreachEmail[]
 
-  @@index([companyId])
-  @@index([email])
-  @@index([isUnsubscribed])
+  @@unique([organizationId, id])
+  @@index([organizationId, companyId])
+  @@index([organizationId, email])
+  @@index([organizationId, isUnsubscribed])
 }
 
 model CrowdfundingProject {
   id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
   platformId     String        @db.Uuid
   companyId      String?       @db.Uuid
   title          String
-  url            String        @unique
+  url            String
   status         ProjectStatus @default(unknown)
   amount         Int           @default(0)
   supporterCount Int           @default(0)
@@ -290,22 +355,26 @@ model CrowdfundingProject {
   updatedAt      DateTime      @updatedAt
   deletedAt      DateTime?
 
+  organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   platform             CrowdfundingPlatform   @relation(fields: [platformId], references: [id])
-  company              Company?               @relation(fields: [companyId], references: [id])
+  company              Company?               @relation(fields: [organizationId, companyId], references: [organizationId, id])
   leads                SalesLead[]
   LeadAnalysisRevision LeadAnalysisRevision[]
 
-  @@index([platformId])
-  @@index([companyId])
-  @@index([status])
-  @@index([amount, supporterCount])
-  @@index([endDate])
-  @@index([daysLeft])
-  @@index([location])
+  @@unique([organizationId, id])
+  @@unique([organizationId, url])
+  @@index([organizationId, platformId])
+  @@index([organizationId, companyId])
+  @@index([organizationId, status])
+  @@index([organizationId, amount, supporterCount])
+  @@index([organizationId, endDate])
+  @@index([organizationId, daysLeft])
+  @@index([organizationId, location])
 }
 
 model SalesLead {
   id                String       @id @default(uuid()) @db.Uuid
+  organizationId    String       @db.Uuid
   companyId         String       @db.Uuid
   projectId         String?      @db.Uuid
   status            LeadStatus   @default(discovered)
@@ -332,8 +401,9 @@ model SalesLead {
   updatedAt         DateTime     @updatedAt
   deletedAt         DateTime?
 
-  company           Company                @relation(fields: [companyId], references: [id])
-  project           CrowdfundingProject?   @relation(fields: [projectId], references: [id])
+  organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company           Company                @relation(fields: [organizationId, companyId], references: [organizationId, id])
+  project           CrowdfundingProject?   @relation(fields: [organizationId, projectId], references: [organizationId, id])
   mails             OutreachEmail[]
   tasks             Task[]
   scores            LeadScore[]
@@ -341,14 +411,16 @@ model SalesLead {
   analysisRevisions LeadAnalysisRevision[]
   opportunity       Opportunity?
 
-  @@unique([companyId, projectId])
-  @@index([status, priority])
-  @@index([score])
-  @@index([nextActionAt])
+  @@unique([organizationId, id])
+  @@unique([organizationId, companyId, projectId])
+  @@index([organizationId, status, priority])
+  @@index([organizationId, score])
+  @@index([organizationId, nextActionAt])
 }
 
 model LeadScore {
   id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
   leadId         String   @db.Uuid
   amountScore    Int      @default(0)
   supporterScore Int      @default(0)
@@ -360,14 +432,17 @@ model LeadScore {
   version        String   @default("v1")
   createdAt      DateTime @default(now())
 
-  lead SalesLead @relation(fields: [leadId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lead         SalesLead    @relation(fields: [organizationId, leadId], references: [organizationId, id])
 
-  @@index([leadId])
-  @@index([totalScore])
+  @@unique([organizationId, id])
+  @@index([organizationId, leadId])
+  @@index([organizationId, totalScore])
 }
 
 model OutreachEmail {
   id                 String      @id @default(uuid()) @db.Uuid
+  organizationId     String      @db.Uuid
   leadId             String?     @db.Uuid
   companyId          String      @db.Uuid
   contactId          String?     @db.Uuid
@@ -395,11 +470,12 @@ model OutreachEmail {
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
-  lead             SalesLead?            @relation(fields: [leadId], references: [id])
-  company          Company               @relation(fields: [companyId], references: [id])
-  contact          ContactPerson?        @relation(fields: [contactId], references: [id])
-  approvedBy       User?                 @relation("MailApprover", fields: [approvedById], references: [id])
-  analysisRevision LeadAnalysisRevision? @relation(fields: [analysisRevisionId], references: [id], onDelete: SetNull)
+  organization     Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lead             SalesLead?              @relation(fields: [organizationId, leadId], references: [organizationId, id])
+  company          Company                 @relation(fields: [organizationId, companyId], references: [organizationId, id])
+  contact          ContactPerson?          @relation(fields: [organizationId, contactId], references: [organizationId, id])
+  approvedBy       OrganizationMembership? @relation("MailApproverMembership", fields: [organizationId, approvedById], references: [organizationId, userId])
+  analysisRevision LeadAnalysisRevision?   @relation(fields: [organizationId, analysisRevisionId], references: [organizationId, id])
   events           EmailEvent[]
   replies          EmailReply[]
   links            TrackedLink[]
@@ -407,66 +483,80 @@ model OutreachEmail {
   aiGenerations    AiGeneration[]
   checklistItems   MailChecklistItem[]
 
-  @@index([status])
-  @@index([leadId])
-  @@index([companyId])
-  @@index([analysisRevisionId])
-  @@index([destinationKey, status])
-  @@index([gmailThreadId])
-  @@index([scheduledAt])
+  @@unique([organizationId, id])
+  @@unique([organizationId, gmailMessageId])
+  @@index([organizationId, status])
+  @@index([organizationId, leadId])
+  @@index([organizationId, companyId])
+  @@index([organizationId, analysisRevisionId])
+  @@index([organizationId, destinationKey, status])
+  @@index([organizationId, gmailThreadId])
+  @@index([organizationId, scheduledAt])
 }
 
 model MailTemplate {
-  id          String   @id @default(uuid()) @db.Uuid
-  key         String   @unique
-  name        String
-  channel     String   @default("email")
-  subject     String?
-  body        String
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  key            String
+  name           String
+  channel        String   @default("email")
+  subject        String?
+  body           String
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  @@index([channel, isActive])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, key])
+  @@index([organizationId, channel, isActive])
 }
 
 model MailChecklistItem {
-  id        String    @id @default(uuid()) @db.Uuid
-  emailId   String    @db.Uuid
-  key       String
-  label     String
-  checked   Boolean   @default(false)
-  checkedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  emailId        String    @db.Uuid
+  key            String
+  label          String
+  checked        Boolean   @default(false)
+  checkedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  email OutreachEmail @relation(fields: [emailId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  email        OutreachEmail @relation(fields: [organizationId, emailId], references: [organizationId, id])
 
-  @@unique([emailId, key])
-  @@index([emailId])
-  @@index([checked])
+  @@unique([organizationId, id])
+  @@unique([organizationId, emailId, key])
+  @@index([organizationId, emailId])
+  @@index([organizationId, checked])
 }
 
 model EmailEvent {
-  id        String         @id @default(uuid()) @db.Uuid
-  emailId   String         @db.Uuid
-  type      EmailEventType
-  payload   Json?
-  ipHash    String?
-  userAgent String?
-  createdAt DateTime       @default(now())
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  emailId        String         @db.Uuid
+  type           EmailEventType
+  payload        Json?
+  ipHash         String?
+  userAgent      String?
+  createdAt      DateTime       @default(now())
 
-  email OutreachEmail @relation(fields: [emailId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  email        OutreachEmail @relation(fields: [organizationId, emailId], references: [organizationId, id])
 
-  @@index([emailId, type])
-  @@index([createdAt])
+  @@unique([organizationId, id])
+  @@index([organizationId, emailId, type])
+  @@index([organizationId, createdAt])
 }
 
 model EmailReply {
   id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
   emailId        String        @db.Uuid
-  gmailMessageId String?       @unique
+  gmailMessageId String?
   fromEmail      String?
   body           String
   bodyText       String?
@@ -477,85 +567,101 @@ model EmailReply {
   receivedAt     DateTime      @default(now())
   createdAt      DateTime      @default(now())
 
-  email OutreachEmail @relation(fields: [emailId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  email        OutreachEmail @relation(fields: [organizationId, emailId], references: [organizationId, id])
 
-  @@index([emailId])
-  @@index([category])
-  @@index([receivedAt])
+  @@unique([organizationId, id])
+  @@unique([organizationId, gmailMessageId])
+  @@index([organizationId, emailId])
+  @@index([organizationId, category])
+  @@index([organizationId, receivedAt])
 }
 
 model TrackedLink {
-  id          String   @id @default(uuid()) @db.Uuid
-  emailId     String   @db.Uuid
-  token       String   @unique
-  originalUrl String
-  label       String?
-  createdAt   DateTime @default(now())
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  emailId        String   @db.Uuid
+  token          String   @unique
+  originalUrl    String
+  label          String?
+  createdAt      DateTime @default(now())
 
-  email  OutreachEmail @relation(fields: [emailId], references: [id])
-  clicks LinkClick[]
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  email        OutreachEmail @relation(fields: [organizationId, emailId], references: [organizationId, id])
+  clicks       LinkClick[]
 
-  @@index([emailId])
+  @@unique([organizationId, id])
+  @@index([organizationId, emailId])
 }
 
 model LinkClick {
-  id        String   @id @default(uuid()) @db.Uuid
-  linkId    String   @db.Uuid
-  ipHash    String?
-  userAgent String?
-  referer   String?
-  clickedAt DateTime @default(now())
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  linkId         String   @db.Uuid
+  ipHash         String?
+  userAgent      String?
+  referer        String?
+  clickedAt      DateTime @default(now())
 
-  link TrackedLink @relation(fields: [linkId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  link         TrackedLink  @relation(fields: [organizationId, linkId], references: [organizationId, id])
 
-  @@index([linkId])
-  @@index([clickedAt])
+  @@unique([organizationId, id])
+  @@index([organizationId, linkId])
+  @@index([organizationId, clickedAt])
 }
 
 model MailAttachment {
-  id        String         @id @default(uuid()) @db.Uuid
-  emailId   String         @db.Uuid
-  type      AttachmentType @default(other)
-  name      String
-  url       String
-  mimeType  String?
-  sizeBytes Int?
-  createdAt DateTime       @default(now())
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  emailId        String         @db.Uuid
+  type           AttachmentType @default(other)
+  name           String
+  url            String
+  mimeType       String?
+  sizeBytes      Int?
+  createdAt      DateTime       @default(now())
 
-  email OutreachEmail @relation(fields: [emailId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  email        OutreachEmail @relation(fields: [organizationId, emailId], references: [organizationId, id])
 
-  @@index([emailId])
-  @@index([type])
+  @@unique([organizationId, id])
+  @@index([organizationId, emailId])
+  @@index([organizationId, type])
 }
 
 model AiGeneration {
-  id            String           @id @default(uuid()) @db.Uuid
-  leadId        String?          @db.Uuid
-  emailId       String?          @db.Uuid
-  type          AiGenerationType
-  provider      String
-  model         String
-  promptVersion String
-  inputJson     Json
-  outputJson    Json
-  latencyMs     Int?
-  tokenInput    Int?
-  tokenOutput   Int?
-  costUsd       Decimal?         @db.Decimal(12, 6)
-  createdAt     DateTime         @default(now())
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  leadId         String?          @db.Uuid
+  emailId        String?          @db.Uuid
+  type           AiGenerationType
+  provider       String
+  model          String
+  promptVersion  String
+  inputJson      Json
+  outputJson     Json
+  latencyMs      Int?
+  tokenInput     Int?
+  tokenOutput    Int?
+  costUsd        Decimal?         @db.Decimal(12, 6)
+  createdAt      DateTime         @default(now())
 
-  lead              SalesLead?             @relation(fields: [leadId], references: [id])
-  email             OutreachEmail?         @relation(fields: [emailId], references: [id])
+  organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lead              SalesLead?             @relation(fields: [organizationId, leadId], references: [organizationId, id])
+  email             OutreachEmail?         @relation(fields: [organizationId, emailId], references: [organizationId, id])
   analysisRevisions LeadAnalysisRevision[]
 
-  @@index([type])
-  @@index([leadId])
-  @@index([emailId])
-  @@index([createdAt])
+  @@unique([organizationId, id])
+  @@index([organizationId, type])
+  @@index([organizationId, leadId])
+  @@index([organizationId, emailId])
+  @@index([organizationId, createdAt])
 }
 
 model AiUsageLedger {
   id               String        @id @default(uuid()) @db.Uuid
+  organizationId   String        @db.Uuid
   provider         String
   model            String
   operation        String
@@ -565,11 +671,15 @@ model AiUsageLedger {
   createdAt        DateTime      @default(now())
   completedAt      DateTime?
 
-  @@index([provider, createdAt, status])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, provider, createdAt, status])
 }
 
 model LeadAnalysisRevision {
   id                 String             @id @default(uuid()) @db.Uuid
+  organizationId     String             @db.Uuid
   leadId             String             @db.Uuid
   projectId          String             @db.Uuid
   sourceGenerationId String?            @db.Uuid
@@ -587,42 +697,48 @@ model LeadAnalysisRevision {
   editedFields       String[]           @default([])
   createdAt          DateTime           @default(now())
 
-  lead             SalesLead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  project          CrowdfundingProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  sourceGeneration AiGeneration?       @relation(fields: [sourceGenerationId], references: [id], onDelete: SetNull)
-  changedBy        User?               @relation("LeadAnalysisChanger", fields: [changedById], references: [id], onDelete: SetNull)
+  organization     Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lead             SalesLead               @relation(fields: [organizationId, leadId], references: [organizationId, id], onDelete: Cascade)
+  project          CrowdfundingProject     @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+  sourceGeneration AiGeneration?           @relation(fields: [organizationId, sourceGenerationId], references: [organizationId, id])
+  changedBy        OrganizationMembership? @relation("LeadAnalysisChangerMembership", fields: [organizationId, changedById], references: [organizationId, userId])
   emails           OutreachEmail[]
 
-  @@unique([leadId, version])
-  @@index([leadId, status, version])
-  @@index([projectId])
-  @@index([sourceGenerationId])
-  @@index([changedById])
+  @@unique([organizationId, id])
+  @@unique([organizationId, leadId, version])
+  @@index([organizationId, leadId, status, version])
+  @@index([organizationId, projectId])
+  @@index([organizationId, sourceGenerationId])
+  @@index([organizationId, changedById])
 }
 
 model Task {
-  id          String     @id @default(uuid()) @db.Uuid
-  leadId      String?    @db.Uuid
-  assigneeId  String?    @db.Uuid
-  title       String
-  description String?
-  status      TaskStatus @default(todo)
-  dueAt       DateTime?
-  doneAt      DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @db.Uuid
+  leadId         String?    @db.Uuid
+  assigneeId     String?    @db.Uuid
+  title          String
+  description    String?
+  status         TaskStatus @default(todo)
+  dueAt          DateTime?
+  doneAt         DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
-  lead     SalesLead? @relation(fields: [leadId], references: [id])
-  assignee User?      @relation(fields: [assigneeId], references: [id])
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lead         SalesLead?              @relation(fields: [organizationId, leadId], references: [organizationId, id])
+  assignee     OrganizationMembership? @relation("TaskAssigneeMembership", fields: [organizationId, assigneeId], references: [organizationId, userId])
 
-  @@index([status, dueAt])
-  @@index([leadId])
-  @@index([assigneeId])
+  @@unique([organizationId, id])
+  @@index([organizationId, status, dueAt])
+  @@index([organizationId, leadId])
+  @@index([organizationId, assigneeId])
 }
 
 model Opportunity {
   id                 String                 @id @default(uuid()) @db.Uuid
-  leadId             String                 @unique @db.Uuid
+  organizationId     String                 @db.Uuid
+  leadId             String                 @db.Uuid
   ownerId            String?                @db.Uuid
   stage              OpportunityStage       @default(uncontacted)
   probability        Int                    @default(0)
@@ -639,56 +755,67 @@ model Opportunity {
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
 
-  lead    SalesLead                 @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  owner   User?                     @relation("OpportunityOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  history OpportunityStageHistory[]
+  organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lead         SalesLead                 @relation(fields: [organizationId, leadId], references: [organizationId, id], onDelete: Cascade)
+  owner        OrganizationMembership?   @relation("OpportunityOwnerMembership", fields: [organizationId, ownerId], references: [organizationId, userId])
+  history      OpportunityStageHistory[]
 
-  @@index([stage, updatedAt])
-  @@index([ownerId, stage])
-  @@index([expectedCloseDate])
+  @@unique([organizationId, id])
+  @@unique([organizationId, leadId])
+  @@index([organizationId, stage, updatedAt])
+  @@index([organizationId, ownerId, stage])
+  @@index([organizationId, expectedCloseDate])
 }
 
 model OpportunityStageHistory {
-  id            String                  @id @default(uuid()) @db.Uuid
-  opportunityId String                  @db.Uuid
-  fromStage     OpportunityStage?
-  toStage       OpportunityStage
-  changedById   String?                 @db.Uuid
-  source        OpportunityChangeSource @default(manual)
-  sourceId      String?
-  reason        String?
-  operationKey  String?                 @unique
-  versionAfter  Int
-  snapshot      Json?
-  createdAt     DateTime                @default(now())
+  id             String                  @id @default(uuid()) @db.Uuid
+  organizationId String                  @db.Uuid
+  opportunityId  String                  @db.Uuid
+  fromStage      OpportunityStage?
+  toStage        OpportunityStage
+  changedById    String?                 @db.Uuid
+  source         OpportunityChangeSource @default(manual)
+  sourceId       String?
+  reason         String?
+  operationKey   String?
+  versionAfter   Int
+  snapshot       Json?
+  createdAt      DateTime                @default(now())
 
-  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-  changedBy   User?       @relation("OpportunityStageChanger", fields: [changedById], references: [id], onDelete: SetNull)
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  opportunity  Opportunity             @relation(fields: [organizationId, opportunityId], references: [organizationId, id], onDelete: Cascade)
+  changedBy    OrganizationMembership? @relation("OpportunityStageChangerMembership", fields: [organizationId, changedById], references: [organizationId, userId])
 
-  @@index([opportunityId, createdAt])
-  @@index([toStage, createdAt])
-  @@index([changedById, createdAt])
+  @@unique([organizationId, id])
+  @@unique([organizationId, operationKey])
+  @@index([organizationId, opportunityId, createdAt])
+  @@index([organizationId, toStage, createdAt])
+  @@index([organizationId, changedById, createdAt])
 }
 
 model AuditLog {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String?  @db.Uuid
-  sessionId  String?  @db.Uuid
-  action     String
-  entityType String
-  entityId   String?
-  before     Json?
-  after      Json?
-  ipHash     String?
-  userAgent  String?
-  createdAt  DateTime @default(now())
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String?  @db.Uuid
+  sessionId      String?  @db.Uuid
+  action         String
+  entityType     String
+  entityId       String?
+  before         Json?
+  after          Json?
+  ipHash         String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
 
-  user User? @relation(fields: [userId], references: [id])
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  actor        OrganizationMembership? @relation("AuditActorMembership", fields: [organizationId, userId], references: [organizationId, userId])
+  session      UserSession?            @relation(fields: [organizationId, sessionId], references: [organizationId, id])
 
-  @@index([entityType, entityId])
-  @@index([action])
-  @@index([createdAt])
-  @@index([userId, createdAt])
-  @@index([sessionId, createdAt])
-  @@index([action, createdAt])
+  @@unique([organizationId, id])
+  @@index([organizationId, entityType, entityId])
+  @@index([organizationId, action])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, userId, createdAt])
+  @@index([organizationId, sessionId, createdAt])
+  @@index([organizationId, action, createdAt])
 }

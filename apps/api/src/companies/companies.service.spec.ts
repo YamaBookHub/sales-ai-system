@@ -1,18 +1,25 @@
 import { CompaniesService } from './companies.service';
 
 describe('CompaniesService', () => {
-  const actor = { userId: 'user-1', sessionId: 'session-1' };
+  const actor = { userId: 'user-1', sessionId: 'session-1', organizationId: 'organization-1' };
 
   function setup() {
     const tx = {
       company: {
         create: jest.fn().mockResolvedValue({ id: 'company-1', isBlocked: false }),
-        findUniqueOrThrow: jest.fn().mockResolvedValue({ isBlocked: false }),
-        update: jest.fn().mockResolvedValue({ id: 'company-1', isBlocked: true })
+        findFirstOrThrow: jest.fn().mockResolvedValue({ isBlocked: false }),
+        update: jest.fn().mockResolvedValue({ id: 'company-1', isBlocked: true }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0)
       },
       auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) }
     };
-    const prisma = { $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)) };
+    const prisma = {
+      company: tx.company,
+      $transaction: jest.fn((input: ((client: typeof tx) => unknown) | Promise<unknown>[]) =>
+        Array.isArray(input) ? Promise.all(input) : input(tx)
+      )
+    };
     return { service: new CompaniesService(prisma as any), tx, prisma };
   }
 
@@ -33,6 +40,30 @@ describe('CompaniesService', () => {
     });
     expect(tx.auditLog.create.mock.calls[0][0].data.after).not.toHaveProperty('websiteUrl');
     expect(tx.auditLog.create.mock.calls[0][0].data.after).not.toHaveProperty('memo');
+    expect(tx.company.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ organizationId: actor.organizationId })
+    });
+  });
+
+  it('scopes list and block queries to the active organization', async () => {
+    const { service, prisma, tx } = setup();
+    await service.list(actor.organizationId, 1, 20);
+    await service.block('company-1', {}, actor);
+
+    expect(tx.company.findMany).toHaveBeenCalledWith({
+      where: { organizationId: actor.organizationId, deletedAt: null },
+      skip: 0,
+      take: 20,
+      orderBy: { createdAt: 'desc' }
+    });
+
+    expect(tx.company.findFirstOrThrow).toHaveBeenCalledWith({
+      where: { id: 'company-1', organizationId: actor.organizationId, deletedAt: null },
+      select: { isBlocked: true }
+    });
+    expect(tx.company.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { organizationId_id: { organizationId: actor.organizationId, id: 'company-1' } }
+    }));
   });
 
   it('audits a block without persisting the block reason', async () => {

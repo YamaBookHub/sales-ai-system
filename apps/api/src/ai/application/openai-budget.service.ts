@@ -20,7 +20,7 @@ export class OpenAiBudgetService {
   constructor(private readonly prisma: PrismaService) {}
 
   async execute<T extends MeteredOpenAiResult>(
-    input: { model: string; operation: string; requestInput: unknown; maxOutputTokens: number },
+    input: { organizationId: string; model: string; operation: string; requestInput: unknown; maxOutputTokens: number },
     run: () => Promise<T>
   ): Promise<T> {
     const now = new Date();
@@ -33,7 +33,7 @@ export class OpenAiBudgetService {
       result = await run();
     } catch (error) {
       await this.prisma.aiUsageLedger.update({
-        where: { id: reservation.id },
+        where: { organizationId_id: { organizationId: input.organizationId, id: reservation.id } },
         data: {
           status: AiUsageStatus.failed,
           actualCostUsd: estimatedCostUsd,
@@ -45,19 +45,20 @@ export class OpenAiBudgetService {
 
     const actualCostUsd = roundUsd(result.usage?.costUsd ?? estimatedCostUsd);
     await this.prisma.aiUsageLedger.update({
-      where: { id: reservation.id },
+      where: { organizationId_id: { organizationId: input.organizationId, id: reservation.id } },
       data: { status: AiUsageStatus.completed, actualCostUsd, completedAt: new Date() }
     });
     return result;
   }
 
-  async getUsageSummary(now = new Date()) {
+  async getUsageSummary(organizationId: string, now = new Date()) {
     const config = readOpenAiBudgetConfig();
-    const usage = await this.monthUsage(now);
+    const usage = await this.monthUsage(organizationId, now);
     return buildOpenAiUsageSummary({ now, budgetUsd: config.budgetUsd, ...usage });
   }
 
   private async reserve(input: {
+    organizationId: string;
     model: string;
     operation: string;
     estimatedCostUsd: number;
@@ -68,14 +69,15 @@ export class OpenAiBudgetService {
     const staleBefore = new Date(input.now.getTime() - OPENAI_RESERVATION_TTL_MS);
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('openai-monthly-budget'))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`openai-monthly-budget:${input.organizationId}`}))`;
       await tx.aiUsageLedger.updateMany({
-        where: { provider: 'openai', status: AiUsageStatus.reserved, createdAt: { lt: staleBefore } },
+        where: { organizationId: input.organizationId, provider: 'openai', status: AiUsageStatus.reserved, createdAt: { lt: staleBefore } },
         data: { status: AiUsageStatus.failed, completedAt: input.now }
       });
 
       const rows = await tx.aiUsageLedger.findMany({
         where: {
+          organizationId: input.organizationId,
           provider: 'openai',
           createdAt: { gte: range.start, lt: range.end },
           OR: [
@@ -91,6 +93,7 @@ export class OpenAiBudgetService {
 
       return tx.aiUsageLedger.create({
         data: {
+          organizationId: input.organizationId,
           provider: 'openai',
           model: input.model,
           operation: input.operation,
@@ -102,10 +105,11 @@ export class OpenAiBudgetService {
     });
   }
 
-  private async monthUsage(now: Date) {
+  private async monthUsage(organizationId: string, now: Date) {
     const range = openAiMonthRange(now);
     const rows = await this.prisma.aiUsageLedger.findMany({
       where: {
+        organizationId,
         provider: 'openai',
         createdAt: { gte: range.start, lt: range.end },
         OR: [

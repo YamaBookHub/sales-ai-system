@@ -5,9 +5,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class ListLeadGenerationsUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(leadId: string) {
-    const lead = await this.prisma.salesLead.findUnique({
-      where: { id: leadId },
+  async execute(leadId: string, organizationId: string) {
+    const lead = await this.prisma.salesLead.findFirst({
+      where: { id: leadId, organizationId },
       select: { id: true }
     });
 
@@ -16,7 +16,7 @@ export class ListLeadGenerationsUseCase {
     }
 
     const items = await this.prisma.aiGeneration.findMany({
-      where: { leadId },
+      where: { organizationId, leadId },
       orderBy: { createdAt: 'desc' },
       take: 20,
       include: {

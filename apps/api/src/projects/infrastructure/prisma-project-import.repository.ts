@@ -27,31 +27,35 @@ export type BulkImportAuditSummary = {
 export class PrismaProjectImportRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async existingProjectUrls(baseUrl: string) {
+  async existingProjectUrls(organizationId: string, baseUrl: string) {
     const projects = await this.prisma.crowdfundingProject.findMany({
-      where: { platform: { baseUrl } },
+      where: { organizationId, platform: { baseUrl } },
       select: { url: true }
     });
     return new Set(projects.map((project) => normalizeSearchUrl(project.url)));
   }
 
-  async persistImportedProject(imported: NormalizedImportedProject, options: ProjectImportPersistenceOptions = {}) {
+  async persistImportedProject(
+    organizationId: string,
+    imported: NormalizedImportedProject,
+    options: ProjectImportPersistenceOptions = {}
+  ) {
     const projectUrl = normalizeSearchUrl(imported.project.url);
     const normalizedCompanyName = normalizeImportedCompanyName(imported.company.name);
 
     return this.prisma.$transaction(async (tx) => {
-      for (const lockKey of projectImportLockKeys(projectUrl, normalizedCompanyName)) {
+      for (const lockKey of projectImportLockKeys(organizationId, projectUrl, normalizedCompanyName)) {
         await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', lockKey);
       }
       const existingLeadIds = await tx.salesLead.findMany({
-        where: { project: { url: projectUrl }, deletedAt: null },
+        where: { organizationId, project: { url: projectUrl }, deletedAt: null },
         select: { id: true },
         orderBy: { id: 'asc' }
       });
       for (const existingLead of existingLeadIds) {
         await tx.$executeRawUnsafe(
           'SELECT pg_advisory_xact_lock(hashtext($1))',
-          `lead-analysis:${existingLead.id}`
+          `lead-analysis:${organizationId}:${existingLead.id}`
         );
       }
       const platform = await tx.crowdfundingPlatform.upsert({
@@ -70,6 +74,7 @@ export class PrismaProjectImportRepository {
       });
       const existingCompany = await tx.company.findFirst({
         where: {
+          organizationId,
           normalizedName: normalizedCompanyName,
           deletedAt: null
         }
@@ -77,7 +82,7 @@ export class PrismaProjectImportRepository {
       const company =
         existingCompany
           ? await tx.company.update({
-              where: { id: existingCompany.id },
+              where: { organizationId_id: { organizationId, id: existingCompany.id } },
               data: compact({
                 websiteUrl: existingCompany.websiteUrl || imported.company.websiteUrl || undefined,
                 inquiryUrl: existingCompany.inquiryUrl || imported.company.inquiryUrl || undefined,
@@ -90,6 +95,7 @@ export class PrismaProjectImportRepository {
             })
           : await tx.company.create({
               data: {
+                organizationId,
                 name: imported.company.name,
                 normalizedName: normalizedCompanyName,
                 websiteUrl: imported.company.websiteUrl || undefined,
@@ -102,7 +108,7 @@ export class PrismaProjectImportRepository {
               }
             });
       const project = await tx.crowdfundingProject.upsert({
-        where: { url: projectUrl },
+        where: { organizationId_url: { organizationId, url: projectUrl } },
         update: {
           platformId: platform.id,
           companyId: company.id,
@@ -118,6 +124,7 @@ export class PrismaProjectImportRepository {
           scrapedAt: new Date()
         },
         create: {
+          organizationId,
           platformId: platform.id,
           companyId: company.id,
           title: imported.project.title,
@@ -135,7 +142,8 @@ export class PrismaProjectImportRepository {
       });
       const existingLead = await tx.salesLead.findUnique({
         where: {
-          companyId_projectId: {
+          organizationId_companyId_projectId: {
+            organizationId,
             companyId: company.id,
             projectId: project.id
           }
@@ -143,7 +151,8 @@ export class PrismaProjectImportRepository {
       });
       const lead = await tx.salesLead.upsert({
         where: {
-          companyId_projectId: {
+          organizationId_companyId_projectId: {
+            organizationId,
             companyId: company.id,
             projectId: project.id
           }
@@ -160,6 +169,7 @@ export class PrismaProjectImportRepository {
           brandAnalysisMemo: existingLead?.brandAnalysisMemo || imported.lead.brandAnalysisMemo || undefined
         },
         create: {
+          organizationId,
           companyId: company.id,
           projectId: project.id,
           source: imported.lead.source,
@@ -176,10 +186,11 @@ export class PrismaProjectImportRepository {
         }
       });
 
-      await ensureOpportunityForLead(tx, lead.id);
+      await ensureOpportunityForLead(tx, lead.id, organizationId);
 
       await tx.auditLog.create({
         data: {
+          organizationId,
           action: options.bulk ? 'projects.bulk_import.item' : 'projects.import',
           userId: options.actor?.userId ?? null,
           sessionId: options.actor?.sessionId ?? null,
@@ -198,9 +209,10 @@ export class PrismaProjectImportRepository {
     });
   }
 
-  async recordBulkImportAudit(actor: AuditActor | null | undefined, summary: BulkImportAuditSummary) {
+  async recordBulkImportAudit(organizationId: string, actor: AuditActor | null | undefined, summary: BulkImportAuditSummary) {
     await this.prisma.auditLog.create({
       data: {
+        organizationId,
         action: 'projects.bulk_import',
         userId: actor?.userId ?? null,
         sessionId: actor?.sessionId ?? null,

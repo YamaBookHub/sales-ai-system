@@ -53,10 +53,10 @@ export function normalizeImportedCompanyName(value: string) {
   return value.trim().toLowerCase();
 }
 
-export function projectImportLockKeys(projectUrl: string, companyName: string) {
+export function projectImportLockKeys(organizationId: string, projectUrl: string, companyName: string) {
   return [
-    `project-import:company:${normalizeImportedCompanyName(companyName)}`,
-    `project-import:project:${normalizeSearchUrl(projectUrl)}`
+    `project-import:${organizationId}:company:${normalizeImportedCompanyName(companyName)}`,
+    `project-import:${organizationId}:project:${normalizeSearchUrl(projectUrl)}`
   ].sort();
 }
 

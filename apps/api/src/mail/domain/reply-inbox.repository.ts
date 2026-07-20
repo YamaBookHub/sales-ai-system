@@ -23,5 +23,5 @@ export type ReplyInboxListResult = {
 };
 
 export interface ReplyInboxRepository {
-  list(query?: ReplyInboxListQuery): Promise<ReplyInboxListResult>;
+  list(organizationId: string, query?: ReplyInboxListQuery): Promise<ReplyInboxListResult>;
 }

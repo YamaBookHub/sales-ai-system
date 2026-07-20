@@ -4,7 +4,8 @@ describe('TrackingService', () => {
   const createPrisma = () => {
     const prisma = {
     outreachEmail: {
-      findUnique: jest.fn().mockResolvedValue({ id: 'mail_1' })
+      findFirst: jest.fn().mockResolvedValue({ id: 'mail_1', organizationId: 'org_1' }),
+      findUnique: jest.fn().mockResolvedValue({ id: 'mail_1', organizationId: 'org_1' })
     },
     trackedLink: {
       create: jest.fn().mockResolvedValue({
@@ -21,6 +22,7 @@ describe('TrackingService', () => {
         token: 'token_1',
         originalUrl: 'https://example.com/company.pdf',
         label: 'company_material',
+        organizationId: 'org_1',
         email: { id: 'mail_1', leadId: 'lead_1' }
       }),
       findMany: jest.fn()
@@ -37,6 +39,7 @@ describe('TrackingService', () => {
       update: jest.fn()
     },
     contactPerson: {
+      findFirst: jest.fn().mockResolvedValue({ id: 'contact_1' }),
       update: jest.fn().mockResolvedValue({ id: 'contact_1' }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 })
       },
@@ -56,12 +59,13 @@ describe('TrackingService', () => {
       emailId: 'mail_1',
       originalUrl: 'https://example.com/company.pdf',
       label: 'company_material'
-    });
+    }, { organizationId: 'org_1', userId: 'user-1', sessionId: 'session-1' });
 
     expect(link.label).toBe('company_material');
     expect(link.trackingPath).toBe('/t/click/token_1');
     expect(prisma.trackedLink.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        organizationId: 'org_1',
         emailId: 'mail_1',
         originalUrl: 'https://example.com/company.pdf',
         label: 'company_material',
@@ -78,10 +82,11 @@ describe('TrackingService', () => {
       emailId: 'mail_1',
       originalUrl: 'https://example.com/private.pdf',
       label: 'company_material'
-    }, { userId: 'user-1', sessionId: 'session-1' });
+    }, { organizationId: 'org_1', userId: 'user-1', sessionId: 'session-1' });
 
     const audit = prisma.auditLog.create.mock.calls[0][0].data;
     expect(audit).toMatchObject({
+      organizationId: 'org_1',
       userId: 'user-1',
       sessionId: 'session-1',
       action: 'tracked_link.created',
@@ -96,9 +101,10 @@ describe('TrackingService', () => {
     const service = new TrackingService(prisma as any);
 
     await expect(service.resolveClick('token_1')).resolves.toBe('https://example.com/company.pdf');
-    expect(prisma.linkClick.create).toHaveBeenCalledWith({ data: { linkId: 'link_1' } });
+    expect(prisma.linkClick.create).toHaveBeenCalledWith({ data: { organizationId: 'org_1', linkId: 'link_1' } });
     expect(prisma.emailEvent.create).toHaveBeenCalledWith({
       data: {
+        organizationId: 'org_1',
         emailId: 'mail_1',
         type: 'clicked',
         payload: {
@@ -109,7 +115,7 @@ describe('TrackingService', () => {
       }
     });
     expect(prisma.salesLead.update).toHaveBeenCalledWith({
-      where: { id: 'lead_1' },
+      where: { organizationId_id: { organizationId: 'org_1', id: 'lead_1' } },
       data: expect.objectContaining({
         score: 85,
         priority: 'high',
@@ -134,7 +140,7 @@ describe('TrackingService', () => {
       emailId: 'mail_1',
       originalUrl: 'https://example.com/company.pdf',
       label: 'company_material'
-    })).resolves.toMatchObject({
+    }, { organizationId: 'org_1', userId: 'user-1', sessionId: 'session-1' })).resolves.toMatchObject({
       id: 'link_existing',
       trackingPath: '/t/click/token_existing'
     });
@@ -157,7 +163,7 @@ describe('TrackingService', () => {
     ]);
     const service = new TrackingService(prisma as any);
 
-    await expect(service.getMailEngagement('mail_1')).resolves.toMatchObject({
+    await expect(service.getMailEngagement('org_1', 'mail_1')).resolves.toMatchObject({
       emailId: 'mail_1',
       materialViewed: true,
       materialClickCount: 2,
@@ -170,18 +176,24 @@ describe('TrackingService', () => {
         }
       ]
     });
+    expect(prisma.trackedLink.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { organizationId: 'org_1', emailId: 'mail_1' }
+    }));
   });
 
   it('unsubscribes a contact and clears its primary flag', async () => {
     const prisma = createPrisma();
     const service = new TrackingService(prisma as any);
 
-    await expect(service.unsubscribe({ contactId: 'contact_1' })).resolves.toMatchObject({
+    await expect(service.unsubscribe(
+      { contactId: 'contact_1' },
+      { organizationId: 'org_1', userId: 'user-1', sessionId: 'session-1' }
+    )).resolves.toMatchObject({
       contactId: 'contact_1',
       isUnsubscribed: true
     });
     expect(prisma.contactPerson.update).toHaveBeenCalledWith({
-      where: { id: 'contact_1' },
+      where: { organizationId_id: { organizationId: 'org_1', id: 'contact_1' } },
       data: {
         isUnsubscribed: true,
         unsubscribedAt: expect.any(Date),
@@ -194,13 +206,17 @@ describe('TrackingService', () => {
     const prisma = createPrisma();
     const service = new TrackingService(prisma as any);
 
-    await expect(service.unsubscribe({ email: ' Contact@Example.COM ' })).resolves.toMatchObject({
+    await expect(service.unsubscribe(
+      { email: ' Contact@Example.COM ' },
+      { organizationId: 'org_1', userId: 'user-1', sessionId: 'session-1' }
+    )).resolves.toMatchObject({
       email: 'Contact@Example.COM',
       isUnsubscribed: true,
       updatedCount: 1
     });
     expect(prisma.contactPerson.updateMany).toHaveBeenCalledWith({
       where: {
+        organizationId: 'org_1',
         email: { equals: 'Contact@Example.COM', mode: 'insensitive' },
         deletedAt: null
       },
@@ -212,7 +228,10 @@ describe('TrackingService', () => {
     });
 
     prisma.contactPerson.updateMany.mockResolvedValueOnce({ count: 0 });
-    await expect(service.unsubscribe({ email: 'missing@example.com' })).resolves.toMatchObject({
+    await expect(service.unsubscribe(
+      { email: 'missing@example.com' },
+      { organizationId: 'org_1', userId: 'user-1', sessionId: 'session-1' }
+    )).resolves.toMatchObject({
       isUnsubscribed: false,
       message: '一致する有効な連絡先が見つかりません。'
     });

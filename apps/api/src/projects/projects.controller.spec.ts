@@ -4,10 +4,12 @@ describe('ProjectsController audit actor propagation', () => {
   const principal = {
     userId: 'user_1',
     sessionId: 'session_1',
+    organizationId: 'organization_1',
+    organizationSlug: 'organization-1',
     role: 'operator' as const,
     email: 'operator@example.test'
   };
-  const actor = { userId: principal.userId, sessionId: principal.sessionId };
+  const actor = { userId: principal.userId, sessionId: principal.sessionId, organizationId: principal.organizationId };
 
   it('passes the authenticated actor through create and import operations', async () => {
     const projects = { create: jest.fn().mockResolvedValue({}) };

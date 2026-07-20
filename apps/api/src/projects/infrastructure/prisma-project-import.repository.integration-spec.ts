@@ -5,6 +5,8 @@ import { PrismaProjectImportRepository } from './prisma-project-import.repositor
 const testDatabaseUrl = requireTestDatabaseUrl();
 
 describe('PrismaProjectImportRepository integration', () => {
+  const organizationId = '00000000-0000-4000-8000-000000000007';
+  const secondaryOrganizationId = '00000000-0000-4000-8000-000000000008';
   let prisma: PrismaClient;
   let concurrentPrisma: PrismaClient;
   let repository: PrismaProjectImportRepository;
@@ -84,24 +86,30 @@ describe('PrismaProjectImportRepository integration', () => {
     concurrentRepository = new PrismaProjectImportRepository(concurrentPrisma as any);
     await prisma.$connect();
     await concurrentPrisma.$connect();
+    await prisma.organization.upsert({
+      where: { id: secondaryOrganizationId },
+      update: { isActive: true },
+      create: { id: secondaryOrganizationId, slug: `integration-${suffix}`, name: 'Integration Organization' }
+    });
   });
 
   afterAll(async () => {
     const leadIds = await prisma.salesLead.findMany({
-      where: { project: { url: { in: testProjectUrls } } },
+      where: { organizationId: { in: [organizationId, secondaryOrganizationId] }, project: { url: { in: testProjectUrls } } },
       select: { id: true }
     });
-    await prisma.auditLog.deleteMany({ where: { entityId: { in: leadIds.map((lead) => lead.id) } } });
-    await prisma.salesLead.deleteMany({ where: { project: { url: { in: testProjectUrls } } } });
-    await prisma.crowdfundingProject.deleteMany({ where: { url: { in: testProjectUrls } } });
-    await prisma.company.deleteMany({ where: { name: { in: testCompanyNames } } });
+    await prisma.auditLog.deleteMany({ where: { organizationId: { in: [organizationId, secondaryOrganizationId] }, entityId: { in: leadIds.map((lead) => lead.id) } } });
+    await prisma.salesLead.deleteMany({ where: { organizationId: { in: [organizationId, secondaryOrganizationId] }, project: { url: { in: testProjectUrls } } } });
+    await prisma.crowdfundingProject.deleteMany({ where: { organizationId: { in: [organizationId, secondaryOrganizationId] }, url: { in: testProjectUrls } } });
+    await prisma.company.deleteMany({ where: { organizationId: { in: [organizationId, secondaryOrganizationId] }, name: { in: testCompanyNames } } });
     await prisma.crowdfundingPlatform.deleteMany({ where: { baseUrl: platformBaseUrl } });
+    await prisma.organization.delete({ where: { id: secondaryOrganizationId } });
     await concurrentPrisma.$disconnect();
     await prisma.$disconnect();
   });
 
   it('persists platform, company, project, lead, and audit log in one real transaction', async () => {
-    const result = await repository.persistImportedProject(imported, { bulk: true });
+    const result = await repository.persistImportedProject(organizationId, imported, { bulk: true });
 
     expect(result.platform.baseUrl).toBe(platformBaseUrl);
     expect(result.company.name).toBe(companyName);
@@ -110,7 +118,8 @@ describe('PrismaProjectImportRepository integration', () => {
 
     const lead = await prisma.salesLead.findUnique({
       where: {
-        companyId_projectId: {
+        organizationId_companyId_projectId: {
+          organizationId,
           companyId: result.company.id,
           projectId: result.project.id
         }
@@ -148,8 +157,8 @@ describe('PrismaProjectImportRepository integration', () => {
     });
 
     const [first, second] = await Promise.all([
-      repository.persistImportedProject(concurrentImport, { bulk: true }),
-      concurrentRepository.persistImportedProject(duplicateImport, { bulk: true })
+      repository.persistImportedProject(organizationId, concurrentImport, { bulk: true }),
+      concurrentRepository.persistImportedProject(organizationId, duplicateImport, { bulk: true })
     ]);
 
     expect(first.company.id).toBe(second.company.id);
@@ -162,6 +171,7 @@ describe('PrismaProjectImportRepository integration', () => {
     const [first, second] = await Promise.all(
       sharedCompanyProjectUrls.map((url, index) =>
         (index === 0 ? repository : concurrentRepository).persistImportedProject(
+          organizationId,
           buildImportedProject({ projectUrl: url, companyName: sharedCompanyName, platformBaseUrl }),
           { bulk: true }
         )
@@ -180,12 +190,14 @@ describe('PrismaProjectImportRepository integration', () => {
   it('rolls back a failed item without affecting a concurrent successful item', async () => {
     const results = await Promise.allSettled([
       repository.persistImportedProject(
+        organizationId,
         buildImportedProject({ projectUrl: successfulPartialProjectUrl, companyName: partialCompanyName, platformBaseUrl }),
         { bulk: true }
       ),
       concurrentRepository.persistImportedProject(
+        organizationId,
         buildImportedProject({ projectUrl: failedPartialProjectUrl, companyName: partialCompanyName, platformBaseUrl }),
-        { bulk: true, actor: { userId: 'not-a-uuid', sessionId: 'not-a-session-id' } }
+        { bulk: true, actor: { userId: 'not-a-uuid', sessionId: 'not-a-session-id', organizationId } }
       )
     ]);
 
@@ -196,20 +208,31 @@ describe('PrismaProjectImportRepository integration', () => {
       projects: 1,
       leads: 1
     });
-    await expect(prisma.crowdfundingProject.findUnique({ where: { url: failedPartialProjectUrl } })).resolves.toBeNull();
+    await expect(prisma.crowdfundingProject.findUnique({
+      where: { organizationId_url: { organizationId, url: failedPartialProjectUrl } }
+    })).resolves.toBeNull();
   });
 
   async function expectImportedRowCounts(input: { projectUrls: string[]; companyName: string; projects: number; leads: number }) {
     const [companyCount, projectCount, leadCount] = await Promise.all([
-      prisma.company.count({ where: { normalizedName: input.companyName.trim().toLowerCase(), deletedAt: null } }),
-      prisma.crowdfundingProject.count({ where: { url: { in: input.projectUrls } } }),
-      prisma.salesLead.count({ where: { project: { url: { in: input.projectUrls } } } })
+      prisma.company.count({ where: { organizationId, normalizedName: input.companyName.trim().toLowerCase(), deletedAt: null } }),
+      prisma.crowdfundingProject.count({ where: { organizationId, url: { in: input.projectUrls } } }),
+      prisma.salesLead.count({ where: { organizationId, project: { url: { in: input.projectUrls } } } })
     ]);
 
     expect(companyCount).toBe(1);
     expect(projectCount).toBe(input.projects);
     expect(leadCount).toBe(input.leads);
   }
+
+  it('permits the same source URL in a second organization without crossing company or lead records', async () => {
+    const second = await concurrentRepository.persistImportedProject(secondaryOrganizationId, imported, { bulk: true });
+    const first = await repository.persistImportedProject(organizationId, imported, { bulk: true });
+
+    expect(second.project.id).not.toBe(first.project.id);
+    expect(second.company.id).not.toBe(first.company.id);
+    expect(second.lead.id).not.toBe(first.lead.id);
+  });
 });
 
 function buildImportedProject(input: { projectUrl: string; companyName: string; platformBaseUrl: string }): NormalizedImportedProject {

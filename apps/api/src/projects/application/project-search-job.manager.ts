@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import {
   countImportableSearchItems,
@@ -18,6 +18,8 @@ import { PrismaProjectImportRepository } from '../infrastructure/prisma-project-
 
 type SearchJob = {
   id: string;
+  organizationId: string;
+  ownerUserId: string;
   status: 'running' | 'completed' | 'cancelled' | 'failed';
   source: ProjectSourceProvider['source'];
   desiredLimit: number;
@@ -45,11 +47,19 @@ export class ProjectSearchJobManager {
 
   constructor(private readonly projectImportRepository: PrismaProjectImportRepository) {}
 
-  start(provider: ProjectSourceProvider, dto: SearchCampfireProjectsDto, searchWithProvider: SearchWithProvider) {
+  start(
+    organizationId: string,
+    ownerUserId: string,
+    provider: ProjectSourceProvider,
+    dto: SearchCampfireProjectsDto,
+    searchWithProvider: SearchWithProvider
+  ) {
     const desiredLimit = normalizeResultLimit(dto.limit);
     this.pruneSearchJobs();
     const job: SearchJob = {
       id: randomUUID(),
+      organizationId,
+      ownerUserId,
       status: 'running',
       source: provider.source,
       desiredLimit,
@@ -67,19 +77,13 @@ export class ProjectSearchJobManager {
     return this.publicSearchJob(job);
   }
 
-  get(id: string) {
-    const job = this.searchJobs.get(id);
-    if (!job) {
-      throw new BadRequestException('検索ジョブが見つかりません。もう一度検索してください。');
-    }
+  get(id: string, organizationId: string, ownerUserId: string) {
+    const job = this.findOwnedJob(id, organizationId, ownerUserId);
     return this.publicSearchJob(job);
   }
 
-  cancel(id: string) {
-    const job = this.searchJobs.get(id);
-    if (!job) {
-      throw new BadRequestException('検索ジョブが見つかりません。もう一度検索してください。');
-    }
+  cancel(id: string, organizationId: string, ownerUserId: string) {
+    const job = this.findOwnedJob(id, organizationId, ownerUserId);
     if (job.status === 'running') {
       job.cancelled = true;
       job.status = 'cancelled';
@@ -103,7 +107,7 @@ export class ProjectSearchJobManager {
     searchWithProvider: SearchWithProvider
   ) {
     try {
-      const existingUrls = await this.projectImportRepository.existingProjectUrls(provider.baseUrl);
+      const existingUrls = await this.projectImportRepository.existingProjectUrls(job.organizationId, provider.baseUrl);
       const excludeUrls = Array.from(new Set([...(dto.excludeUrls || []), ...existingUrls]));
       for (const limit of progressiveSearchLimits(job.desiredLimit)) {
         if (job.cancelled) break;
@@ -184,6 +188,15 @@ export class ProjectSearchJobManager {
       startedAt: job.startedAt,
       updatedAt: job.updatedAt
     };
+  }
+
+  private findOwnedJob(id: string, organizationId: string, ownerUserId: string) {
+    const job = this.searchJobs.get(id);
+    if (!job || job.organizationId !== organizationId || job.ownerUserId !== ownerUserId) {
+      // Do not reveal a job belonging to another organization or user.
+      throw new NotFoundException('検索ジョブが見つかりません。もう一度検索してください。');
+    }
+    return job;
   }
 
   private pruneSearchJobs() {

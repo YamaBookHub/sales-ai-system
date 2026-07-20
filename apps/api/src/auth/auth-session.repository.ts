@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type CreateUserSessionInput = {
+  organizationId: string;
   userId: string;
   tokenHash: string;
   csrfTokenHash: string;
@@ -27,7 +28,7 @@ export class AuthSessionRepository {
         absoluteExpiresAt: { gt: now },
         idleExpiresAt: { gt: now }
       },
-      include: { user: true }
+      include: { user: true, organization: true, membership: true }
     });
   }
 
@@ -55,6 +56,13 @@ export class AuthSessionRepository {
   async revokeAllForUser(userId: string, now: Date): Promise<void> {
     await this.prisma.userSession.updateMany({
       where: { userId, revokedAt: null },
+      data: { revokedAt: now }
+    });
+  }
+
+  async revokeAllForMembership(organizationId: string, userId: string, now: Date): Promise<void> {
+    await this.prisma.userSession.updateMany({
+      where: { organizationId, userId, revokedAt: null },
       data: { revokedAt: now }
     });
   }

@@ -24,10 +24,12 @@
 | GET | `/api/auth/google/start` | 公開 | Google OAuth/OIDC開始 |
 | GET | `/api/auth/google/callback` | 公開 | callback検証とsession発行 |
 | POST | `/api/auth/local-login` | local限定公開 | 固定した既存active userのsession発行 |
-| GET | `/api/auth/me` | 必須 | current user、role別permissions、CSRF token、session絶対期限 |
+| GET | `/api/auth/me` | 必須 | current user、active organization、role別permissions、CSRF token、session絶対期限 |
 | POST | `/api/auth/logout` | 必須 + CSRF | current session失効 |
 
 local loginは `APP_ENV=local`、`AUTH_MODE=local`、loopback origin、`AUTH_DEV_USER_EMAIL` の既存active userという全条件を要求し、requestから利用者を選択できない。
+
+`GET /api/auth/me` の `data.user` は `organizationId` と `organizationSlug` を返す。これらはsessionに固定されたactive organizationであり、requestのheader、query、bodyから上書きできない。
 
 ### 管理API
 

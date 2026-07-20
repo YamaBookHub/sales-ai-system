@@ -2,6 +2,8 @@ import { NotFoundException } from '@nestjs/common';
 import { ContactsService } from './contacts.service';
 
 describe('ContactsService', () => {
+  const organizationId = 'organization-1';
+  const actor = { userId: 'user-1', sessionId: 'session-1', organizationId };
   const company = { id: 'company-1', name: '株式会社テスト', deletedAt: null };
   const activeContact = {
     id: 'contact-1',
@@ -40,10 +42,10 @@ describe('ContactsService', () => {
   it('lists only active contacts after confirming the company exists', async () => {
     const { service, prisma } = setup();
 
-    await expect(service.listByCompany(company.id)).resolves.toEqual([activeContact]);
-    expect(prisma.company.findFirst).toHaveBeenCalledWith({ where: { id: company.id, deletedAt: null } });
+    await expect(service.listByCompany(company.id, organizationId)).resolves.toEqual([activeContact]);
+    expect(prisma.company.findFirst).toHaveBeenCalledWith({ where: { id: company.id, organizationId, deletedAt: null } });
     expect(prisma.contactPerson.findMany).toHaveBeenCalledWith({
-      where: { companyId: company.id, deletedAt: null },
+      where: { organizationId, companyId: company.id, deletedAt: null },
       orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }]
     });
   });
@@ -55,19 +57,20 @@ describe('ContactsService', () => {
       name: ' 鈴木 花子 ',
       email: 'hanako@example.com',
       isPrimary: true
-    })).resolves.toMatchObject({ id: 'contact-2', name: '鈴木 花子', isPrimary: true });
+    }, actor)).resolves.toMatchObject({ id: 'contact-2', name: '鈴木 花子', isPrimary: true });
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(tx.$executeRawUnsafe).toHaveBeenCalledWith(
       'SELECT pg_advisory_xact_lock(hashtext($1))',
-      'company-contacts:company-1'
+      'company-contacts:organization-1:company-1'
     );
     expect(tx.contactPerson.updateMany).toHaveBeenCalledWith({
-      where: { companyId: company.id, deletedAt: null, isPrimary: true },
+      where: { organizationId, companyId: company.id, deletedAt: null, isPrimary: true },
       data: { isPrimary: false }
     });
     expect(tx.contactPerson.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        organizationId,
         companyId: company.id,
         name: '鈴木 花子',
         email: 'hanako@example.com',
@@ -82,7 +85,7 @@ describe('ContactsService', () => {
     const { service, tx } = setup();
     tx.company.findFirst.mockResolvedValue(null);
 
-    await expect(service.create('missing-company', { name: '担当者' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.create('missing-company', { name: '担当者' }, actor)).rejects.toBeInstanceOf(NotFoundException);
     expect(tx.contactPerson.create).not.toHaveBeenCalled();
   });
 
@@ -94,10 +97,11 @@ describe('ContactsService', () => {
       email: null,
       inquiryUrl: 'https://example.com/inquiry',
       isPrimary: true
-    });
+    }, actor);
 
     expect(tx.contactPerson.updateMany).toHaveBeenCalledWith({
       where: {
+        organizationId,
         companyId: company.id,
         deletedAt: null,
         isPrimary: true,
@@ -106,7 +110,7 @@ describe('ContactsService', () => {
       data: { isPrimary: false }
     });
     expect(tx.contactPerson.update).toHaveBeenCalledWith({
-      where: { id: activeContact.id },
+      where: { organizationId_id: { organizationId, id: activeContact.id } },
       data: {
         name: null,
         email: null,
@@ -120,10 +124,10 @@ describe('ContactsService', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-17T01:02:03.000Z'));
     const { service, tx } = setup();
 
-    await service.unsubscribe(activeContact.id);
+    await service.unsubscribe(activeContact.id, actor);
 
     expect(tx.contactPerson.update).toHaveBeenCalledWith({
-      where: { id: activeContact.id },
+      where: { organizationId_id: { organizationId, id: activeContact.id } },
       data: {
         isUnsubscribed: true,
         unsubscribedAt: new Date('2026-07-17T01:02:03.000Z'),
@@ -138,7 +142,8 @@ describe('ContactsService', () => {
 
     await service.update(activeContact.id, { email: 'changed@example.com', inquiryUrl: 'https://example.com/contact' }, {
       userId: 'user-1',
-      sessionId: 'session-1'
+      sessionId: 'session-1',
+      organizationId
     });
 
     const audit = tx.auditLog.create.mock.calls[0][0].data;
@@ -158,11 +163,11 @@ describe('ContactsService', () => {
     const { service, tx } = setup();
     tx.contactPerson.findFirst.mockResolvedValue({ ...activeContact, isUnsubscribed: true, unsubscribedAt: new Date() });
 
-    await service.update(activeContact.id, { isUnsubscribed: false, isPrimary: true });
+    await service.update(activeContact.id, { isUnsubscribed: false, isPrimary: true }, actor);
 
     expect(tx.contactPerson.updateMany).toHaveBeenCalled();
     expect(tx.contactPerson.update).toHaveBeenCalledWith({
-      where: { id: activeContact.id },
+      where: { organizationId_id: { organizationId, id: activeContact.id } },
       data: {
         isPrimary: true,
         isUnsubscribed: false,
@@ -175,14 +180,14 @@ describe('ContactsService', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-17T02:03:04.000Z'));
     const { service, tx } = setup();
 
-    await service.archive(activeContact.id);
+    await service.archive(activeContact.id, actor);
     expect(tx.contactPerson.update).toHaveBeenCalledWith({
-      where: { id: activeContact.id },
+      where: { organizationId_id: { organizationId, id: activeContact.id } },
       data: { deletedAt: new Date('2026-07-17T02:03:04.000Z'), isPrimary: false }
     });
 
     tx.contactPerson.findFirst.mockResolvedValue(null);
-    await expect(service.update(activeContact.id, { roleTitle: '更新不可' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.update(activeContact.id, { roleTitle: '更新不可' }, actor)).rejects.toBeInstanceOf(NotFoundException);
     jest.useRealTimers();
   });
 });

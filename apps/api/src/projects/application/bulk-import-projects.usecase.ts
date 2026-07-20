@@ -24,7 +24,7 @@ export class BulkImportProjectsUseCase {
     private readonly makuakeProvider: MakuakeProjectSourceProvider
   ) {}
 
-  async execute(dto: BulkImportProjectsDto, actor: AuditActor | null = null) {
+  async execute(dto: BulkImportProjectsDto, actor: AuditActor) {
     const provider = this.providerFor(dto.source);
     const urlInputs = uniqueNormalizedUrlInputs(dto.urls, (url) => provider.normalizeUrl(url));
     const importConcurrency = clampConcurrency(dto.importConcurrency, 1, 4, 4);
@@ -34,7 +34,7 @@ export class BulkImportProjectsUseCase {
 
     await runWithConcurrency(urlInputs, importConcurrency, async (item) => {
       try {
-        const result = await this.importWithProvider(provider, item.url, { bulk: true, actor });
+        const result = await this.importWithProvider(provider, item.url, actor, { bulk: true, actor });
         imported.push({
           originalUrl: item.originalUrl,
           url: item.url,
@@ -66,18 +66,18 @@ export class BulkImportProjectsUseCase {
       items,
       analysisItems
     });
-    await this.projectImportRepository.recordBulkImportAudit(actor, summary);
+    await this.projectImportRepository.recordBulkImportAudit(actor.organizationId, actor, summary);
 
     return summary;
   }
 
-  private async importWithProvider(provider: ProjectSourceProvider, url: string, options: ImportOptions = {}) {
+  private async importWithProvider(provider: ProjectSourceProvider, url: string, actor: AuditActor, options: ImportOptions = {}) {
     const normalizedUrl = provider.normalizeUrl(url);
     const imported = await provider.import(normalizedUrl);
     if (imported.project.status !== 'active') {
       throw new BadRequestException('現在公開中・募集中のプロジェクトだけ取り込めます。終了済み・公開前のURLは対象外です。');
     }
-    const result = await this.projectImportRepository.persistImportedProject(imported, options);
+    const result = await this.projectImportRepository.persistImportedProject(actor.organizationId, imported, options);
 
     return {
       ...result,

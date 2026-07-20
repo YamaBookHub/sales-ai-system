@@ -2,6 +2,7 @@ import { NormalizedImportedProject } from '../domain/project-source-provider';
 import { PrismaProjectImportRepository } from './prisma-project-import.repository';
 
 describe('PrismaProjectImportRepository', () => {
+  const organizationId = 'organization-1';
   const imported: NormalizedImportedProject = {
     source: 'campfire',
     platform: {
@@ -55,10 +56,10 @@ describe('PrismaProjectImportRepository', () => {
     };
     const repository = new PrismaProjectImportRepository(prisma as any);
 
-    const urls = await repository.existingProjectUrls('https://camp-fire.jp');
+    const urls = await repository.existingProjectUrls(organizationId, 'https://camp-fire.jp');
 
     expect(prisma.crowdfundingProject.findMany).toHaveBeenCalledWith({
-      where: { platform: { baseUrl: 'https://camp-fire.jp' } },
+      where: { organizationId, platform: { baseUrl: 'https://camp-fire.jp' } },
       select: { url: true }
     });
     expect(urls.has('https://camp-fire.jp/projects/test/view')).toBe(true);
@@ -90,6 +91,7 @@ describe('PrismaProjectImportRepository', () => {
       },
       salesLead: {
         findMany: jest.fn().mockResolvedValue([{ id: 'lead-existing' }]),
+        findFirst: jest.fn().mockResolvedValue({ id: 'lead-1', organizationId }),
         findUnique: jest.fn().mockResolvedValue({
           contactFormUrl: 'https://existing.example.com/contact',
           brandWebsiteUrl: 'https://existing.example.com',
@@ -123,17 +125,17 @@ describe('PrismaProjectImportRepository', () => {
     };
     const repository = new PrismaProjectImportRepository(prisma as any);
 
-    const actor = { userId: 'user-1', sessionId: 'session-1' };
-    const result = await repository.persistImportedProject(imported, { bulk: true, actor });
+    const actor = { userId: 'user-1', sessionId: 'session-1', organizationId };
+    const result = await repository.persistImportedProject(organizationId, imported, { bulk: true, actor });
 
     expect(result.lead.id).toBe('lead-1');
     expect(tx.$executeRawUnsafe).toHaveBeenCalledTimes(4);
-    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(1, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'project-import:company:テスト食品株式会社');
-    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(2, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'project-import:project:https://camp-fire.jp/projects/test/view');
-    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(3, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'lead-analysis:lead-existing');
-    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(4, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'opportunity:lead-1');
+    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(1, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'project-import:organization-1:company:テスト食品株式会社');
+    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(2, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'project-import:organization-1:project:https://camp-fire.jp/projects/test/view');
+    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(3, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'lead-analysis:organization-1:lead-existing');
+    expect(tx.$executeRawUnsafe).toHaveBeenNthCalledWith(4, 'SELECT pg_advisory_xact_lock(hashtext($1))', 'opportunity:organization-1:lead-1');
     expect(tx.company.update).toHaveBeenCalledWith({
-      where: { id: 'company-1' },
+      where: { organizationId_id: { organizationId, id: 'company-1' } },
       data: expect.objectContaining({
         websiteUrl: 'https://existing.example.com',
         inquiryUrl: 'https://brand.example.com/contact'
@@ -149,6 +151,7 @@ describe('PrismaProjectImportRepository', () => {
     }));
     expect(tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        organizationId,
         action: 'projects.bulk_import.item',
         userId: 'user-1',
         sessionId: 'session-1',
@@ -166,7 +169,7 @@ describe('PrismaProjectImportRepository', () => {
     };
     const repository = new PrismaProjectImportRepository(prisma as any);
 
-    await repository.recordBulkImportAudit({ userId: 'user-1', sessionId: 'session-1' }, {
+    await repository.recordBulkImportAudit(organizationId, { userId: 'user-1', sessionId: 'session-1', organizationId }, {
       source: 'campfire',
       total: 3,
       imported: 2,
@@ -177,6 +180,7 @@ describe('PrismaProjectImportRepository', () => {
 
     expect(prisma.auditLog.create).toHaveBeenCalledWith({
       data: {
+        organizationId,
         action: 'projects.bulk_import',
         userId: 'user-1',
         sessionId: 'session-1',

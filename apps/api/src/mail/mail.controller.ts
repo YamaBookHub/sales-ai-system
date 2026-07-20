@@ -23,8 +23,13 @@ export class MailController {
   constructor(private readonly mail: MailService) {}
 
   @Get()
-  async list(@Query('page') page = '1', @Query('limit') limit = '20', @Query('status') status?: EmailStatus) {
-    return ok(await this.mail.list(Number(page), Number(limit), status));
+  async list(
+    @Query('page') page = '1',
+    @Query('limit') limit = '20',
+    @Query('status') status: EmailStatus | undefined,
+    @CurrentUser() principal: AuthenticatedPrincipal
+  ) {
+    return ok(await this.mail.list(principal.organizationId, Number(page), Number(limit), status));
   }
 
   @Post('draft')
@@ -34,13 +39,13 @@ export class MailController {
   }
 
   @Get('templates')
-  async listTemplates(@Query('channel') channel?: string) {
-    return ok(await this.mail.listTemplates(channel));
+  async listTemplates(@Query('channel') channel: string | undefined, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.listTemplates(principal.organizationId, channel));
   }
 
   @Get('templates/:key')
-  async getTemplate(@Param('key') key: string) {
-    return ok(await this.mail.getTemplate(key));
+  async getTemplate(@Param('key') key: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.getTemplate(principal.organizationId, key));
   }
 
   @Post('templates')
@@ -62,13 +67,13 @@ export class MailController {
   }
 
   @Get(':id/consistency')
-  async checkConsistency(@Param('id') id: string) {
-    return ok(await this.mail.checkDraftConsistency(id));
+  async checkConsistency(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.checkDraftConsistency(id, principal.organizationId));
   }
 
   @Get(':id/checklist')
-  async getChecklist(@Param('id') id: string) {
-    return ok(await this.mail.getChecklist(id));
+  async getChecklist(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.getChecklist(id, principal.organizationId));
   }
 
   @Patch(':id/checklist')
@@ -138,7 +143,7 @@ export class MailController {
   }
 
   @Get('threads/:gmailThreadId')
-  async getThread(@Param('gmailThreadId') gmailThreadId: string) {
-    return ok(await this.mail.getThread(gmailThreadId));
+  async getThread(@Param('gmailThreadId') gmailThreadId: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.getThread(gmailThreadId, principal.organizationId));
   }
 }

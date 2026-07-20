@@ -22,8 +22,13 @@ export class ProjectsController {
   ) {}
 
   @Get()
-  async list(@Query('page') page = '1', @Query('limit') limit = '20', @Query('status') status?: ProjectStatus) {
-    return ok(await this.projects.list(Number(page), Number(limit), status));
+  async list(
+    @Query('page') page = '1',
+    @Query('limit') limit = '20',
+    @Query('status') status: ProjectStatus | undefined,
+    @CurrentUser() principal: AuthenticatedPrincipal
+  ) {
+    return ok(await this.projects.list(principal.organizationId, Number(page), Number(limit), status));
   }
 
   @Post()
@@ -62,30 +67,30 @@ export class ProjectsController {
 
   @Post('search/campfire')
   @RequirePermissions('prospecting.execute')
-  async searchCampfire(@Body() dto: SearchCampfireProjectsDto) {
-    return ok(await this.searchUseCase.searchCampfire(dto));
+  async searchCampfire(@Body() dto: SearchCampfireProjectsDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.searchUseCase.searchCampfire(dto, principal.organizationId));
   }
 
   @Post('search')
   @RequirePermissions('prospecting.execute')
-  async searchProjects(@Body() dto: SearchProjectsDto) {
-    return ok(await this.searchUseCase.search(dto));
+  async searchProjects(@Body() dto: SearchProjectsDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.searchUseCase.search(dto, principal.organizationId));
   }
 
   @Post('search-jobs')
   @RequirePermissions('prospecting.execute')
-  async startSearchJob(@Body() dto: SearchProjectsDto) {
-    return ok(this.searchUseCase.startJob(dto));
+  async startSearchJob(@Body() dto: SearchProjectsDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(this.searchUseCase.startJob(dto, principal.organizationId, principal.userId));
   }
 
   @Get('search-jobs/:id')
-  async getSearchJob(@Param('id') id: string) {
-    return ok(this.searchUseCase.getJob(id));
+  async getSearchJob(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(this.searchUseCase.getJob(id, principal.organizationId, principal.userId));
   }
 
   @Post('search-jobs/:id/cancel')
   @RequirePermissions('prospecting.execute')
-  async cancelSearchJob(@Param('id') id: string) {
-    return ok(this.searchUseCase.cancelJob(id));
+  async cancelSearchJob(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(this.searchUseCase.cancelJob(id, principal.organizationId, principal.userId));
   }
 }

@@ -13,8 +13,12 @@ export class CompaniesController {
   constructor(private readonly companies: CompaniesService) {}
 
   @Get()
-  async list(@Query('page') page = '1', @Query('limit') limit = '20') {
-    return ok(await this.companies.list(Number(page), Number(limit)));
+  async list(
+    @Query('page') page = '1',
+    @Query('limit') limit = '20',
+    @CurrentUser() principal: AuthenticatedPrincipal
+  ) {
+    return ok(await this.companies.list(principal.organizationId, Number(page), Number(limit)));
   }
 
   @Post()

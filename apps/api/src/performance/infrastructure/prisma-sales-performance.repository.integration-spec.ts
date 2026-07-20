@@ -15,6 +15,7 @@ describe('PrismaSalesPerformanceRepository integration', () => {
     leads: [] as string[],
     mails: [] as string[]
   };
+  let organizationId: string;
   let ownerA: string;
   let ownerB: string;
 
@@ -23,6 +24,7 @@ describe('PrismaSalesPerformanceRepository integration', () => {
     repository = new PrismaSalesPerformanceRepository(prisma as any);
     await prisma.$connect();
     const fixtures = await createFixtures(prisma, suffix, ids);
+    organizationId = fixtures.organizationId;
     ownerA = fixtures.ownerA;
     ownerB = fixtures.ownerB;
   });
@@ -36,13 +38,14 @@ describe('PrismaSalesPerformanceRepository integration', () => {
     await prisma.salesLead.deleteMany({ where: { id: { in: ids.leads } } });
     await prisma.crowdfundingProject.deleteMany({ where: { id: { in: ids.projects } } });
     await prisma.company.deleteMany({ where: { id: { in: ids.companies } } });
-    await prisma.crowdfundingPlatform.deleteMany({ where: { id: { in: ids.platforms } } });
+    await prisma.organization.delete({ where: { id: organizationId } });
     await prisma.user.deleteMany({ where: { id: { in: ids.users } } });
+    await prisma.crowdfundingPlatform.deleteMany({ where: { id: { in: ids.platforms } } });
     await prisma.$disconnect();
   });
 
   it('aggregates a known sent cohort without duplicate events or end-boundary leakage', async () => {
-    const result = await repository.summarize(period());
+    const result = await repository.summarize({ ...period(), organizationId });
 
     expect(result).toEqual({
       sentMessages: 4,
@@ -56,7 +59,7 @@ describe('PrismaSalesPerformanceRepository integration', () => {
   });
 
   it('applies the current owner filter to every metric', async () => {
-    const result = await repository.summarize({ ...period(), ownerId: ownerA });
+    const result = await repository.summarize({ ...period(), organizationId, ownerId: ownerA });
 
     expect(result).toMatchObject({
       sentMessages: 3,
@@ -70,7 +73,7 @@ describe('PrismaSalesPerformanceRepository integration', () => {
   });
 
   it('lists inactive owners that still own performance records', async () => {
-    const owners = await repository.listOwners();
+    const owners = await repository.listOwners(organizationId);
 
     expect(owners).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: ownerA, isActive: true }),
@@ -79,8 +82,8 @@ describe('PrismaSalesPerformanceRepository integration', () => {
   });
 
   it('filters the acquisition source, including manually registered leads', async () => {
-    const campfire = await repository.summarize({ ...period(), source: 'campfire' });
-    const manual = await repository.summarize({ ...period(), source: 'manual' });
+    const campfire = await repository.summarize({ ...period(), organizationId, source: 'campfire' });
+    const manual = await repository.summarize({ ...period(), organizationId, source: 'manual' });
 
     expect(campfire).toMatchObject({ sentMessages: 2, contactedLeads: 2, wonLeads: 1, lostLeads: 1 });
     expect(manual).toMatchObject({ sentMessages: 1, contactedLeads: 1, repliedLeads: 0 });
@@ -88,10 +91,12 @@ describe('PrismaSalesPerformanceRepository integration', () => {
 
   it('uses inclusive Tokyo dates and returns zero-safe counts outside the cohort', async () => {
     const firstDay = await repository.summarize({
+      organizationId,
       startUtc: new Date('2097-02-28T15:00:00.000Z'),
       endExclusiveUtc: new Date('2097-03-01T15:00:00.000Z')
     });
     const empty = await repository.summarize({
+      organizationId,
       startUtc: new Date('2097-04-01T15:00:00.000Z'),
       endExclusiveUtc: new Date('2097-04-02T15:00:00.000Z')
     });
@@ -128,11 +133,23 @@ async function createFixtures(
     mails: string[];
   }
 ) {
+  const organization = await prisma.organization.create({
+    data: {
+      slug: `metrics-${suffix}`,
+      name: `集計組織-${suffix}`
+    }
+  });
   const [ownerARecord, ownerBRecord] = await Promise.all([
     prisma.user.create({ data: { email: `metrics-owner-a-${suffix}@example.com`, name: '集計担当A' } }),
     prisma.user.create({ data: { email: `metrics-owner-b-${suffix}@example.com`, name: '集計担当B', isActive: false } })
   ]);
   ids.users.push(ownerARecord.id, ownerBRecord.id);
+  await prisma.organizationMembership.createMany({
+    data: [
+      { organizationId: organization.id, userId: ownerARecord.id, displayName: '集計担当A', role: 'operator' },
+      { organizationId: organization.id, userId: ownerBRecord.id, displayName: '集計担当B', role: 'operator', isActive: false }
+    ]
+  });
 
   const [campfire, makuake] = await Promise.all([
     prisma.crowdfundingPlatform.create({
@@ -144,13 +161,14 @@ async function createFixtures(
   ]);
   ids.platforms.push(campfire.id, makuake.id);
 
-  const won = await createLeadFixture(prisma, ids, suffix, 'won', campfire.id, ownerARecord.id, 'won');
-  const lost = await createLeadFixture(prisma, ids, suffix, 'lost', campfire.id, ownerARecord.id, 'lost');
-  const meeting = await createLeadFixture(prisma, ids, suffix, 'meeting', makuake.id, ownerBRecord.id, 'meeting');
-  const manual = await createLeadFixture(prisma, ids, suffix, 'manual', null, ownerARecord.id, 'contacted');
+  const won = await createLeadFixture(prisma, ids, organization.id, suffix, 'won', campfire.id, ownerARecord.id, 'won');
+  const lost = await createLeadFixture(prisma, ids, organization.id, suffix, 'lost', campfire.id, ownerARecord.id, 'lost');
+  const meeting = await createLeadFixture(prisma, ids, organization.id, suffix, 'meeting', makuake.id, ownerBRecord.id, 'meeting');
+  const manual = await createLeadFixture(prisma, ids, organization.id, suffix, 'manual', null, ownerARecord.id, 'contacted');
 
   await prisma.opportunityStageHistory.create({
     data: {
+      organizationId: organization.id,
       opportunityId: lost.opportunityId,
       fromStage: 'contacted',
       toStage: 'meeting',
@@ -161,31 +179,35 @@ async function createFixtures(
   });
 
   await Promise.all([
-    createSentMail(prisma, ids, won.leadId, won.companyId, '2097-02-28T15:00:00.000Z', true, 'won', '2097-04-20T03:00:00.000Z', true),
-    createSentMail(prisma, ids, lost.leadId, lost.companyId, '2097-03-15T03:00:00.000Z', false),
-    createSentMail(prisma, ids, meeting.leadId, meeting.companyId, '2097-03-31T14:59:59.000Z', true),
-    createSentMail(prisma, ids, manual.leadId, manual.companyId, '2097-03-20T03:00:00.000Z', false),
-    createSentMail(prisma, ids, won.leadId, won.companyId, '2097-02-28T14:59:59.000Z', false, 'outside-period', '2097-03-02T03:00:00.000Z'),
-    createSentMail(prisma, ids, manual.leadId, manual.companyId, '2097-03-31T15:00:00.000Z', false, 'end-exclusive')
+    createSentMail(prisma, ids, organization.id, won.leadId, won.companyId, '2097-02-28T15:00:00.000Z', true, 'won', '2097-04-20T03:00:00.000Z', true),
+    createSentMail(prisma, ids, organization.id, lost.leadId, lost.companyId, '2097-03-15T03:00:00.000Z', false),
+    createSentMail(prisma, ids, organization.id, meeting.leadId, meeting.companyId, '2097-03-31T14:59:59.000Z', true),
+    createSentMail(prisma, ids, organization.id, manual.leadId, manual.companyId, '2097-03-20T03:00:00.000Z', false),
+    createSentMail(prisma, ids, organization.id, won.leadId, won.companyId, '2097-02-28T14:59:59.000Z', false, 'outside-period', '2097-03-02T03:00:00.000Z'),
+    createSentMail(prisma, ids, organization.id, manual.leadId, manual.companyId, '2097-03-31T15:00:00.000Z', false, 'end-exclusive')
   ]);
 
-  return { ownerA: ownerARecord.id, ownerB: ownerBRecord.id };
+  return { organizationId: organization.id, ownerA: ownerARecord.id, ownerB: ownerBRecord.id };
 }
 
 async function createLeadFixture(
   prisma: PrismaClient,
   ids: { companies: string[]; projects: string[]; leads: string[] },
+  organizationId: string,
   suffix: string,
   key: string,
   platformId: string | null,
   ownerId: string,
   stage: 'contacted' | 'meeting' | 'won' | 'lost'
 ) {
-  const company = await prisma.company.create({ data: { name: `集計会社-${key}-${suffix}` } });
+  const company = await prisma.company.create({
+    data: { organizationId, name: `集計会社-${key}-${suffix}` }
+  });
   ids.companies.push(company.id);
   const project = platformId
     ? await prisma.crowdfundingProject.create({
         data: {
+          organizationId,
           platformId,
           companyId: company.id,
           title: `集計案件-${key}-${suffix}`,
@@ -195,11 +217,17 @@ async function createLeadFixture(
     : null;
   if (project) ids.projects.push(project.id);
   const lead = await prisma.salesLead.create({
-    data: { companyId: company.id, projectId: project?.id, source: platformId ? 'integration' : 'manual' }
+    data: {
+      organizationId,
+      companyId: company.id,
+      projectId: project?.id,
+      source: platformId ? 'integration' : 'manual'
+    }
   });
   ids.leads.push(lead.id);
   const opportunity = await prisma.opportunity.create({
     data: {
+      organizationId,
       leadId: lead.id,
       ownerId,
       stage,
@@ -221,7 +249,13 @@ async function createLeadFixture(
       : [];
   for (const history of histories) {
     await prisma.opportunityStageHistory.create({
-      data: { opportunityId: opportunity.id, fromStage: 'contacted', source: 'manual', ...history }
+      data: {
+        organizationId,
+        opportunityId: opportunity.id,
+        fromStage: 'contacted',
+        source: 'manual',
+        ...history
+      }
     });
   }
   return { companyId: company.id, leadId: lead.id, opportunityId: opportunity.id };
@@ -230,6 +264,7 @@ async function createLeadFixture(
 async function createSentMail(
   prisma: PrismaClient,
   ids: { mails: string[] },
+  organizationId: string,
   leadId: string,
   companyId: string,
   sentAt: string,
@@ -241,6 +276,7 @@ async function createSentMail(
   const date = new Date(sentAt);
   const mail = await prisma.outreachEmail.create({
     data: {
+      organizationId,
       leadId,
       companyId,
       status: 'sent',
@@ -250,13 +286,18 @@ async function createSentMail(
     }
   });
   ids.mails.push(mail.id);
-  await prisma.emailEvent.create({ data: { emailId: mail.id, type: 'sent', createdAt: new Date(eventCreatedAt) } });
+  await prisma.emailEvent.create({
+    data: { organizationId, emailId: mail.id, type: 'sent', createdAt: new Date(eventCreatedAt) }
+  });
   if (duplicateSentEvent) {
-    await prisma.emailEvent.create({ data: { emailId: mail.id, type: 'sent', createdAt: new Date(eventCreatedAt) } });
+    await prisma.emailEvent.create({
+      data: { organizationId, emailId: mail.id, type: 'sent', createdAt: new Date(eventCreatedAt) }
+    });
   }
   if (replied) {
     await prisma.emailReply.create({
       data: {
+        organizationId,
         emailId: mail.id,
         body: '返信です',
         bodyText: '返信です',
@@ -266,6 +307,7 @@ async function createSentMail(
     });
     await prisma.emailReply.create({
       data: {
+        organizationId,
         emailId: mail.id,
         body: '追加返信です',
         bodyText: '追加返信です',

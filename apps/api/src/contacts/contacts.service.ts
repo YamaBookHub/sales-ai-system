@@ -12,29 +12,30 @@ const activeContactWhere = { deletedAt: null };
 export class ContactsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listByCompany(companyId: string) {
-    await this.getActiveCompany(this.prisma, companyId);
+  async listByCompany(companyId: string, organizationId: string) {
+    await this.getActiveCompany(this.prisma, companyId, organizationId);
     return this.prisma.contactPerson.findMany({
-      where: { companyId, ...activeContactWhere },
+      where: { organizationId, companyId, ...activeContactWhere },
       orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }]
     });
   }
 
-  async create(companyId: string, dto: CreateContactDto, actor?: AuditActor) {
+  async create(companyId: string, dto: CreateContactDto, actor: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
-      await this.lockCompanyContacts(tx, companyId);
-      await this.getActiveCompany(tx, companyId);
+      await this.lockCompanyContacts(tx, actor.organizationId, companyId);
+      await this.getActiveCompany(tx, companyId, actor.organizationId);
 
       if (dto.isPrimary === true) {
-        await this.clearOtherPrimaryContacts(tx, companyId);
+        await this.clearOtherPrimaryContacts(tx, actor.organizationId, companyId);
       }
 
       const data: Prisma.ContactPersonUncheckedCreateInput = {
-          companyId,
-          ...contactFields(dto),
-          isPrimary: dto.isPrimary === true,
-          isUnsubscribed: false,
-          unsubscribedAt: null
+        organizationId: actor.organizationId,
+        companyId,
+        ...contactFields(dto),
+        isPrimary: dto.isPrimary === true,
+        isUnsubscribed: false,
+        unsubscribedAt: null
       };
 
       const contact = await tx.contactPerson.create({ data });
@@ -47,18 +48,18 @@ export class ContactsService {
     });
   }
 
-  async update(id: string, dto: UpdateContactDto, actor?: AuditActor) {
+  async update(id: string, dto: UpdateContactDto, actor: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
-      const snapshot = await this.getActiveContact(tx, id);
-      await this.lockCompanyContacts(tx, snapshot.companyId);
-      const contact = await this.getActiveContact(tx, id);
+      const snapshot = await this.getActiveContact(tx, id, actor.organizationId);
+      await this.lockCompanyContacts(tx, actor.organizationId, snapshot.companyId);
+      const contact = await this.getActiveContact(tx, id, actor.organizationId);
       const nextIsUnsubscribed = hasOwn(dto, 'isUnsubscribed')
         ? dto.isUnsubscribed === true
         : contact.isUnsubscribed;
       const makePrimary = dto.isPrimary === true && !nextIsUnsubscribed;
 
       if (makePrimary) {
-        await this.clearOtherPrimaryContacts(tx, contact.companyId, id);
+        await this.clearOtherPrimaryContacts(tx, actor.organizationId, contact.companyId, id);
       }
 
       const data: Prisma.ContactPersonUpdateInput = {
@@ -75,7 +76,10 @@ export class ContactsService {
         if (nextIsUnsubscribed) data.isPrimary = false;
       }
 
-      const updated = await tx.contactPerson.update({ where: { id }, data });
+      const updated = await tx.contactPerson.update({
+        where: { organizationId_id: { organizationId: actor.organizationId, id } },
+        data
+      });
       await recordContactAudit(tx, actor, 'contact.updated', id, contactAuditSnapshot(contact), {
         ...contactAuditSnapshot(updated),
         changedFields: Object.keys(data).sort()
@@ -84,13 +88,13 @@ export class ContactsService {
     });
   }
 
-  async archive(id: string, actor?: AuditActor) {
+  async archive(id: string, actor: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
-      const snapshot = await this.getActiveContact(tx, id);
-      await this.lockCompanyContacts(tx, snapshot.companyId);
-      await this.getActiveContact(tx, id);
+      const snapshot = await this.getActiveContact(tx, id, actor.organizationId);
+      await this.lockCompanyContacts(tx, actor.organizationId, snapshot.companyId);
+      await this.getActiveContact(tx, id, actor.organizationId);
       const archived = await tx.contactPerson.update({
-        where: { id },
+        where: { organizationId_id: { organizationId: actor.organizationId, id } },
         data: { deletedAt: new Date(), isPrimary: false }
       });
       await recordContactAudit(tx, actor, 'contact.archived', id, contactAuditSnapshot(snapshot), {
@@ -102,13 +106,13 @@ export class ContactsService {
     });
   }
 
-  async unsubscribe(id: string, actor?: AuditActor) {
+  async unsubscribe(id: string, actor: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
-      const snapshot = await this.getActiveContact(tx, id);
-      await this.lockCompanyContacts(tx, snapshot.companyId);
-      await this.getActiveContact(tx, id);
+      const snapshot = await this.getActiveContact(tx, id, actor.organizationId);
+      await this.lockCompanyContacts(tx, actor.organizationId, snapshot.companyId);
+      await this.getActiveContact(tx, id, actor.organizationId);
       const contact = await tx.contactPerson.update({
-        where: { id },
+        where: { organizationId_id: { organizationId: actor.organizationId, id } },
         data: {
           isUnsubscribed: true,
           unsubscribedAt: new Date(),
@@ -123,28 +127,33 @@ export class ContactsService {
     });
   }
 
-  private async getActiveCompany(client: Pick<PrismaService, 'company'> | ContactTransaction, companyId: string) {
-    const company = await client.company.findFirst({ where: { id: companyId, deletedAt: null } });
+  private async getActiveCompany(
+    client: Pick<PrismaService, 'company'> | ContactTransaction,
+    companyId: string,
+    organizationId: string
+  ) {
+    const company = await client.company.findFirst({ where: { id: companyId, organizationId, deletedAt: null } });
     if (!company) throw new NotFoundException('企業が見つかりません。');
     return company;
   }
 
-  private async getActiveContact(client: ContactTransaction, id: string) {
-    const contact = await client.contactPerson.findFirst({ where: { id, ...activeContactWhere } });
+  private async getActiveContact(client: ContactTransaction, id: string, organizationId: string) {
+    const contact = await client.contactPerson.findFirst({ where: { id, organizationId, ...activeContactWhere } });
     if (!contact) throw new NotFoundException('連絡先が見つかりません。');
     return contact;
   }
 
-  private lockCompanyContacts(client: ContactTransaction, companyId: string) {
+  private lockCompanyContacts(client: ContactTransaction, organizationId: string, companyId: string) {
     return client.$executeRawUnsafe(
       'SELECT pg_advisory_xact_lock(hashtext($1))',
-      `company-contacts:${companyId}`
+      `company-contacts:${organizationId}:${companyId}`
     );
   }
 
-  private clearOtherPrimaryContacts(client: ContactTransaction, companyId: string, exceptId?: string) {
+  private clearOtherPrimaryContacts(client: ContactTransaction, organizationId: string, companyId: string, exceptId?: string) {
     return client.contactPerson.updateMany({
       where: {
+        organizationId,
         companyId,
         ...activeContactWhere,
         isPrimary: true,

@@ -7,6 +7,7 @@ import {
 
 type LeadWithProject = {
   id: string;
+  organizationId: string;
   project: {
     id: string;
     title: string;
@@ -26,9 +27,10 @@ export async function requireLatestConfirmedAnalysis(
   }
   const fingerprint = projectSourceFingerprint(lead.project);
   const [analysisRevision, latestUsableConfirmed] = await Promise.all([
-    tx.leadAnalysisRevision.findUnique({ where: { id: analysisRevisionId } }),
+    tx.leadAnalysisRevision.findFirst({ where: { id: analysisRevisionId, organizationId: lead.organizationId } }),
     tx.leadAnalysisRevision.findFirst({
       where: {
+        organizationId: lead.organizationId,
         leadId: lead.id,
         projectId: lead.project.id,
         status: 'confirmed',

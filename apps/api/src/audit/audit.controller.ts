@@ -1,4 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { AuthenticatedPrincipal } from '../auth/auth.types';
 import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { ok } from '../common/api-response';
 import { ListAuditLogsQueryDto } from './audit-query.dto';
@@ -10,8 +12,8 @@ export class AuditController {
   constructor(private readonly audits: AuditLogService) {}
 
   @Get()
-  async list(@Query() query: ListAuditLogsQueryDto) {
-    return ok(await this.audits.list(query.page, query.limit, {
+  async list(@CurrentUser() principal: AuthenticatedPrincipal, @Query() query: ListAuditLogsQueryDto) {
+    return ok(await this.audits.list(principal.organizationId, query.page, query.limit, {
       userId: query.userId,
       action: query.action,
       entityType: query.entityType,

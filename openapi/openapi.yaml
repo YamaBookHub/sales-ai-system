@@ -1854,10 +1854,12 @@ components:
           properties:
             user:
               type: object
-              required: [id, email, role, permissions]
+              required: [id, email, organizationId, organizationSlug, role, permissions]
               properties:
                 id: { type: string, format: uuid }
                 email: { type: string, format: email }
+                organizationId: { type: string, format: uuid }
+                organizationSlug: { type: string }
                 role: { type: string, enum: [admin, manager, operator, viewer] }
                 permissions:
                   type: array

@@ -49,6 +49,7 @@ export async function recordMailAudit(
 
   await tx.auditLog.create({
     data: {
+      organizationId: actor.organizationId,
       userId: actor.userId,
       sessionId: actor.sessionId,
       action,

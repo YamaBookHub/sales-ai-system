@@ -8,6 +8,7 @@ import { GoogleOidcService } from './google-oidc.service';
 
 describe('GoogleOidcService', () => {
   const config: AuthConfig = {
+    organizationSlug: 'default',
     appEnvironment: 'production',
     authMode: 'google',
     appBaseUrl: new URL('https://sales.example.com'),

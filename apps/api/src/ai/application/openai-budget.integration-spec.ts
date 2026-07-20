@@ -5,18 +5,30 @@ const testDatabaseUrl = requireTestDatabaseUrl();
 
 describe('OpenAI budget guard integration', () => {
   let prisma: PrismaClient;
+  let organizationId: string;
   const originalEnv = { ...process.env };
   const testModel = `openai-budget-test-${Date.now()}`;
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl } } });
     await prisma.$connect();
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const organization = await prisma.organization.create({
+      data: { slug: `openai-budget-integration-${suffix}`, name: 'OpenAI budget integration' }
+    });
+    organizationId = organization.id;
   });
 
   afterAll(async () => {
-    await prisma.aiUsageLedger.deleteMany({ where: { model: testModel } });
-    await prisma.$disconnect();
-    process.env = { ...originalEnv };
+    try {
+      if (organizationId) {
+        await prisma.aiUsageLedger.deleteMany({ where: { organizationId, model: testModel } });
+        await prisma.organization.delete({ where: { id: organizationId } });
+      }
+    } finally {
+      await prisma.$disconnect();
+      process.env = { ...originalEnv };
+    }
   });
 
   it('allows only one caller to reserve the final budget slot', async () => {
@@ -26,7 +38,7 @@ describe('OpenAI budget guard integration', () => {
     delete process.env.OPENAI_OUTPUT_COST_PER_1M;
     const service = new OpenAiBudgetService(prisma as any);
     const run = () => service.execute(
-      { model: testModel, operation: 'concurrency_test', requestInput: {}, maxOutputTokens: 100 },
+      { organizationId, model: testModel, operation: 'concurrency_test', requestInput: {}, maxOutputTokens: 100 },
       async () => ({ usage: { costUsd: 0.01 } })
     );
 
@@ -35,7 +47,7 @@ describe('OpenAI budget guard integration', () => {
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
     expect(await prisma.aiUsageLedger.count({
-      where: { model: testModel, status: 'completed' }
+      where: { organizationId, model: testModel, status: 'completed' }
     })).toBe(1);
   });
 });

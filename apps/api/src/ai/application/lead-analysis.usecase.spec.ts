@@ -27,7 +27,7 @@ describe('LeadAnalysisUseCase audit actor', () => {
     };
     const tx = {
       $executeRawUnsafe: jest.fn().mockResolvedValue(1),
-      salesLead: { findUnique: jest.fn().mockResolvedValue({ id: 'lead_1', project }) },
+      salesLead: { findFirst: jest.fn().mockResolvedValue({ id: 'lead_1', organizationId: 'org_1', project }) },
       leadAnalysisRevision: {
         findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue(revision)
@@ -36,7 +36,7 @@ describe('LeadAnalysisUseCase audit actor', () => {
     };
     const prisma = {
       $transaction: jest.fn((callback) => callback(tx)),
-      salesLead: { findUnique: jest.fn().mockResolvedValue({ id: 'lead_1', project }) },
+      salesLead: { findFirst: jest.fn().mockResolvedValue({ id: 'lead_1', organizationId: 'org_1', project }) },
       leadAnalysisRevision: {
         findMany: jest.fn().mockResolvedValue([revision]),
         findFirst: jest.fn().mockResolvedValue(revision)
@@ -49,11 +49,12 @@ describe('LeadAnalysisUseCase audit actor', () => {
       appeal: revision.appeal,
       targetUser: revision.targetUser,
       videoIdea: revision.videoIdea
-    }, { userId: 'user_1', sessionId: 'session_1' });
+    }, { userId: 'user_1', sessionId: 'session_1', organizationId: 'org_1' });
 
     expect(tx.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       userId: 'user_1',
       sessionId: 'session_1',
+      organizationId: 'org_1',
       action: 'analysis.confirmed',
       entityId: revision.id
     }) });

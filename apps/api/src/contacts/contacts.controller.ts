@@ -13,8 +13,8 @@ export class ContactsController {
   constructor(private readonly contacts: ContactsService) {}
 
   @Get('companies/:companyId/contacts')
-  async listByCompany(@Param('companyId') companyId: string) {
-    return ok(await this.contacts.listByCompany(companyId));
+  async listByCompany(@Param('companyId') companyId: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.contacts.listByCompany(companyId, principal.organizationId));
   }
 
   @Post('companies/:companyId/contacts')

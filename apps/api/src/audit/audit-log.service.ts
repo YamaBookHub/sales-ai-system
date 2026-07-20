@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type CreateAuditLogInput = {
+  organizationId: string;
   userId: string;
   sessionId?: string | null;
   action: string;
@@ -28,6 +29,7 @@ export class AuditLogService {
     return this.prisma.auditLog.create({
       data: {
         userId: input.userId,
+        organizationId: input.organizationId,
         sessionId: input.sessionId || null,
         action: input.action,
         entityType: input.entityType,
@@ -37,23 +39,24 @@ export class AuditLogService {
     });
   }
 
-  async list(page = 1, limit = 50, filters: AuditLogFilters = {}) {
+  async list(organizationId: string, page = 1, limit = 50, filters: AuditLogFilters = {}) {
     const safePage = positiveInteger(page, 1);
     const safeLimit = Math.min(100, positiveInteger(limit, 50));
-    const where = this.buildWhere(filters);
+    const where = this.buildWhere(organizationId, filters);
     const [items, total] = await this.prisma.$transaction([
       this.prisma.auditLog.findMany({
         where,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: (safePage - 1) * safeLimit,
         take: safeLimit,
-        include: { user: { select: { id: true, name: true } } }
+        include: { actor: { include: { user: { select: { id: true, name: true } } } } }
       }),
       this.prisma.auditLog.count({ where })
     ]);
     return {
-      items: items.map((item) => ({
+      items: items.map(({ actor, ...item }) => ({
         ...item,
+        user: actor?.user || null,
         before: sanitizeAuditSnapshot(item.before),
         after: sanitizeAuditSnapshot(item.after)
       })),
@@ -63,11 +66,12 @@ export class AuditLogService {
     };
   }
 
-  private buildWhere(filters: AuditLogFilters): Prisma.AuditLogWhereInput {
+  private buildWhere(organizationId: string, filters: AuditLogFilters): Prisma.AuditLogWhereInput {
     const createdAt = filters.from || filters.to
       ? { ...(filters.from ? { gte: filters.from } : {}), ...(filters.to ? { lte: filters.to } : {}) }
       : undefined;
     return {
+      organizationId,
       ...(hasText(filters.userId) ? { userId: filters.userId } : {}),
       ...(hasText(filters.action) ? { action: filters.action } : {}),
       ...(hasText(filters.entityType) ? { entityType: filters.entityType } : {}),

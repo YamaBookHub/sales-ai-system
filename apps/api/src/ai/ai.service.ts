@@ -24,43 +24,43 @@ export class AiService {
     private readonly openAiBudgetService: OpenAiBudgetService
   ) {}
 
-  async analyzeLead(leadId: string, actor: AuditActor | null = null) {
+  async analyzeLead(leadId: string, actor: AuditActor) {
     return this.analyzeLeadUseCase.execute(leadId, actor);
   }
 
-  async generateMailDraft(leadId: string, dto: GenerateMailDto, actor: AuditActor | null = null) {
+  async generateMailDraft(leadId: string, dto: GenerateMailDto, actor: AuditActor) {
     return this.generateMailDraftUseCase.execute(leadId, dto, actor);
   }
 
-  getLeadAnalysis(leadId: string) {
-    return this.leadAnalysisUseCase.get(leadId);
+  getLeadAnalysis(leadId: string, actor: AuditActor) {
+    return this.leadAnalysisUseCase.get(leadId, actor);
   }
 
-  saveLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto, actor: AuditActor | null = null) {
+  saveLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto, actor: AuditActor) {
     return this.leadAnalysisUseCase.save(leadId, dto, actor);
   }
 
-  confirmLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto, actor: AuditActor | null = null) {
+  confirmLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto, actor: AuditActor) {
     return this.leadAnalysisUseCase.confirm(leadId, dto, actor);
   }
 
-  async polishMail(mailId: string, model?: SelectableAiModel, actor: AuditActor | null = null) {
+  async polishMail(mailId: string, model: SelectableAiModel | undefined, actor: AuditActor) {
     return this.polishMailUseCase.execute(mailId, model, actor);
   }
 
-  async classifyReply(replyId: string, actor: AuditActor | null = null) {
+  async classifyReply(replyId: string, actor: AuditActor) {
     return this.classifyReplyUseCase.execute(replyId, actor);
   }
 
-  async listLeadGenerations(leadId: string) {
-    return this.listLeadGenerationsUseCase.execute(leadId);
+  async listLeadGenerations(leadId: string, actor: AuditActor) {
+    return this.listLeadGenerationsUseCase.execute(leadId, actor.organizationId);
   }
 
-  async checkMailSemanticConsistency(mailId: string, model?: SelectableAiModel) {
-    return this.checkMailSemanticConsistencyUseCase.execute(mailId, model);
+  async checkMailSemanticConsistency(mailId: string, model: SelectableAiModel | undefined, actor: AuditActor) {
+    return this.checkMailSemanticConsistencyUseCase.execute(mailId, model, actor.organizationId);
   }
 
-  getOpenAiUsageSummary() {
-    return this.openAiBudgetService.getUsageSummary();
+  getOpenAiUsageSummary(actor: AuditActor) {
+    return this.openAiBudgetService.getUsageSummary(actor.organizationId);
   }
 }

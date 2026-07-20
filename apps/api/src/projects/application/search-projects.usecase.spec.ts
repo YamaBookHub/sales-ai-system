@@ -1,6 +1,8 @@
 import { SearchProjectsUseCase } from './search-projects.usecase';
 
 describe('SearchProjectsUseCase', () => {
+  const organizationId = 'organization_1';
+  const ownerUserId = 'user_1';
   const createDeps = () => {
     const jobManager = {
       start: jest.fn().mockReturnValue({ id: 'job_1', status: 'running' }),
@@ -36,7 +38,7 @@ describe('SearchProjectsUseCase', () => {
     const { jobManager, campfireProvider, makuakeProvider } = createDeps();
     const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any);
 
-    const result = await useCase.search({ source: 'makuake', keyword: '食品' });
+    const result = await useCase.search({ source: 'makuake', keyword: '食品' }, organizationId);
 
     expect(makuakeProvider.search).toHaveBeenCalledWith(
       { source: 'makuake', keyword: '食品', excludeUrls: [] },
@@ -49,7 +51,7 @@ describe('SearchProjectsUseCase', () => {
     const { jobManager, campfireProvider, makuakeProvider } = createDeps();
     const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any);
 
-    const result = await useCase.searchCampfire({ status: 'endingSoon', endingSoonDays: 14, limit: 10 });
+    const result = await useCase.searchCampfire({ status: 'endingSoon', endingSoonDays: 14, limit: 10 }, organizationId);
 
     expect(result.items.map((item: { url: string }) => item.url)).toEqual([
       'https://camp-fire.jp/projects/2',
@@ -67,11 +69,17 @@ describe('SearchProjectsUseCase', () => {
     const { jobManager, campfireProvider, makuakeProvider } = createDeps();
     const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any);
 
-    const job = useCase.startJob({ source: 'campfire', limit: 50 });
+    const job = useCase.startJob({ source: 'campfire', limit: 50 }, organizationId, ownerUserId);
 
     expect(job).toEqual({ id: 'job_1', status: 'running' });
-    expect(jobManager.start).toHaveBeenCalledWith(campfireProvider, { source: 'campfire', limit: 50 }, expect.any(Function));
-    const callback = jobManager.start.mock.calls[0][2];
+    expect(jobManager.start).toHaveBeenCalledWith(
+      organizationId,
+      ownerUserId,
+      campfireProvider,
+      { source: 'campfire', limit: 50 },
+      expect.any(Function)
+    );
+    const callback = jobManager.start.mock.calls[0][4];
     const controller = new AbortController();
     await callback(campfireProvider, { limit: 50 }, { signal: controller.signal });
     expect(campfireProvider.search).toHaveBeenLastCalledWith(

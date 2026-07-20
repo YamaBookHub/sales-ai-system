@@ -13,10 +13,11 @@ export type MailRecipientContact = {
 };
 
 /** Select the primary active email contact, falling back to the oldest active email contact. */
-export function resolveMailRecipient(reader: ContactPersonReader, companyId: string) {
+export function resolveMailRecipient(reader: ContactPersonReader, companyId: string, organizationId: string) {
   return reader.contactPerson.findFirst({
     where: {
       companyId,
+      organizationId,
       deletedAt: null,
       isUnsubscribed: false,
       email: { not: null }

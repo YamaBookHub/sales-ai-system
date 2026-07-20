@@ -10,6 +10,8 @@ describe('PrismaOpportunityRepository integration', () => {
   let repository: PrismaOpportunityRepository;
   let concurrentRepository: PrismaOpportunityRepository;
   let platformId: string;
+  let organizationId: string;
+  let managerUserId: string;
   const fixtureIds = {
     company: [] as string[],
     project: [] as string[],
@@ -32,19 +34,50 @@ describe('PrismaOpportunityRepository integration', () => {
       }
     });
     platformId = platform.id;
+
+    const organization = await prisma.organization.create({
+      data: {
+        slug: `opportunity-integration-${suffix}`,
+        name: `Opportunity統合テスト組織 ${suffix}`
+      }
+    });
+    organizationId = organization.id;
+    const managerUser = await prisma.user.create({
+      data: {
+        email: `opportunity-manager-${suffix}@example.test`,
+        name: 'Opportunity統合テスト管理者'
+      }
+    });
+    managerUserId = managerUser.id;
+    await prisma.organizationMembership.create({
+      data: {
+        organizationId,
+        userId: managerUserId,
+        role: 'manager'
+      }
+    });
   });
 
   afterAll(async () => {
+    if (organizationId) {
+      await prisma.auditLog.deleteMany({ where: { organizationId } });
+      await prisma.opportunityStageHistory.deleteMany({ where: { organizationId } });
+    }
     if (fixtureIds.lead.length > 0) {
-      await prisma.task.deleteMany({ where: { leadId: { in: fixtureIds.lead } } });
-      await prisma.opportunity.deleteMany({ where: { leadId: { in: fixtureIds.lead } } });
-      await prisma.salesLead.deleteMany({ where: { id: { in: fixtureIds.lead } } });
+      await prisma.task.deleteMany({ where: { organizationId, leadId: { in: fixtureIds.lead } } });
+      await prisma.opportunity.deleteMany({ where: { organizationId, leadId: { in: fixtureIds.lead } } });
+      await prisma.salesLead.deleteMany({ where: { organizationId, id: { in: fixtureIds.lead } } });
     }
     if (fixtureIds.project.length > 0) {
-      await prisma.crowdfundingProject.deleteMany({ where: { id: { in: fixtureIds.project } } });
+      await prisma.crowdfundingProject.deleteMany({ where: { organizationId, id: { in: fixtureIds.project } } });
     }
     if (fixtureIds.company.length > 0) {
-      await prisma.company.deleteMany({ where: { id: { in: fixtureIds.company } } });
+      await prisma.company.deleteMany({ where: { organizationId, id: { in: fixtureIds.company } } });
+    }
+    if (organizationId && managerUserId) {
+      await prisma.organizationMembership.deleteMany({ where: { organizationId, userId: managerUserId } });
+      await prisma.user.deleteMany({ where: { id: managerUserId } });
+      await prisma.organization.deleteMany({ where: { id: organizationId } });
     }
     if (platformId) {
       await prisma.crowdfundingPlatform.delete({ where: { id: platformId } });
@@ -55,11 +88,16 @@ describe('PrismaOpportunityRepository integration', () => {
   it('creates one opportunity and its initial history for a lead', async () => {
     const leadId = await createLead('initial');
 
-    const first = await prisma.$transaction((tx) => ensureOpportunityForLead(tx, leadId));
-    const second = await prisma.$transaction((tx) => ensureOpportunityForLead(tx, leadId));
+    const first = await prisma.$transaction((tx) => ensureOpportunityForLead(tx, leadId, organizationId));
+    const second = await prisma.$transaction((tx) => ensureOpportunityForLead(tx, leadId, organizationId));
     const opportunity = await prisma.opportunity.findUniqueOrThrow({
-      where: { leadId },
-      include: { history: { orderBy: { createdAt: 'asc' } } }
+      where: { organizationId_leadId: { organizationId, leadId } },
+      include: {
+        history: {
+          orderBy: { createdAt: 'asc' },
+          include: { changedBy: { include: { user: true } } }
+        }
+      }
     });
 
     expect(second.id).toBe(first.id);
@@ -93,8 +131,13 @@ describe('PrismaOpportunityRepository integration', () => {
     }, manager());
 
     const opportunity = await prisma.opportunity.findUniqueOrThrow({
-      where: { leadId },
-      include: { history: { orderBy: { createdAt: 'asc' } } }
+      where: { organizationId_leadId: { organizationId, leadId } },
+      include: {
+        history: {
+          orderBy: { createdAt: 'asc' },
+          include: { changedBy: { include: { user: true } } }
+        }
+      }
     });
     expect(opportunity).toMatchObject({ stage: 'replied', probability: 25, version: 3 });
     expect(opportunity.history.map((item) => [item.fromStage, item.toStage])).toEqual([
@@ -103,6 +146,7 @@ describe('PrismaOpportunityRepository integration', () => {
       ['contacted', 'replied']
     ]);
     expect(opportunity.history.slice(1).every((item) => item.source === 'manual')).toBe(true);
+    expect(opportunity.history.slice(1).every((item) => item.changedBy?.userId === managerUserId)).toBe(true);
   });
 
   it('persists the loss reason and its detail', async () => {
@@ -125,7 +169,7 @@ describe('PrismaOpportunityRepository integration', () => {
     }, manager());
 
     const opportunity = await prisma.opportunity.findUniqueOrThrow({
-      where: { leadId },
+      where: { organizationId_leadId: { organizationId, leadId } },
       include: { history: { orderBy: { createdAt: 'desc' }, take: 1 } }
     });
     expect(opportunity).toMatchObject({
@@ -165,7 +209,9 @@ describe('PrismaOpportunityRepository integration', () => {
     const rejected = results.find((result) => result.status === 'rejected');
     expect(rejected).toBeDefined();
     expect((rejected as PromiseRejectedResult).reason).toMatchObject({ status: 409 });
-    await expect(prisma.opportunity.findUniqueOrThrow({ where: { leadId } })).resolves.toMatchObject({
+    await expect(prisma.opportunity.findUniqueOrThrow({
+      where: { organizationId_leadId: { organizationId, leadId } }
+    })).resolves.toMatchObject({
       stage: 'contacted',
       version: 2
     });
@@ -185,7 +231,7 @@ describe('PrismaOpportunityRepository integration', () => {
     const first = await repository.transition(leadId, input, manager());
     const repeated = await repository.transition(leadId, input, manager());
     const historyCount = await prisma.opportunityStageHistory.count({
-      where: { opportunity: { leadId } }
+      where: { organizationId, opportunity: { organizationId, leadId } }
     });
 
     expect(repeated.id).toBe(first.id);
@@ -216,9 +262,12 @@ describe('PrismaOpportunityRepository integration', () => {
   it('does not expose or update an opportunity whose lead is logically deleted', async () => {
     const leadId = await createLead('soft-deleted');
     await ensureForTest(leadId);
-    await prisma.salesLead.update({ where: { id: leadId }, data: { deletedAt: new Date() } });
+    await prisma.salesLead.update({
+      where: { organizationId_id: { organizationId, id: leadId } },
+      data: { deletedAt: new Date() }
+    });
 
-    await expect(repository.getByLeadId(leadId)).rejects.toMatchObject({ status: 404 });
+    await expect(repository.getByLeadId(organizationId, leadId)).rejects.toMatchObject({ status: 404 });
     await expect(repository.transition(leadId, {
       expectedVersion: 1,
       operationKey: randomUUID(),
@@ -230,9 +279,9 @@ describe('PrismaOpportunityRepository integration', () => {
   it('clears lead follow-up dates and cancels active tasks on a terminal transition', async () => {
     const leadId = await createLead('terminal-cleanup');
     const tasks = await Promise.all([
-      prisma.task.create({ data: { leadId, title: '未完了タスク', status: 'todo' } }),
-      prisma.task.create({ data: { leadId, title: '進行中タスク', status: 'doing' } }),
-      prisma.task.create({ data: { leadId, title: '完了済みタスク', status: 'done', doneAt: new Date() } })
+      prisma.task.create({ data: { organizationId, leadId, title: '未完了タスク', status: 'todo' } }),
+      prisma.task.create({ data: { organizationId, leadId, title: '進行中タスク', status: 'doing' } }),
+      prisma.task.create({ data: { organizationId, leadId, title: '完了済みタスク', status: 'done', doneAt: new Date() } })
     ]);
     await ensureForTest(leadId);
     await repository.transition(leadId, {
@@ -250,8 +299,11 @@ describe('PrismaOpportunityRepository integration', () => {
     }, manager());
 
     const [lead, persistedTasks] = await Promise.all([
-      prisma.salesLead.findUniqueOrThrow({ where: { id: leadId } }),
-      prisma.task.findMany({ where: { id: { in: tasks.map((task) => task.id) } }, orderBy: { title: 'asc' } })
+      prisma.salesLead.findUniqueOrThrow({ where: { organizationId_id: { organizationId, id: leadId } } }),
+      prisma.task.findMany({
+        where: { organizationId, id: { in: tasks.map((task) => task.id) } },
+        orderBy: { title: 'asc' }
+      })
     ]);
     expect(lead).toMatchObject({ nextActionAt: null, nextFollowUpAt: null });
     expect(persistedTasks.find((task) => task.title === '未完了タスク')?.status).toBe('cancelled');
@@ -269,19 +321,26 @@ describe('PrismaOpportunityRepository integration', () => {
       reason: 'cascade確認'
     }, manager());
 
-    const opportunity = await prisma.opportunity.findUniqueOrThrow({ where: { leadId } });
-    await prisma.salesLead.delete({ where: { id: leadId } });
+    const opportunity = await prisma.opportunity.findUniqueOrThrow({
+      where: { organizationId_leadId: { organizationId, leadId } }
+    });
+    await prisma.salesLead.delete({ where: { organizationId_id: { organizationId, id: leadId } } });
 
-    await expect(prisma.opportunity.findUnique({ where: { id: opportunity.id } })).resolves.toBeNull();
-    await expect(prisma.opportunityStageHistory.count({ where: { opportunityId: opportunity.id } })).resolves.toBe(0);
+    await expect(prisma.opportunity.findUnique({
+      where: { organizationId_id: { organizationId, id: opportunity.id } }
+    })).resolves.toBeNull();
+    await expect(prisma.opportunityStageHistory.count({
+      where: { organizationId, opportunityId: opportunity.id }
+    })).resolves.toBe(0);
   });
 
   async function createLead(label: string) {
     const company = await prisma.company.create({
-      data: { name: `Opportunity ${label} ${suffix}` }
+      data: { organizationId, name: `Opportunity ${label} ${suffix}` }
     });
     const project = await prisma.crowdfundingProject.create({
       data: {
+        organizationId,
         platformId,
         companyId: company.id,
         title: `Opportunity統合テスト案件 ${label}`,
@@ -294,6 +353,7 @@ describe('PrismaOpportunityRepository integration', () => {
     });
     const lead = await prisma.salesLead.create({
       data: {
+        organizationId,
         companyId: company.id,
         projectId: project.id,
         source: 'integration-test',
@@ -308,11 +368,11 @@ describe('PrismaOpportunityRepository integration', () => {
   }
 
   async function ensureForTest(leadId: string) {
-    return prisma.$transaction((tx) => ensureOpportunityForLead(tx, leadId));
+    return prisma.$transaction((tx) => ensureOpportunityForLead(tx, leadId, organizationId));
   }
 
   function manager() {
-    return { userId: null, role: 'manager' as const };
+    return { userId: managerUserId, organizationId, role: 'manager' as const };
   }
 });
 

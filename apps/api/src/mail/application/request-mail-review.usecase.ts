@@ -6,9 +6,7 @@ import { PrismaMailWorkflowRepository } from '../infrastructure/prisma-mail-work
 export class RequestMailReviewUseCase {
   constructor(private readonly mails: PrismaMailWorkflowRepository) {}
 
-  execute(id: string, actor: AuditActor | null = null) {
-    return actor
-      ? this.mails.transitionIfDeliveryAllowed(id, 'in_review', 'reviewed', {}, undefined, actor)
-      : this.mails.transitionIfDeliveryAllowed(id, 'in_review', 'reviewed');
+  execute(id: string, actor: AuditActor) {
+    return this.mails.transitionIfDeliveryAllowed(id, 'in_review', 'reviewed', {}, undefined, actor);
   }
 }

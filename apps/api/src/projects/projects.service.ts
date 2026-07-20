@@ -32,9 +32,9 @@ export class ProjectsService {
     private readonly makuakeProvider: MakuakeProjectSourceProvider
   ) {}
 
-  async list(page = 1, limit = 20, status?: ProjectStatus) {
+  async list(organizationId: string, page = 1, limit = 20, status?: ProjectStatus) {
     const skip = (page - 1) * limit;
-    const where = status ? { status } : {};
+    const where = { organizationId, ...(status ? { status } : {}) };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.crowdfundingProject.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
       this.prisma.crowdfundingProject.count({ where })
@@ -43,10 +43,18 @@ export class ProjectsService {
     return { items, page, limit, total };
   }
 
-  async create(dto: CreateProjectDto, actor: AuditActor | null = null) {
+  async create(dto: CreateProjectDto, actor: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
+      if (dto.companyId) {
+        const company = await tx.company.findFirst({
+          where: { id: dto.companyId, organizationId: actor.organizationId, deletedAt: null },
+          select: { id: true }
+        });
+        if (!company) throw new BadRequestException('企業が見つかりません。');
+      }
       const project = await tx.crowdfundingProject.create({
         data: {
+          organizationId: actor.organizationId,
           platformId: dto.platformId,
           companyId: dto.companyId,
           title: dto.title,
@@ -58,25 +66,22 @@ export class ProjectsService {
         }
       });
 
-      if (actor) {
-        await tx.auditLog.create({
-          data: {
-            userId: actor.userId,
-            sessionId: actor.sessionId,
-            action: 'project.created',
-            entityType: 'CrowdfundingProject',
-            entityId: project.id,
-            after: {
-              platformId: project.platformId,
-              companyId: project.companyId,
-              status: project.status,
-              amount: project.amount,
-              supporterCount: project.supporterCount,
-              category: project.category
-            }
+      await tx.auditLog.create({
+        data: {
+          ...actor,
+          action: 'project.created',
+          entityType: 'CrowdfundingProject',
+          entityId: project.id,
+          after: {
+            platformId: project.platformId,
+            companyId: project.companyId,
+            status: project.status,
+            amount: project.amount,
+            supporterCount: project.supporterCount,
+            category: project.category
           }
-        });
-      }
+        }
+      });
 
       return project;
     });
@@ -102,19 +107,19 @@ export class ProjectsService {
     return result;
   }
 
-  startSearchJob(dto: SearchProjectsDto) {
+  startSearchJob(dto: SearchProjectsDto, organizationId: string, ownerUserId: string) {
     const provider = this.providerFor(dto.source);
-    return this.projectSearchJobManager.start(provider, dto, (searchProvider, searchDto, options) =>
+    return this.projectSearchJobManager.start(organizationId, ownerUserId, provider, dto, (searchProvider, searchDto, options) =>
       this.searchWithProvider(searchProvider, searchDto, options)
     );
   }
 
-  getSearchJob(id: string) {
-    return this.projectSearchJobManager.get(id);
+  getSearchJob(id: string, organizationId: string, ownerUserId: string) {
+    return this.projectSearchJobManager.get(id, organizationId, ownerUserId);
   }
 
-  cancelSearchJob(id: string) {
-    return this.projectSearchJobManager.cancel(id);
+  cancelSearchJob(id: string, organizationId: string, ownerUserId: string) {
+    return this.projectSearchJobManager.cancel(id, organizationId, ownerUserId);
   }
 
   campfireCategories() {
@@ -125,15 +130,15 @@ export class ProjectsService {
     return this.providerFor(source).categories();
   }
 
-  importProject(dto: ImportProjectDto, actor: AuditActor | null = null) {
+  importProject(dto: ImportProjectDto, actor: AuditActor) {
     return this.importWithProvider(this.providerFor(dto.source), dto.url, { actor });
   }
 
-  async importCampfire(dto: ImportCampfireProjectDto, actor: AuditActor | null = null) {
+  async importCampfire(dto: ImportCampfireProjectDto, actor: AuditActor) {
     return this.importProject({ source: 'campfire', url: dto.url }, actor);
   }
 
-  async bulkImport(dto: BulkImportProjectsDto, actor: AuditActor | null = null) {
+  async bulkImport(dto: BulkImportProjectsDto, actor: AuditActor) {
     const provider = this.providerFor(dto.source);
     const urlInputs = uniqueNormalizedUrlInputs(dto.urls, (url) => provider.normalizeUrl(url));
     const importConcurrency = clampConcurrency(dto.importConcurrency, 1, 4, 4);
@@ -175,7 +180,7 @@ export class ProjectsService {
       items,
       analysisItems
     });
-    await this.projectImportRepository.recordBulkImportAudit(actor, summary);
+    await this.projectImportRepository.recordBulkImportAudit(actor.organizationId, actor, summary);
 
     return summary;
   }
@@ -186,7 +191,8 @@ export class ProjectsService {
     if (imported.project.status !== 'active') {
       throw new BadRequestException('現在公開中・募集中のプロジェクトだけ取り込めます。終了済み・公開前のURLは対象外です。');
     }
-    const result = await this.projectImportRepository.persistImportedProject(imported, options);
+    if (!options.actor) throw new BadRequestException('組織情報が必要です。');
+    const result = await this.projectImportRepository.persistImportedProject(options.actor.organizationId, imported, options);
 
     return {
       ...result,

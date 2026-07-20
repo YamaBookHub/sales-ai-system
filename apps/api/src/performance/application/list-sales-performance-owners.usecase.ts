@@ -11,7 +11,7 @@ export class ListSalesPerformanceOwnersUseCase {
     private readonly repository: SalesPerformanceRepository
   ) {}
 
-  execute() {
-    return this.repository.listOwners();
+  execute(organizationId: string) {
+    return this.repository.listOwners(organizationId);
   }
 }

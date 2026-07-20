@@ -1,6 +1,8 @@
 import { ProjectSearchJobManager } from './project-search-job.manager';
 
 describe('ProjectSearchJobManager', () => {
+  const organizationId = 'organization-1';
+  const ownerUserId = 'user-1';
   const provider = { source: 'campfire', baseUrl: 'https://camp-fire.jp' } as any;
   const diagnostics = {
     sourceCandidateCount: 10,
@@ -15,9 +17,21 @@ describe('ProjectSearchJobManager', () => {
     } as any);
   }
 
+  function startJob(manager: ProjectSearchJobManager, sourceProvider: any, dto: any, search: any) {
+    return manager.start(organizationId, ownerUserId, sourceProvider, dto, search);
+  }
+
+  function getJob(manager: ProjectSearchJobManager, id: string) {
+    return manager.get(id, organizationId, ownerUserId);
+  }
+
+  function cancelJob(manager: ProjectSearchJobManager, id: string) {
+    return manager.cancel(id, organizationId, ownerUserId);
+  }
+
   async function waitForTerminal(manager: ProjectSearchJobManager, id: string) {
     for (let attempt = 0; attempt < 20; attempt += 1) {
-      const job = manager.get(id);
+      const job = getJob(manager, id);
       if (job.status !== 'running') return job;
       await new Promise((resolve) => setImmediate(resolve));
     }
@@ -27,16 +41,20 @@ describe('ProjectSearchJobManager', () => {
   it('reports desired_reached', async () => {
     const manager = createManager();
     const items = Array.from({ length: 10 }, (_, index) => ({ url: `https://camp-fire.jp/projects/${index}` }));
-    const started = manager.start(provider, { limit: 10 }, jest.fn().mockResolvedValue({ items, diagnostics }));
+    const started = startJob(manager, provider, { limit: 10 }, jest.fn().mockResolvedValue({ items, diagnostics }));
 
     const job = await waitForTerminal(manager, started.id);
     expect(job).toMatchObject({ status: 'completed', completionReason: 'desired_reached', importableCount: 10 });
+    expect((manager as any).projectImportRepository.existingProjectUrls).toHaveBeenCalledWith(
+      organizationId,
+      provider.baseUrl
+    );
   });
 
   it('reports source_exhausted without restrictive conditions', async () => {
     const manager = createManager();
     const items = Array.from({ length: 8 }, (_, index) => ({ url: `https://camp-fire.jp/projects/${index}` }));
-    const started = manager.start(
+    const started = startJob(manager,
       provider,
       { limit: 10 },
       jest.fn().mockResolvedValue({
@@ -52,7 +70,7 @@ describe('ProjectSearchJobManager', () => {
   it('reports condition_shortage when a condition leaves fewer matches', async () => {
     const manager = createManager();
     const items = Array.from({ length: 8 }, (_, index) => ({ url: `https://camp-fire.jp/projects/${index}` }));
-    const started = manager.start(
+    const started = startJob(manager,
       provider,
       { limit: 10, status: 'endingSoon' },
       jest.fn().mockResolvedValue({ items, diagnostics: { ...diagnostics, conditionMatchedCount: 8 } })
@@ -66,7 +84,7 @@ describe('ProjectSearchJobManager', () => {
   it('reports excluded_existing when exclusions explain the shortage', async () => {
     const manager = createManager(['https://camp-fire.jp/projects/existing']);
     const items = Array.from({ length: 8 }, (_, index) => ({ url: `https://camp-fire.jp/projects/${index}` }));
-    const started = manager.start(
+    const started = startJob(manager,
       provider,
       { limit: 10 },
       jest.fn().mockResolvedValue({ items, diagnostics: { ...diagnostics, conditionMatchedCount: 10, excludedCount: 2 } })
@@ -78,7 +96,7 @@ describe('ProjectSearchJobManager', () => {
 
   it('reports failed when the provider throws', async () => {
     const manager = createManager();
-    const started = manager.start(provider, { limit: 10 }, jest.fn().mockRejectedValue(new Error('provider timeout')));
+    const started = startJob(manager, provider, { limit: 10 }, jest.fn().mockRejectedValue(new Error('provider timeout')));
 
     const job = await waitForTerminal(manager, started.id);
     expect(job).toMatchObject({ status: 'failed', completionReason: 'failed' });
@@ -92,19 +110,19 @@ describe('ProjectSearchJobManager', () => {
       receivedSignal = options?.signal;
       options?.signal?.addEventListener('abort', () => reject(new Error('page closed')), { once: true });
     }));
-    const started = manager.start(provider, { limit: 10 }, search);
+    const started = startJob(manager, provider, { limit: 10 }, search);
     for (let attempt = 0; attempt < 10 && !receivedSignal; attempt += 1) {
       await new Promise((resolve) => setImmediate(resolve));
     }
 
     const cancelledAt = Date.now();
-    const cancelled = manager.cancel(started.id);
+    const cancelled = cancelJob(manager, started.id);
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(Date.now() - cancelledAt).toBeLessThan(2000);
     expect(receivedSignal?.aborted).toBe(true);
     expect(cancelled).toMatchObject({ status: 'cancelled', completionReason: 'cancelled' });
-    expect(manager.get(started.id)).toMatchObject({ status: 'cancelled', completionReason: 'cancelled' });
+    expect(getJob(manager, started.id)).toMatchObject({ status: 'cancelled', completionReason: 'cancelled' });
   });
 
   it('passes one abort signal to every progressive provider call', async () => {
@@ -122,7 +140,7 @@ describe('ProjectSearchJobManager', () => {
         }
       });
     });
-    const started = manager.start(provider, { limit: 10 }, search);
+    const started = startJob(manager, provider, { limit: 10 }, search);
 
     await waitForTerminal(manager, started.id);
 
@@ -136,9 +154,9 @@ describe('ProjectSearchJobManager', () => {
     const pending = new Promise((resolve) => {
       resolveSearch = resolve;
     });
-    const started = manager.start(provider, { limit: 10 }, jest.fn().mockReturnValue(pending));
+    const started = startJob(manager, provider, { limit: 10 }, jest.fn().mockReturnValue(pending));
     await new Promise((resolve) => setImmediate(resolve));
-    const cancelled = manager.cancel(started.id);
+    const cancelled = cancelJob(manager, started.id);
 
     resolveSearch({
       items: [{ url: 'https://camp-fire.jp/projects/late' }],
@@ -151,7 +169,7 @@ describe('ProjectSearchJobManager', () => {
     });
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(manager.get(started.id)).toMatchObject({
+    expect(getJob(manager, started.id)).toMatchObject({
       status: 'cancelled',
       completionReason: 'cancelled',
       message: cancelled.message,
@@ -168,12 +186,12 @@ describe('ProjectSearchJobManager', () => {
         finishSearch = resolve;
       });
     });
-    const started = manager.start({ source, baseUrl: `https://${source}.example` } as any, { limit: 10 }, search as any);
+    const started = startJob(manager, { source, baseUrl: `https://${source}.example` } as any, { limit: 10 }, search as any);
 
     for (let attempt = 0; attempt < 10 && !finishSearch; attempt += 1) {
       await new Promise((resolve) => setImmediate(resolve));
     }
-    expect(manager.get(started.id)).toMatchObject({ status: 'running', itemCount: 1 });
+    expect(getJob(manager, started.id)).toMatchObject({ status: 'running', itemCount: 1 });
 
     finishSearch({
       items: Array.from({ length: 10 }, (_, index) => ({ url: `https://${source}.example/projects/${index}` })),
@@ -194,7 +212,7 @@ describe('ProjectSearchJobManager', () => {
       await options.onItems(items.slice(0, 6));
       return { items, diagnostics };
     });
-    const started = manager.start(provider, { limit: 10 }, search as any);
+    const started = startJob(manager, provider, { limit: 10 }, search as any);
 
     const completed = await waitForTerminal(manager, started.id);
     expect(completed).toMatchObject({ status: 'completed', itemCount: 10, importableCount: 10 });
@@ -215,21 +233,29 @@ describe('ProjectSearchJobManager', () => {
       ]);
       return new Promise(() => undefined);
     });
-    const started = manager.start(provider, { limit: 10 }, search as any);
+    const started = startJob(manager, provider, { limit: 10 }, search as any);
     for (let attempt = 0; attempt < 10 && !emitItems; attempt += 1) {
       await new Promise((resolve) => setImmediate(resolve));
     }
 
     await emitItems([{ url: 'https://camp-fire.jp/projects/first', title: '更新済み' }]);
-    const observed = manager.get(started.id);
+    const observed = getJob(manager, started.id);
     expect(observed.items.map((item) => item.url)).toEqual([
       'https://camp-fire.jp/projects/first',
       'https://camp-fire.jp/projects/second'
     ]);
     expect(observed.items[0].title).toBe('更新済み');
 
-    manager.cancel(started.id);
+    cancelJob(manager, started.id);
     expect(await emitItems([{ url: 'https://camp-fire.jp/projects/late' }])).toBe(false);
-    expect(manager.get(started.id).items.map((item) => item.url)).not.toContain('https://camp-fire.jp/projects/late');
+    expect(getJob(manager, started.id).items.map((item) => item.url)).not.toContain('https://camp-fire.jp/projects/late');
+  });
+
+  it('hides jobs from a different organization or a different user', () => {
+    const manager = createManager();
+    const started = startJob(manager, provider, { limit: 10 }, jest.fn().mockReturnValue(new Promise(() => undefined)));
+
+    expect(() => manager.get(started.id, 'organization-2', ownerUserId)).toThrow('検索ジョブが見つかりません');
+    expect(() => manager.cancel(started.id, organizationId, 'user-2')).toThrow('検索ジョブが見つかりません');
   });
 });

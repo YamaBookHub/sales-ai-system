@@ -13,6 +13,7 @@ describe('ListSalesPerformanceOwnersUseCase', () => {
     };
     const usecase = new ListSalesPerformanceOwnersUseCase(repository);
 
-    await expect(usecase.execute()).resolves.toEqual(ownerItems);
+    await expect(usecase.execute('org_1')).resolves.toEqual(ownerItems);
+    expect(repository.listOwners).toHaveBeenCalledWith('org_1');
   });
 });

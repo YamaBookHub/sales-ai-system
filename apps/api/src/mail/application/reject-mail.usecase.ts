@@ -8,19 +8,17 @@ import { PrismaMailWorkflowRepository } from '../infrastructure/prisma-mail-work
 export class RejectMailUseCase {
   constructor(private readonly mails: PrismaMailWorkflowRepository) {}
 
-  async execute(id: string, dto: RejectMailDto, actor: AuditActor | null = null) {
-    const email = await this.mails.get(id);
+  async execute(id: string, dto: RejectMailDto, actor: AuditActor) {
+    const email = await this.mails.get(id, actor.organizationId);
     assertCanReject(email.status);
     const reason = dto.reason?.trim() || 'rejected_by_reviewer';
-    return actor
-      ? this.mails.transition(
-        id,
-        'rejected',
-        'rejected',
-        { failedReason: reason, approvedAt: null, approvedById: null },
-        { reason },
-        actor
-      )
-      : this.mails.transition(id, 'rejected', 'rejected', { failedReason: reason, approvedAt: null }, { reason });
+    return this.mails.transition(
+      id,
+      'rejected',
+      'rejected',
+      { failedReason: reason, approvedAt: null, approvedById: null },
+      { reason },
+      actor
+    );
   }
 }

@@ -103,6 +103,8 @@ export class AuthController {
       user: {
         id: principal.userId,
         email: principal.email,
+        organizationId: principal.organizationId,
+        organizationSlug: principal.organizationSlug,
         role: principal.role,
         permissions: permissionsForRole(principal.role)
       },

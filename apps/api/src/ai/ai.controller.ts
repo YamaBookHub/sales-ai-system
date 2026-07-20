@@ -31,8 +31,8 @@ export class AiController {
   }
 
   @Get('leads/:leadId/analysis')
-  async getLeadAnalysis(@Param('leadId') leadId: string) {
-    return ok(await this.ai.getLeadAnalysis(leadId));
+  async getLeadAnalysis(@Param('leadId') leadId: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.ai.getLeadAnalysis(leadId, auditActor(principal)));
   }
 
   @Patch('leads/:leadId/analysis')
@@ -55,19 +55,19 @@ export class AiController {
 
   @Post('mails/:mailId/semantic-consistency')
   @RequirePermissions('analysis.execute')
-  async checkMailSemanticConsistency(@Param('mailId') mailId: string, @Body() dto: SelectAiModelDto) {
-    return ok(await this.ai.checkMailSemanticConsistency(mailId, dto?.model));
+  async checkMailSemanticConsistency(@Param('mailId') mailId: string, @Body() dto: SelectAiModelDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.ai.checkMailSemanticConsistency(mailId, dto?.model, auditActor(principal)));
   }
 
   @Get('leads/:leadId/generations')
-  async listLeadGenerations(@Param('leadId') leadId: string) {
-    return ok(await this.ai.listLeadGenerations(leadId));
+  async listLeadGenerations(@Param('leadId') leadId: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.ai.listLeadGenerations(leadId, auditActor(principal)));
   }
 
   @Get('usage-summary')
   @RequirePermissions('ai.cost.read')
-  async getUsageSummary() {
-    return ok(await this.ai.getOpenAiUsageSummary());
+  async getUsageSummary(@CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.ai.getOpenAiUsageSummary(auditActor(principal)));
   }
 
   @Post('replies/:replyId/classify')

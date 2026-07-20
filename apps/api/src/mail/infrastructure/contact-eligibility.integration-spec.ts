@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { AuditActor } from '../../audit/audit-actor';
 import { GenerateMailDraftUseCase } from '../../ai/application/generate-mail-draft.usecase';
 import { projectSourceFingerprint } from '../../ai/domain/lead-analysis';
 import { MarkMailSentUseCase } from '../application/mark-mail-sent.usecase';
@@ -9,39 +10,86 @@ const testDatabaseUrl = requireTestDatabaseUrl();
 describe('contact eligibility integration', () => {
   let prisma: PrismaClient;
   const companyIds: string[] = [];
+  let organizationId: string;
+  let userId: string;
+  let actor: AuditActor;
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl } } });
     await prisma.$connect();
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const organization = await prisma.organization.create({
+      data: { slug: `contact-eligibility-${suffix}`, name: 'Contact eligibility integration organization' }
+    });
+    organizationId = organization.id;
+    const user = await prisma.user.create({
+      data: { email: `contact-eligibility-${suffix}@example.com`, name: 'Contact eligibility tester' }
+    });
+    userId = user.id;
+    await prisma.organizationMembership.create({
+      data: { organizationId, userId, role: 'admin' }
+    });
+    const session = await prisma.userSession.create({
+      data: {
+        organizationId,
+        userId,
+        tokenHash: `contact-eligibility-token-${suffix}`,
+        csrfTokenHash: `contact-eligibility-csrf-${suffix}`,
+        absoluteExpiresAt: new Date('2030-01-01T00:00:00.000Z'),
+        idleExpiresAt: new Date('2030-01-01T00:00:00.000Z')
+      }
+    });
+    actor = { organizationId, userId, sessionId: session.id };
   });
 
   afterAll(async () => {
-    if (companyIds.length > 0) {
-      await prisma.emailEvent.deleteMany({ where: { email: { companyId: { in: companyIds } } } });
-      await prisma.aiGeneration.deleteMany({ where: { lead: { companyId: { in: companyIds } } } });
-      await prisma.outreachEmail.deleteMany({ where: { companyId: { in: companyIds } } });
-      await prisma.contactPerson.deleteMany({ where: { companyId: { in: companyIds } } });
-      await prisma.salesLead.deleteMany({ where: { companyId: { in: companyIds } } });
-      await prisma.crowdfundingProject.deleteMany({ where: { companyId: { in: companyIds } } });
-      await prisma.company.deleteMany({ where: { id: { in: companyIds } } });
+    try {
+      if (organizationId) {
+        await prisma.linkClick.deleteMany({ where: { organizationId } });
+        await prisma.trackedLink.deleteMany({ where: { organizationId } });
+        await prisma.mailAttachment.deleteMany({ where: { organizationId } });
+        await prisma.emailEvent.deleteMany({ where: { organizationId } });
+        await prisma.emailReply.deleteMany({ where: { organizationId } });
+        await prisma.mailChecklistItem.deleteMany({ where: { organizationId } });
+        await prisma.aiGeneration.deleteMany({ where: { organizationId } });
+        await prisma.outreachEmail.deleteMany({ where: { organizationId } });
+        await prisma.opportunityStageHistory.deleteMany({ where: { organizationId } });
+        await prisma.opportunity.deleteMany({ where: { organizationId } });
+        await prisma.task.deleteMany({ where: { organizationId } });
+        await prisma.leadAnalysisRevision.deleteMany({ where: { organizationId } });
+        await prisma.leadScore.deleteMany({ where: { organizationId } });
+        await prisma.contactPerson.deleteMany({ where: { organizationId } });
+        await prisma.salesLead.deleteMany({ where: { organizationId } });
+        await prisma.crowdfundingProject.deleteMany({ where: { organizationId } });
+        await prisma.company.deleteMany({ where: { organizationId } });
+        await prisma.auditLog.deleteMany({ where: { organizationId } });
+        await prisma.userSession.deleteMany({ where: { organizationId } });
+        await prisma.organizationMembership.deleteMany({ where: { organizationId } });
+        await prisma.user.deleteMany({ where: { id: userId } });
+        await prisma.organization.deleteMany({ where: { id: organizationId } });
+      }
+    } finally {
+      await prisma.$disconnect();
     }
-    await prisma.$disconnect();
   });
 
   it('keeps mail, AI history, and lead state unchanged for a blocked company', async () => {
     const fixture = await createFixture('blocked');
-    await prisma.company.update({ where: { id: fixture.companyId }, data: { isBlocked: true } });
+    await prisma.company.update({
+      where: { organizationId_id: { organizationId, id: fixture.companyId } },
+      data: { isBlocked: true }
+    });
     const useCase = new GenerateMailDraftUseCase(prisma as any);
 
     await expect(useCase.execute(fixture.leadIds[0], {
       templateKey: 'normal',
       analysisRevisionId: fixture.analysisRevisionIds[0]
-    }))
+    }, actor))
       .rejects.toThrow('この企業は送信禁止');
 
-    expect(await prisma.outreachEmail.count({ where: { leadId: fixture.leadIds[0] } })).toBe(0);
-    expect(await prisma.aiGeneration.count({ where: { leadId: fixture.leadIds[0] } })).toBe(0);
-    expect((await prisma.salesLead.findUniqueOrThrow({ where: { id: fixture.leadIds[0] } })).status)
+    expect(await prisma.outreachEmail.count({ where: { organizationId, leadId: fixture.leadIds[0] } })).toBe(0);
+    expect(await prisma.aiGeneration.count({ where: { organizationId, leadId: fixture.leadIds[0] } })).toBe(0);
+    expect((await prisma.salesLead.findFirstOrThrow({ where: { organizationId, id: fixture.leadIds[0] } })).status)
       .toBe('qualified');
   });
 
@@ -52,15 +100,15 @@ describe('contact eligibility integration', () => {
     await useCase.execute(fixture.leadIds[0], {
       templateKey: 'normal',
       analysisRevisionId: fixture.analysisRevisionIds[0]
-    });
+    }, actor);
     await expect(useCase.execute(fixture.leadIds[1], {
       templateKey: 'normal',
       analysisRevisionId: fixture.analysisRevisionIds[1]
-    }))
+    }, actor))
       .rejects.toThrow('重複接触');
 
-    expect(await prisma.outreachEmail.count({ where: { companyId: fixture.companyId } })).toBe(1);
-    expect((await prisma.salesLead.findUniqueOrThrow({ where: { id: fixture.leadIds[1] } })).status)
+    expect(await prisma.outreachEmail.count({ where: { organizationId, companyId: fixture.companyId } })).toBe(1);
+    expect((await prisma.salesLead.findFirstOrThrow({ where: { organizationId, id: fixture.leadIds[1] } })).status)
       .toBe('qualified');
   });
 
@@ -70,9 +118,9 @@ describe('contact eligibility integration', () => {
       .execute(fixture.leadIds[0], {
         templateKey: 'normal',
         analysisRevisionId: fixture.analysisRevisionIds[0]
-      });
+      }, actor);
     await prisma.contactPerson.update({
-      where: { id: fixture.contactId },
+      where: { organizationId_id: { organizationId, id: fixture.contactId } },
       data: { isUnsubscribed: true, unsubscribedAt: new Date(), isPrimary: false }
     });
     const repository = new PrismaMailWorkflowRepository(prisma as any);
@@ -80,12 +128,15 @@ describe('contact eligibility integration', () => {
     await expect(repository.transitionIfDeliveryAllowed(
       generated.email.id,
       'in_review',
-      'reviewed'
+      'reviewed',
+      {},
+      undefined,
+      actor
     )).rejects.toThrow('配信停止');
 
-    expect((await prisma.outreachEmail.findUniqueOrThrow({ where: { id: generated.email.id } })).status)
+    expect((await prisma.outreachEmail.findFirstOrThrow({ where: { organizationId, id: generated.email.id } })).status)
       .toBe('draft');
-    expect((await prisma.salesLead.findUniqueOrThrow({ where: { id: fixture.leadIds[0] } })).status)
+    expect((await prisma.salesLead.findFirstOrThrow({ where: { organizationId, id: fixture.leadIds[0] } })).status)
       .toBe('drafted');
   });
 
@@ -95,29 +146,33 @@ describe('contact eligibility integration', () => {
       .execute(fixture.leadIds[0], {
         templateKey: 'normal',
         analysisRevisionId: fixture.analysisRevisionIds[0]
-      });
+      }, actor);
     await prisma.outreachEmail.update({
-      where: { id: generated.email.id },
+      where: { organizationId_id: { organizationId, id: generated.email.id } },
       data: { status: 'approved' }
     });
     const useCase = new MarkMailSentUseCase(new PrismaMailWorkflowRepository(prisma as any));
 
     const results = await Promise.allSettled([
-      useCase.execute(generated.email.id, {}),
-      useCase.execute(generated.email.id, {})
+      useCase.execute(generated.email.id, {}, actor),
+      useCase.execute(generated.email.id, {}, actor)
     ]);
 
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
-    expect((await prisma.outreachEmail.findUniqueOrThrow({ where: { id: generated.email.id } })).status)
+    expect((await prisma.outreachEmail.findFirstOrThrow({ where: { organizationId, id: generated.email.id } })).status)
       .toBe('sent');
     expect(await prisma.emailEvent.count({
-      where: { emailId: generated.email.id, type: 'sent' }
+      where: { organizationId, emailId: generated.email.id, type: 'sent' }
     })).toBe(1);
-    expect(await prisma.opportunity.findUnique({ where: { leadId: fixture.leadIds[0] } }))
+    expect(await prisma.opportunity.findFirst({ where: { organizationId, leadId: fixture.leadIds[0] } }))
       .toMatchObject({ stage: 'contacted', probability: 10, version: 2 });
     expect(await prisma.opportunityStageHistory.count({
-      where: { opportunity: { leadId: fixture.leadIds[0] }, operationKey: `mail-sent:${generated.email.id}` }
+      where: {
+        organizationId,
+        opportunity: { is: { organizationId, leadId: fixture.leadIds[0] } },
+        operationKey: `mail-sent:${generated.email.id}`
+      }
     })).toBe(1);
   });
 
@@ -129,11 +184,16 @@ describe('contact eligibility integration', () => {
       create: { type: 'campfire', name: 'CAMPFIRE', baseUrl: 'https://camp-fire.jp' }
     });
     const company = await prisma.company.create({
-      data: { name: `配信判定テスト ${suffix}`, inquiryUrl: `https://example.com/${suffix}/contact` }
+      data: {
+        organizationId,
+        name: `配信判定テスト ${suffix}`,
+        inquiryUrl: `https://example.com/${suffix}/contact`
+      }
     });
     companyIds.push(company.id);
     const contact = await prisma.contactPerson.create({
       data: {
+        organizationId,
         companyId: company.id,
         name: '営業担当',
         email: `sales-${suffix}@example.com`,
@@ -142,6 +202,7 @@ describe('contact eligibility integration', () => {
     });
     const projects = await Promise.all([0, 1].map((index) => prisma.crowdfundingProject.create({
       data: {
+        organizationId,
         platformId: platform.id,
         companyId: company.id,
         title: `配信判定案件 ${index + 1}`,
@@ -152,6 +213,7 @@ describe('contact eligibility integration', () => {
     })));
     const leads = await Promise.all(projects.map((project) => prisma.salesLead.create({
       data: {
+        organizationId,
         companyId: company.id,
         projectId: project.id,
         status: 'qualified',
@@ -160,6 +222,7 @@ describe('contact eligibility integration', () => {
     })));
     const analysisRevisions = await Promise.all(leads.map((lead, index) => prisma.leadAnalysisRevision.create({
       data: {
+        organizationId,
         leadId: lead.id,
         projectId: projects[index].id,
         version: 1,

@@ -2,7 +2,7 @@ import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { SendQueuedMailUseCase } from './send-queued-mail.usecase';
 
 describe('SendQueuedMailUseCase', () => {
-  const actor = { userId: 'user_1', sessionId: 'session_1' };
+  const actor = { userId: 'user_1', sessionId: 'session_1', organizationId: 'org_1' };
   const email = {
     id: 'mail_1',
     status: 'queued',

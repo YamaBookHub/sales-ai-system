@@ -10,15 +10,16 @@ const ACTIONABLE_MAIL_STATUSES: EmailStatus[] = ['draft', 'in_review', 'approved
 export class NavigationSummaryService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSummary(now = new Date()) {
+  async getSummary(organizationId: string, now = new Date()) {
     const [leads, mailCount, replies] = await Promise.all([
       this.prisma.salesLead.findMany({
+        where: { organizationId, deletedAt: null },
         select: {
           status: true,
           nextActionAt: true,
           nextFollowUpAt: true,
           tasks: {
-            where: { status: { in: ACTIVE_TASK_STATUSES } },
+            where: { organizationId, status: { in: ACTIVE_TASK_STATUSES } },
             orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
             take: 1,
             select: { dueAt: true }
@@ -30,8 +31,8 @@ export class NavigationSummaryService {
           }
         }
       }),
-      this.prisma.outreachEmail.count({ where: { status: { in: ACTIONABLE_MAIL_STATUSES } } }),
-      this.prisma.emailReply.count()
+      this.prisma.outreachEmail.count({ where: { organizationId, status: { in: ACTIONABLE_MAIL_STATUSES } } }),
+      this.prisma.emailReply.count({ where: { organizationId } })
     ]);
 
     const today = leads.filter((lead) => {

@@ -1,10 +1,16 @@
 import { MailService } from './mail.service';
 
 describe('MailService templates', () => {
+  const actor = {
+    userId: '11111111-1111-4111-8111-111111111111',
+    sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    organizationId: '00000000-0000-4000-8000-000000000007'
+  };
+
   const createService = () => {
     const tx = {
       mailTemplate: {
-        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
         upsert: jest.fn().mockImplementation(({ create }) => Promise.resolve({ id: 'template_1', ...create }))
       },
       auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit_1' }) }
@@ -12,8 +18,7 @@ describe('MailService templates', () => {
     const prisma = {
       mailTemplate: {
         findMany: jest.fn().mockResolvedValue([]),
-        findUnique: jest.fn().mockResolvedValue(null),
-        upsert: jest.fn().mockImplementation(({ create }) => Promise.resolve({ id: 'template_1', ...create }))
+        findFirst: jest.fn().mockResolvedValue(null)
       },
       $transaction: jest.fn((callback: (transaction: typeof tx) => unknown) => callback(tx))
     };
@@ -35,7 +40,7 @@ describe('MailService templates', () => {
     return { service, prisma, tx };
   };
 
-  it('saves a template by key so imports can update existing templates', async () => {
+  it('saves a template by organization and key so imports can update existing templates', async () => {
     const { service, tx } = createService();
 
     await expect(service.saveTemplate({
@@ -45,7 +50,7 @@ describe('MailService templates', () => {
       subject: '',
       body: ' 本文 ',
       description: ' 説明 '
-    })).resolves.toMatchObject({
+    }, actor)).resolves.toMatchObject({
       key: 'campfire-site-message',
       name: 'CAMPFIREプロフィールDM',
       channel: 'site_message',
@@ -55,32 +60,27 @@ describe('MailService templates', () => {
     });
 
     expect(tx.mailTemplate.upsert).toHaveBeenCalledWith({
-      where: { key: 'campfire-site-message' },
+      where: { organizationId_key: { organizationId: actor.organizationId, key: 'campfire-site-message' } },
       update: expect.objectContaining({ body: '本文' }),
-      create: expect.objectContaining({ body: '本文' })
+      create: expect.objectContaining({ organizationId: actor.organizationId, body: '本文' })
     });
   });
 
   it('imports multiple templates through the same save path', async () => {
     const { service, tx } = createService();
-    const actor = {
-      userId: '11111111-1111-4111-8111-111111111111',
-      sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    };
 
     await expect(service.importTemplates({
       templates: [
         { key: 'email-normal', name: 'メール標準', channel: 'email', subject: '件名', body: '本文' },
         { key: 'site-message-short', name: 'サイトDM短文', channel: 'site_message', body: '本文' }
       ]
-    }, actor)).resolves.toMatchObject({
-      imported: 2
-    });
+    }, actor)).resolves.toMatchObject({ imported: 2 });
 
     expect(tx.mailTemplate.upsert).toHaveBeenCalledTimes(2);
     expect(tx.auditLog.create).toHaveBeenCalledTimes(2);
     expect(tx.auditLog.create).toHaveBeenNthCalledWith(1, {
       data: expect.objectContaining({
+        organizationId: actor.organizationId,
         userId: actor.userId,
         sessionId: actor.sessionId,
         action: 'mail_template.imported'
@@ -90,10 +90,6 @@ describe('MailService templates', () => {
 
   it('writes a transactional template audit with the actor session and no template content', async () => {
     const { service, tx } = createService();
-    const actor = {
-      userId: '11111111-1111-4111-8111-111111111111',
-      sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    };
 
     await service.saveTemplate({
       key: 'normal-email',
@@ -106,6 +102,7 @@ describe('MailService templates', () => {
 
     expect(tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        organizationId: actor.organizationId,
         userId: actor.userId,
         sessionId: actor.sessionId,
         action: 'mail_template.saved',

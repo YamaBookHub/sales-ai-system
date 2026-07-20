@@ -15,7 +15,7 @@ describe('AuthSessionRepository', () => {
         absoluteExpiresAt: { gt: now },
         idleExpiresAt: { gt: now }
       },
-      include: { user: true }
+      include: { user: true, organization: true, membership: true }
     });
   });
 });

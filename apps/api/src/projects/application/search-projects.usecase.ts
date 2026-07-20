@@ -14,27 +14,29 @@ export class SearchProjectsUseCase {
     private readonly makuakeProvider: MakuakeProjectSourceProvider
   ) {}
 
-  search(dto: SearchProjectsDto) {
+  search(dto: SearchProjectsDto, organizationId: string) {
+    void organizationId;
     return this.searchWithProvider(this.providerFor(dto.source), dto);
   }
 
-  searchCampfire(dto: SearchCampfireProjectsDto) {
+  searchCampfire(dto: SearchCampfireProjectsDto, organizationId: string) {
+    void organizationId;
     return this.searchWithProvider(this.providerFor('campfire'), dto);
   }
 
-  startJob(dto: SearchProjectsDto) {
+  startJob(dto: SearchProjectsDto, organizationId: string, ownerUserId: string) {
     const provider = this.providerFor(dto.source);
-    return this.projectSearchJobManager.start(provider, dto, (searchProvider, searchDto, options) =>
+    return this.projectSearchJobManager.start(organizationId, ownerUserId, provider, dto, (searchProvider, searchDto, options) =>
       this.searchWithProvider(searchProvider, searchDto, options)
     );
   }
 
-  getJob(id: string) {
-    return this.projectSearchJobManager.get(id);
+  getJob(id: string, organizationId: string, ownerUserId: string) {
+    return this.projectSearchJobManager.get(id, organizationId, ownerUserId);
   }
 
-  cancelJob(id: string) {
-    return this.projectSearchJobManager.cancel(id);
+  cancelJob(id: string, organizationId: string, ownerUserId: string) {
+    return this.projectSearchJobManager.cancel(id, organizationId, ownerUserId);
   }
 
   private async searchWithProvider(provider: ProjectSourceProvider, dto: SearchCampfireProjectsDto, options?: ProjectSearchOptions) {

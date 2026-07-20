@@ -7,13 +7,11 @@ import { PrismaMailWorkflowRepository } from '../infrastructure/prisma-mail-work
 export class ApproveMailUseCase {
   constructor(private readonly mails: PrismaMailWorkflowRepository) {}
 
-  async execute(id: string, actor: AuditActor | null = null) {
-    assertChecklistComplete(await this.mails.checklistComplete(id));
+  async execute(id: string, actor: AuditActor) {
+    assertChecklistComplete(await this.mails.checklistComplete(id, actor.organizationId));
     const approvedAt = new Date();
-    return actor
-      ? this.mails.transitionIfDeliveryAllowed(
-        id, 'approved', 'approved', { approvedAt, approvedById: actor.userId }, undefined, actor
-      )
-      : this.mails.transitionIfDeliveryAllowed(id, 'approved', 'approved', { approvedAt });
+    return this.mails.transitionIfDeliveryAllowed(
+      id, 'approved', 'approved', { approvedAt, approvedById: actor.userId }, undefined, actor
+    );
   }
 }

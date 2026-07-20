@@ -4,7 +4,7 @@ describe('CheckMailSemanticConsistencyUseCase', () => {
   it('asks AI for advice without updating the mail or lead', async () => {
     const prisma = {
       outreachEmail: {
-        findUnique: jest.fn().mockResolvedValue({
+        findFirst: jest.fn().mockResolvedValue({
           id: 'mail_1',
           body: '株式会社テスト食品 ご担当者様\n燻製サーモンの案件を拝見しました。',
           company: { name: '株式会社テスト食品' },
@@ -28,25 +28,29 @@ describe('CheckMailSemanticConsistencyUseCase', () => {
       })
     };
 
-    const result = await new CheckMailSemanticConsistencyUseCase(prisma as any, aiClient as any).execute('mail_1', 'gpt-5.6-luna');
+    const result = await new CheckMailSemanticConsistencyUseCase(prisma as any, aiClient as any).execute('mail_1', 'gpt-5.6-luna', 'org_1');
 
     expect(result).toMatchObject({ mailId: 'mail_1', matchesProject: true, confidence: 0.92 });
+    expect(prisma.outreachEmail.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'mail_1', organizationId: 'org_1' }
+    }));
     expect(aiClient.checkSemanticConsistency).toHaveBeenCalledWith(
       expect.objectContaining({
         companyName: '株式会社テスト食品',
         projectTitle: '燻製サーモン',
         factsUsed: ['支援者数: 50人']
       }),
-      'gpt-5.6-luna'
+      'gpt-5.6-luna',
+      'org_1'
     );
     expect(prisma.outreachEmail.update).not.toHaveBeenCalled();
   });
 
   it('fails before calling AI when the mail does not exist', async () => {
-    const prisma = { outreachEmail: { findUnique: jest.fn().mockResolvedValue(null) } };
+    const prisma = { outreachEmail: { findFirst: jest.fn().mockResolvedValue(null) } };
     const aiClient = { checkSemanticConsistency: jest.fn() };
 
-    await expect(new CheckMailSemanticConsistencyUseCase(prisma as any, aiClient as any).execute('missing'))
+    await expect(new CheckMailSemanticConsistencyUseCase(prisma as any, aiClient as any).execute('missing', undefined, 'org_1'))
       .rejects.toThrow('Mail not found');
     expect(aiClient.checkSemanticConsistency).not.toHaveBeenCalled();
   });
@@ -54,7 +58,7 @@ describe('CheckMailSemanticConsistencyUseCase', () => {
   it('does not update anything when the AI provider fails', async () => {
     const prisma = {
       outreachEmail: {
-        findUnique: jest.fn().mockResolvedValue({
+        findFirst: jest.fn().mockResolvedValue({
           id: 'mail_1',
           body: '本文',
           company: { name: '株式会社テスト食品' },
@@ -66,7 +70,7 @@ describe('CheckMailSemanticConsistencyUseCase', () => {
     };
     const aiClient = { checkSemanticConsistency: jest.fn().mockRejectedValue(new Error('AI provider unavailable')) };
 
-    await expect(new CheckMailSemanticConsistencyUseCase(prisma as any, aiClient as any).execute('mail_1'))
+    await expect(new CheckMailSemanticConsistencyUseCase(prisma as any, aiClient as any).execute('mail_1', undefined, 'org_1'))
       .rejects.toThrow('AI provider unavailable');
     expect(prisma.outreachEmail.update).not.toHaveBeenCalled();
   });

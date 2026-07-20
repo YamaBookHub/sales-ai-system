@@ -6,6 +6,7 @@ import {
 export const SALES_PERFORMANCE_REPOSITORY = Symbol('SALES_PERFORMANCE_REPOSITORY');
 
 export type SalesPerformanceRepositoryInput = {
+  organizationId: string;
   startUtc: Date;
   endExclusiveUtc: Date;
   ownerId?: string;
@@ -21,5 +22,5 @@ export type SalesPerformanceOwner = {
 
 export interface SalesPerformanceRepository {
   summarize(input: SalesPerformanceRepositoryInput): Promise<SalesPerformanceCounts>;
-  listOwners(): Promise<SalesPerformanceOwner[]>;
+  listOwners(organizationId: string): Promise<SalesPerformanceOwner[]>;
 }

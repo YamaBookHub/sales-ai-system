@@ -9,7 +9,7 @@ describe('ClassifyReplyUseCase', () => {
     };
     const prisma = {
       emailReply: {
-        findUnique: jest.fn().mockResolvedValue({
+        findFirst: jest.fn().mockResolvedValue({
           id: 'reply_1',
           body: '商談を希望します。',
           bodyText: null,
@@ -19,11 +19,12 @@ describe('ClassifyReplyUseCase', () => {
       $transaction: jest.fn((callback) => callback(tx))
     };
 
-    await new ClassifyReplyUseCase(prisma as any).execute('reply_1', { userId: 'user_1', sessionId: 'session_1' });
+    await new ClassifyReplyUseCase(prisma as any).execute('reply_1', { userId: 'user_1', sessionId: 'session_1', organizationId: 'org_1' });
 
     expect(tx.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       userId: 'user_1',
       sessionId: 'session_1',
+      organizationId: 'org_1',
       action: 'reply.classify',
       entityId: 'reply_1'
     }) });

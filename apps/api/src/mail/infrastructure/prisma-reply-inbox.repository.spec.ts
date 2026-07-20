@@ -1,6 +1,8 @@
 import { PrismaReplyInboxRepository } from './prisma-reply-inbox.repository';
 
 describe('PrismaReplyInboxRepository', () => {
+  const organizationId = '00000000-0000-4000-8000-000000000007';
+
   function createRepository() {
     const prisma = {
       emailReply: {
@@ -11,13 +13,13 @@ describe('PrismaReplyInboxRepository', () => {
     return { prisma, repository: new PrismaReplyInboxRepository(prisma as any) };
   }
 
-  it('applies filters, pagination, selected relations, and the 100-item limit', async () => {
+  it('applies organization filters, pagination, selected relations, and the 100-item limit', async () => {
     const { prisma, repository } = createRepository();
     const record = { id: 'reply_1', emailId: 'mail_1', email: { id: 'mail_1' } };
     prisma.emailReply.count.mockResolvedValue(101);
     prisma.emailReply.findMany.mockResolvedValue([record]);
 
-    const result = await repository.list({
+    const result = await repository.list(organizationId, {
       page: 2,
       limit: 500,
       category: 'need_info',
@@ -28,7 +30,9 @@ describe('PrismaReplyInboxRepository', () => {
     });
 
     expect(result).toMatchObject({ items: [record], page: 2, limit: 100, total: 101 });
-    expect(prisma.emailReply.count).toHaveBeenCalledWith({ where: expect.objectContaining({ AND: expect.any(Array) }) });
+    expect(prisma.emailReply.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({ AND: expect.arrayContaining([{ organizationId }]) })
+    });
     expect(prisma.emailReply.findMany).toHaveBeenCalledWith(expect.objectContaining({
       skip: 100,
       take: 100,
@@ -52,12 +56,12 @@ describe('PrismaReplyInboxRepository', () => {
         { id: 'reply_stop' }
       ]);
 
-    const result = await repository.list({ sort: 'priority', direction: 'desc' });
+    const result = await repository.list(organizationId, { sort: 'priority', direction: 'desc' });
 
     expect(result.items.map((item) => item.id)).toEqual(['reply_complaint', 'reply_stop', 'reply_normal']);
     expect(new Set(result.items.map((item) => item.id)).size).toBe(result.items.length);
     expect(prisma.emailReply.findMany).toHaveBeenNthCalledWith(2, {
-      where: { id: { in: ['reply_complaint', 'reply_stop', 'reply_normal'] } },
+      where: { organizationId, id: { in: ['reply_complaint', 'reply_stop', 'reply_normal'] } },
       select: expect.any(Object)
     });
   });
@@ -67,13 +71,18 @@ describe('PrismaReplyInboxRepository', () => {
     prisma.emailReply.count.mockResolvedValue(0);
     prisma.emailReply.findMany.mockResolvedValue([]);
 
-    await repository.list({ attention: 'stop_followup' });
+    await repository.list(organizationId, { attention: 'stop_followup' });
 
     const where = prisma.emailReply.count.mock.calls[0][0].where;
-    expect(where.AND[0].OR).toEqual(expect.arrayContaining([
-      { category: { in: ['unsubscribe', 'not_interested'] } },
-      { email: { is: { company: { is: { isBlocked: true } } } } },
-      { email: { is: { contact: { is: { isUnsubscribed: true } } } } }
+    expect(where.AND).toEqual(expect.arrayContaining([
+      { organizationId },
+      {
+        OR: expect.arrayContaining([
+          { category: { in: ['unsubscribe', 'not_interested'] } },
+          { email: { is: { company: { is: { isBlocked: true } } } } },
+          { email: { is: { contact: { is: { isUnsubscribed: true } } } } }
+        ])
+      }
     ]));
   });
 });

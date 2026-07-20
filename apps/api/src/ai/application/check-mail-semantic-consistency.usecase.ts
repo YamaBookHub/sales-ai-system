@@ -10,9 +10,9 @@ export class CheckMailSemanticConsistencyUseCase {
     private readonly aiClient: AiClientService
   ) {}
 
-  async execute(mailId: string, model?: SelectableAiModel) {
-    const email = await this.prisma.outreachEmail.findUnique({
-      where: { id: mailId },
+  async execute(mailId: string, model: SelectableAiModel | undefined, organizationId: string) {
+    const email = await this.prisma.outreachEmail.findFirst({
+      where: { id: mailId, organizationId },
       include: {
         company: true,
         lead: { include: { company: true, project: true } },
@@ -40,7 +40,8 @@ export class CheckMailSemanticConsistencyUseCase {
         body: email.body,
         factsUsed: stringArray(output?.factsUsed)
       },
-      model
+      model,
+      organizationId
     );
 
     return {

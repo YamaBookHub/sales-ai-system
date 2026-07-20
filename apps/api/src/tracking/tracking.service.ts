@@ -14,15 +14,16 @@ export class TrackingService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createTrackedLink(dto: CreateTrackedLinkDto, actor?: AuditActor) {
+    if (!actor) throw new NotFoundException('Organization context not found');
     return this.prisma.$transaction(async (tx) => {
-      const email = await tx.outreachEmail.findUnique({ where: { id: dto.emailId } });
+      const email = await tx.outreachEmail.findFirst({ where: { id: dto.emailId, organizationId: actor.organizationId } });
       if (!email) {
         throw new NotFoundException('Mail not found');
       }
 
       const label = dto.label || COMPANY_MATERIAL_LINK_LABEL;
       const existing = await tx.trackedLink.findFirst({
-        where: { emailId: dto.emailId, originalUrl: dto.originalUrl, label }
+        where: { organizationId: actor.organizationId, emailId: dto.emailId, originalUrl: dto.originalUrl, label }
       });
       if (existing) {
         return { ...existing, trackingPath: `/t/click/${existing.token}` };
@@ -30,6 +31,7 @@ export class TrackingService {
 
       const link = await tx.trackedLink.create({
         data: {
+          organizationId: actor.organizationId,
           emailId: dto.emailId,
           token: createTrackingToken(),
           originalUrl: dto.originalUrl,
@@ -51,9 +53,9 @@ export class TrackingService {
     });
   }
 
-  async getMailEngagement(emailId: string) {
+  async getMailEngagement(organizationId: string, emailId: string) {
     const links = await this.prisma.trackedLink.findMany({
-      where: { emailId },
+      where: { organizationId, emailId },
       include: {
         clicks: { orderBy: { clickedAt: 'desc' } }
       }
@@ -81,7 +83,9 @@ export class TrackingService {
   }
 
   async trackOpen(emailId: string) {
-    await this.prisma.emailEvent.create({ data: { emailId, type: 'opened' } });
+    const email = await this.prisma.outreachEmail.findUnique({ where: { id: emailId }, select: { organizationId: true } });
+    if (!email) return;
+    await this.prisma.emailEvent.create({ data: { organizationId: email.organizationId, emailId, type: 'opened' } });
   }
 
   async resolveClick(token: string) {
@@ -94,10 +98,11 @@ export class TrackingService {
       throw new NotFoundException('Tracking link not found');
     }
 
-    await this.prisma.linkClick.create({ data: { linkId: link.id } });
-    const clickCount = await this.prisma.linkClick.count({ where: { linkId: link.id } });
+    await this.prisma.linkClick.create({ data: { organizationId: link.organizationId, linkId: link.id } });
+    const clickCount = await this.prisma.linkClick.count({ where: { organizationId: link.organizationId, linkId: link.id } });
     await this.prisma.emailEvent.create({
       data: {
+        organizationId: link.organizationId,
         emailId: link.emailId,
         type: 'clicked',
         payload: {
@@ -108,20 +113,23 @@ export class TrackingService {
       }
     });
     if (link.label === COMPANY_MATERIAL_LINK_LABEL && link.email.leadId) {
-      await this.applyMaterialEngagement(link.email.leadId, clickCount);
+      await this.applyMaterialEngagement(link.organizationId, link.email.leadId, clickCount);
     }
     return link.originalUrl;
   }
 
-  private async applyMaterialEngagement(leadId: string, clickCount: number) {
+  private async applyMaterialEngagement(organizationId: string, leadId: string, clickCount: number) {
     const engagement = materialEngagementForClickCount(clickCount);
     if (engagement.label === 'none') return;
 
-    const lead = await this.prisma.salesLead.findUnique({ where: { id: leadId }, select: { score: true } });
+    const lead = await this.prisma.salesLead.findUnique({
+      where: { organizationId_id: { organizationId, id: leadId } },
+      select: { score: true }
+    });
     if (!lead) return;
 
     await this.prisma.salesLead.update({
-      where: { id: leadId },
+      where: { organizationId_id: { organizationId, id: leadId } },
       data: {
         score: Math.max(lead.score || 0, engagement.scoreFloor),
         priority: engagement.priority,
@@ -132,10 +140,17 @@ export class TrackingService {
   }
 
   async unsubscribe(dto: UnsubscribeDto, actor?: AuditActor) {
+    if (!actor) throw new NotFoundException('Organization context not found');
     if (dto.contactId) {
+      const contactId = dto.contactId;
       return this.prisma.$transaction(async (tx) => {
+        const current = await tx.contactPerson.findFirst({
+          where: { id: contactId, organizationId: actor.organizationId, deletedAt: null },
+          select: { id: true }
+        });
+        if (!current) throw new NotFoundException('Contact not found');
         const contact = await tx.contactPerson.update({
-          where: { id: dto.contactId },
+          where: { organizationId_id: { organizationId: actor.organizationId, id: contactId } },
           data: { isUnsubscribed: true, unsubscribedAt: new Date(), isPrimary: false }
         });
         if (actor) {
@@ -157,7 +172,7 @@ export class TrackingService {
       const email = dto.email.trim();
       return this.prisma.$transaction(async (tx) => {
         const result = await tx.contactPerson.updateMany({
-          where: { email: { equals: email, mode: 'insensitive' }, deletedAt: null },
+          where: { organizationId: actor.organizationId, email: { equals: email, mode: 'insensitive' }, deletedAt: null },
           data: { isUnsubscribed: true, unsubscribedAt: new Date(), isPrimary: false }
         });
         if (result.count === 0) {

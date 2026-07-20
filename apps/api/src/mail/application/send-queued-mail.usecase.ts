@@ -13,8 +13,8 @@ export class SendQueuedMailUseCase {
   ) {}
 
   async execute(id: string, actor: AuditActor) {
-    const email = await this.mails.get(id);
-    const checklistComplete = await this.mails.checklistComplete(id);
+    const email = await this.mails.get(id, actor.organizationId);
+    const checklistComplete = await this.mails.checklistComplete(id, actor.organizationId);
     assertCanSendQueued(email.status, checklistComplete);
 
     const idempotencyKey = buildMailSendIdempotencyKey(email);
@@ -24,7 +24,7 @@ export class SendQueuedMailUseCase {
 
     try {
       // A contact can be unsubscribed after queueing; check once more immediately before the provider call.
-      await this.mails.assertDeliveryAllowed(id);
+      await this.mails.assertDeliveryAllowed(id, actor.organizationId);
       const result = await this.sender.send(buildMailSendRequest(claimedEmail, idempotencyKey));
       return this.mails.markSentAfterSend(id, result, idempotencyKey, actor);
     } catch (error) {

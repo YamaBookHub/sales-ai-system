@@ -7,9 +7,10 @@ import { classifyReplyText } from '../domain/reply-classifier';
 export class ClassifyReplyUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(replyId: string, actor: AuditActor | null = null) {
-    const reply = await this.prisma.emailReply.findUnique({
-      where: { id: replyId },
+  async execute(replyId: string, actor: AuditActor) {
+    const organizationId = actor.organizationId;
+    const reply = await this.prisma.emailReply.findFirst({
+      where: { id: replyId, organizationId },
       include: { email: true }
     });
 
@@ -21,7 +22,7 @@ export class ClassifyReplyUseCase {
 
     return this.prisma.$transaction(async (tx) => {
       const updatedReply = await tx.emailReply.update({
-        where: { id: replyId },
+        where: { organizationId_id: { organizationId, id: replyId } },
         data: {
           category: classification.category,
           confidence: classification.confidence,
@@ -32,7 +33,7 @@ export class ClassifyReplyUseCase {
 
       if (reply.email.leadId) {
         await tx.salesLead.update({
-          where: { id: reply.email.leadId },
+          where: { organizationId_id: { organizationId, id: reply.email.leadId } },
           data: {
             status: classification.leadStatus,
             nextActionAt: classification.nextActionAt
@@ -40,18 +41,17 @@ export class ClassifyReplyUseCase {
         });
       }
 
-      if (actor) {
-        await tx.auditLog.create({
-          data: {
-            userId: actor.userId,
-            sessionId: actor.sessionId,
-            action: 'reply.classify',
-            entityType: 'EmailReply',
-            entityId: replyId,
-            after: { category: classification.category, confidence: classification.confidence }
-          }
-        });
-      }
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          userId: actor.userId,
+          sessionId: actor.sessionId,
+          action: 'reply.classify',
+          entityType: 'EmailReply',
+          entityId: replyId,
+          after: { category: classification.category, confidence: classification.confidence }
+        }
+      });
 
       return { reply: updatedReply, classification };
     });

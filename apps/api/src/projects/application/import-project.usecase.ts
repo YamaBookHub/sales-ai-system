@@ -14,21 +14,21 @@ export class ImportProjectUseCase {
     private readonly makuakeProvider: MakuakeProjectSourceProvider
   ) {}
 
-  import(dto: ImportProjectDto, actor: AuditActor | null = null) {
-    return this.importWithProvider(this.providerFor(dto.source), dto.url, { actor });
+  import(dto: ImportProjectDto, actor: AuditActor) {
+    return this.importWithProvider(this.providerFor(dto.source), dto.url, actor, { actor });
   }
 
-  importCampfire(dto: ImportCampfireProjectDto, actor: AuditActor | null = null) {
+  importCampfire(dto: ImportCampfireProjectDto, actor: AuditActor) {
     return this.import({ source: 'campfire', url: dto.url }, actor);
   }
 
-  private async importWithProvider(provider: ProjectSourceProvider, url: string, options: ImportOptions = {}) {
+  private async importWithProvider(provider: ProjectSourceProvider, url: string, actor: AuditActor, options: ImportOptions = {}) {
     const normalizedUrl = provider.normalizeUrl(url);
     const imported = await provider.import(normalizedUrl);
     if (imported.project.status !== 'active') {
       throw new BadRequestException('現在公開中・募集中のプロジェクトだけ取り込めます。終了済み・公開前のURLは対象外です。');
     }
-    const result = await this.projectImportRepository.persistImportedProject(imported, options);
+    const result = await this.projectImportRepository.persistImportedProject(actor.organizationId, imported, options);
 
     return {
       ...result,

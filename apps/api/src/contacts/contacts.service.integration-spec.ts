@@ -4,6 +4,8 @@ import { ContactsService } from './contacts.service';
 const testDatabaseUrl = requireTestDatabaseUrl();
 
 describe('ContactsService integration', () => {
+  const organizationId = '00000000-0000-4000-8000-000000000007';
+  const actor = { userId: null, sessionId: null, organizationId } as any;
   let prisma: PrismaClient;
   let service: ContactsService;
   let companyId: string;
@@ -12,7 +14,7 @@ describe('ContactsService integration', () => {
     prisma = new PrismaClient({ datasources: { db: { url: testDatabaseUrl } } });
     await prisma.$connect();
     const company = await prisma.company.create({
-      data: { name: `連絡先テスト ${Date.now()}` }
+      data: { organizationId, name: `連絡先テスト ${Date.now()}` }
     });
     companyId = company.id;
     service = new ContactsService(prisma as any);
@@ -20,33 +22,33 @@ describe('ContactsService integration', () => {
 
   afterAll(async () => {
     if (companyId) {
-      await prisma.contactPerson.deleteMany({ where: { companyId } });
-      await prisma.company.delete({ where: { id: companyId } });
+      await prisma.contactPerson.deleteMany({ where: { organizationId, companyId } });
+      await prisma.company.delete({ where: { organizationId_id: { organizationId, id: companyId } } });
     }
     await prisma.$disconnect();
   });
 
   it('keeps one primary contact under concurrent creates and preserves unsubscribe/archive state', async () => {
     const [first, second] = await Promise.all([
-      service.create(companyId, { name: '第一担当', email: 'first@example.com', isPrimary: true }),
-      service.create(companyId, { name: '第二担当', email: 'second@example.com', isPrimary: true })
+      service.create(companyId, { name: '第一担当', email: 'first@example.com', isPrimary: true }, actor),
+      service.create(companyId, { name: '第二担当', email: 'second@example.com', isPrimary: true }, actor)
     ]);
 
-    let contacts = await service.listByCompany(companyId);
+    let contacts = await service.listByCompany(companyId, organizationId);
     expect(contacts).toHaveLength(2);
     expect(contacts.filter((contact) => contact.isPrimary)).toHaveLength(1);
 
     const primary = contacts.find((contact) => contact.isPrimary)!;
-    await service.unsubscribe(primary.id);
-    contacts = await service.listByCompany(companyId);
+    await service.unsubscribe(primary.id, actor);
+    contacts = await service.listByCompany(companyId, organizationId);
     expect(contacts.find((contact) => contact.id === primary.id)).toMatchObject({
       isPrimary: false,
       isUnsubscribed: true
     });
 
     const archiveId = primary.id === first.id ? second.id : first.id;
-    await service.archive(archiveId);
-    contacts = await service.listByCompany(companyId);
+    await service.archive(archiveId, actor);
+    contacts = await service.listByCompany(companyId, organizationId);
     expect(contacts.map((contact) => contact.id)).not.toContain(archiveId);
   });
 });

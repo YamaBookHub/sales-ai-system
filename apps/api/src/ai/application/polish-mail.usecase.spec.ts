@@ -15,6 +15,7 @@ describe('PolishMailUseCase', () => {
   };
   const email = {
     id: 'mail_1',
+    organizationId: 'org_1',
     leadId: 'lead_1',
     templateKey: 'normal',
     subject: '元の件名',
@@ -64,7 +65,7 @@ describe('PolishMailUseCase', () => {
     };
     const prisma = {
       outreachEmail: {
-        findUnique: jest.fn().mockResolvedValue(email)
+        findFirst: jest.fn().mockResolvedValue(email)
       },
       $transaction: jest.fn((callback) => callback(tx))
     };
@@ -79,7 +80,7 @@ describe('PolishMailUseCase', () => {
     const { prisma, aiClient, tx } = createDeps();
     const useCase = new PolishMailUseCase(prisma as any, aiClient as any);
 
-    const result = await useCase.execute(email.id, 'gpt-5.6-sol');
+    const result = await useCase.execute(email.id, 'gpt-5.6-sol', { userId: 'user_1', sessionId: 'session_1', organizationId: 'org_1' });
 
     expect(result.email.status).toBe('draft');
     expect(result.model).toBe('gpt-test');
@@ -89,9 +90,9 @@ describe('PolishMailUseCase', () => {
       appeal: email.analysisRevision.appeal,
       targetUser: email.analysisRevision.targetUser,
       videoIdea: email.analysisRevision.videoIdea
-    }), 'gpt-5.6-sol');
+    }), 'gpt-5.6-sol', 'org_1');
     expect(tx.outreachEmail.update).toHaveBeenCalledWith({
-      where: { id: email.id },
+      where: { organizationId_id: { organizationId: 'org_1', id: email.id } },
       data: expect.objectContaining({
         subject: draft.subject,
         body: draft.body,
@@ -116,7 +117,7 @@ describe('PolishMailUseCase', () => {
     const { prisma, aiClient, tx } = createDeps();
     aiClient.createSalesMailDraft.mockResolvedValue({ ...draft, model: 'gemini-3.1-flash-lite' });
 
-    await new PolishMailUseCase(prisma as any, aiClient as any).execute(email.id, 'gemini-3.1-flash-lite');
+    await new PolishMailUseCase(prisma as any, aiClient as any).execute(email.id, 'gemini-3.1-flash-lite', { userId: 'user_1', sessionId: 'session_1', organizationId: 'org_1' });
 
     expect(tx.aiGeneration.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
@@ -129,7 +130,7 @@ describe('PolishMailUseCase', () => {
 
   it('audits a polish with the authenticated session without mail text', async () => {
     const { prisma, aiClient, tx } = createDeps();
-    const actor = { userId: 'user_1', sessionId: 'session_1' };
+    const actor = { userId: 'user_1', sessionId: 'session_1', organizationId: 'org_1' };
 
     await new PolishMailUseCase(prisma as any, aiClient as any).execute(email.id, 'gpt-5.6-sol', actor);
 
@@ -147,16 +148,16 @@ describe('PolishMailUseCase', () => {
     aiClient.createSalesMailDraft.mockRejectedValue(new BadGatewayException('AI failed'));
     const useCase = new PolishMailUseCase(prisma as any, aiClient as any);
 
-    await expect(useCase.execute(email.id)).rejects.toThrow(BadGatewayException);
+    await expect(useCase.execute(email.id, undefined, { userId: 'user_1', sessionId: 'session_1', organizationId: 'org_1' })).rejects.toThrow(BadGatewayException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('rejects non-draft mail before calling AI', async () => {
     const { prisma, aiClient } = createDeps();
-    prisma.outreachEmail.findUnique.mockResolvedValue({ ...email, status: 'queued' });
+    prisma.outreachEmail.findFirst.mockResolvedValue({ ...email, status: 'queued' });
     const useCase = new PolishMailUseCase(prisma as any, aiClient as any);
 
-    await expect(useCase.execute(email.id)).rejects.toThrow(ConflictException);
+    await expect(useCase.execute(email.id, undefined, { userId: 'user_1', sessionId: 'session_1', organizationId: 'org_1' })).rejects.toThrow(ConflictException);
     expect(aiClient.createSalesMailDraft).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

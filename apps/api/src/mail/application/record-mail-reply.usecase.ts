@@ -13,23 +13,25 @@ const TERMINAL_CATEGORIES: ReplyCategory[] = ['unsubscribe', 'not_interested'];
 export class RecordMailReplyUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(emailId: string, dto: CreateMailReplyDto, actor: AuditActor | null = null) {
+  async execute(emailId: string, dto: CreateMailReplyDto, actor: AuditActor) {
+    const organizationId = actor.organizationId;
     const receivedAt = dto.receivedAt ? new Date(dto.receivedAt) : new Date();
     const classification = classifyReplyText(dto.body, receivedAt);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
         'SELECT pg_advisory_xact_lock(hashtext($1))',
-        `mail-reply:${emailId}:${dto.fromEmail || ''}:${dto.body.trim()}`
+        `mail-reply:${organizationId}:${emailId}:${dto.fromEmail || ''}:${dto.body.trim()}`
       );
-      const email = await tx.outreachEmail.findUnique({
-        where: { id: emailId },
+      const email = await tx.outreachEmail.findFirst({
+        where: { id: emailId, organizationId },
         select: { id: true, companyId: true, contactId: true, leadId: true }
       });
       if (!email) throw new NotFoundException('Mail not found');
 
       const recentDuplicate = await tx.emailReply.findFirst({
         where: {
+          organizationId,
           emailId,
           fromEmail: dto.fromEmail ?? null,
           bodyText: dto.body,
@@ -41,6 +43,7 @@ export class RecordMailReplyUseCase {
 
       const reply = await tx.emailReply.create({
         data: {
+          organizationId,
           emailId,
           fromEmail: dto.fromEmail,
           body: dto.body,
@@ -56,13 +59,14 @@ export class RecordMailReplyUseCase {
       if (classification.category === 'unsubscribe') {
         if (email.contactId) {
           await tx.contactPerson.update({
-            where: { id: email.contactId },
+            where: { organizationId_id: { organizationId, id: email.contactId } },
             data: { isUnsubscribed: true, unsubscribedAt: receivedAt, isPrimary: false }
           });
         } else if (dto.fromEmail) {
           await tx.contactPerson.updateMany({
             where: {
               companyId: email.companyId,
+              organizationId,
               email: { equals: dto.fromEmail, mode: 'insensitive' },
               deletedAt: null
             },
@@ -75,7 +79,7 @@ export class RecordMailReplyUseCase {
       if (email.leadId) {
         const stopFollowup = TERMINAL_CATEGORIES.includes(classification.category);
         await tx.salesLead.update({
-          where: { id: email.leadId },
+          where: { organizationId_id: { organizationId, id: email.leadId } },
           data: {
             status: classification.leadStatus,
             nextActionAt: classification.nextActionAt ?? null,
@@ -86,6 +90,7 @@ export class RecordMailReplyUseCase {
         if (classification.nextActionAt) {
           task = await tx.task.create({
             data: {
+              organizationId,
               leadId: email.leadId,
               title: replyTaskTitle(classification.category),
               description: `${classification.summary}\n${classification.nextAction}`,
@@ -98,6 +103,7 @@ export class RecordMailReplyUseCase {
         if (opportunityStage) {
           await progressOpportunityInTransaction(tx, {
             leadId: email.leadId,
+            organizationId,
             toStage: opportunityStage,
             sourceId: reply.id,
             operationKey: `mail-reply:${reply.id}`
@@ -107,6 +113,7 @@ export class RecordMailReplyUseCase {
 
       await tx.emailEvent.create({
         data: {
+          organizationId,
           emailId,
           type: 'replied',
           payload: {
@@ -114,7 +121,7 @@ export class RecordMailReplyUseCase {
             confidence: classification.confidence,
             nextActionAt: classification.nextActionAt?.toISOString() ?? null,
             taskId: task?.id ?? null,
-            ...(actor ? { actorUserId: actor.userId } : {})
+            actorUserId: actor.userId
           }
         }
       });

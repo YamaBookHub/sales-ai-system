@@ -15,12 +15,13 @@ export class AiClientService {
     private readonly openAiBudget: OpenAiBudgetService
   ) {}
 
-  async createSalesMailDraft(input: SalesMailDraftInput, requestedModel?: SelectableAiModel) {
+  async createSalesMailDraft(input: SalesMailDraftInput, requestedModel: SelectableAiModel | undefined, organizationId: string) {
     const model = resolveRequestedAiModel(requestedModel);
     if (isGeminiModel(model)) return this.gemini.createSalesMailDraft(input, model);
     this.openAi.assertConfigured();
     return this.openAiBudget.execute(
       {
+        organizationId,
         model,
         operation: 'sales_mail_polish',
         requestInput: input,
@@ -30,12 +31,13 @@ export class AiClientService {
     );
   }
 
-  async checkSemanticConsistency(input: SemanticConsistencyInput, requestedModel?: SelectableAiModel) {
+  async checkSemanticConsistency(input: SemanticConsistencyInput, requestedModel: SelectableAiModel | undefined, organizationId: string) {
     const model = resolveRequestedAiModel(requestedModel);
     if (isGeminiModel(model)) return this.gemini.checkSemanticConsistency(input, model);
     this.openAi.assertConfigured();
     return this.openAiBudget.execute(
       {
+        organizationId,
         model,
         operation: 'semantic_consistency',
         requestInput: input,
