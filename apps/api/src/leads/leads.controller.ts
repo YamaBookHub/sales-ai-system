@@ -2,6 +2,8 @@ import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common
 import { ok } from '../common/api-response';
 import { CreateLeadDto, ListLeadsQueryDto, UpdateLeadDto } from './leads.dto';
 import { LeadsService } from './leads.service';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { AuthenticatedPrincipal } from '../auth/auth.types';
 
 @Controller('leads')
 export class LeadsController {
@@ -28,8 +30,12 @@ export class LeadsController {
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() dto: UpdateLeadDto) {
-    return ok(await this.leads.update(id, dto));
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateLeadDto,
+    @CurrentUser() principal: AuthenticatedPrincipal
+  ) {
+    return ok(await this.leads.update(id, dto, principal.userId));
   }
 
   @Post(':id/score')

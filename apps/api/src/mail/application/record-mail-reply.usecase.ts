@@ -11,7 +11,7 @@ const TERMINAL_CATEGORIES: ReplyCategory[] = ['unsubscribe', 'not_interested'];
 export class RecordMailReplyUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(emailId: string, dto: CreateMailReplyDto) {
+  async execute(emailId: string, dto: CreateMailReplyDto, userId: string | null = null) {
     const receivedAt = dto.receivedAt ? new Date(dto.receivedAt) : new Date();
     const classification = classifyReplyText(dto.body, receivedAt);
 
@@ -111,7 +111,8 @@ export class RecordMailReplyUseCase {
             category: classification.category,
             confidence: classification.confidence,
             nextActionAt: classification.nextActionAt?.toISOString() ?? null,
-            taskId: task?.id ?? null
+            taskId: task?.id ?? null,
+            ...(userId ? { actorUserId: userId } : {})
           }
         }
       });

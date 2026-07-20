@@ -8,7 +8,7 @@ import { normalizeStructuredAnalysis, projectSourceFingerprint } from '../domain
 export class AnalyzeLeadUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(leadId: string) {
+  async execute(leadId: string, userId: string | null = null) {
     const lead = await this.prisma.salesLead.findUnique({
       where: { id: leadId },
       include: { company: true, project: { include: { platform: true } } }
@@ -55,6 +55,7 @@ export class AnalyzeLeadUseCase {
           leadId,
           projectId: currentLead.project.id,
           sourceGenerationId: aiGeneration.id,
+          changedById: userId,
           version: (latest?.version || 0) + 1,
           status: 'draft',
           origin: 'generated',

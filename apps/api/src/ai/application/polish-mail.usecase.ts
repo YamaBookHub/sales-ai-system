@@ -13,7 +13,7 @@ export class PolishMailUseCase {
     private readonly aiClient: AiClientService
   ) {}
 
-  async execute(mailId: string, model?: SelectableAiModel) {
+  async execute(mailId: string, model?: SelectableAiModel, userId: string | null = null) {
     const email = await this.prisma.outreachEmail.findUnique({
       where: { id: mailId },
       include: {
@@ -56,7 +56,7 @@ export class PolishMailUseCase {
           body: draft.body,
           status: 'draft',
           failedReason: null,
-          events: { create: { type: 'generated', payload: { source: `${provider}_polish`, model: draft.model } } }
+          events: { create: { type: 'generated', payload: { source: `${provider}_polish`, model: draft.model, ...(userId ? { actorUserId: userId } : {}) } } }
         }
       });
 

@@ -84,12 +84,12 @@ export class ContactsService {
     });
   }
 
-  async unsubscribe(id: string) {
+  async unsubscribe(id: string, userId?: string) {
     return this.prisma.$transaction(async (tx) => {
       const snapshot = await this.getActiveContact(tx, id);
       await this.lockCompanyContacts(tx, snapshot.companyId);
       await this.getActiveContact(tx, id);
-      return tx.contactPerson.update({
+      const contact = await tx.contactPerson.update({
         where: { id },
         data: {
           isUnsubscribed: true,
@@ -97,6 +97,19 @@ export class ContactsService {
           isPrimary: false
         }
       });
+      if (userId) {
+        await tx.auditLog.create({
+          data: {
+            userId,
+            action: 'contact.unsubscribed',
+            entityType: 'ContactPerson',
+            entityId: id,
+            before: { isUnsubscribed: false },
+            after: { isUnsubscribed: true, companyId: contact.companyId }
+          }
+        });
+      }
+      return contact;
     });
   }
 

@@ -2,15 +2,15 @@ openapi: 3.0.3
 info:
   title: Sales AI System API
   version: 1.0.0
+  description: Browser clients authenticate with an opaque server-side session cookie. Unsafe authenticated requests also require the X-CSRF-Token returned by GET /api/auth/me.
 servers:
   - url: http://localhost:3000
 security:
-  - bearerAuth: []
+  - cookieSession: []
 paths:
   /:
     get:
       summary: Local URL search dashboard HTML
-      security: []
       responses:
         '200':
           description: Dashboard HTML
@@ -20,7 +20,6 @@ paths:
   /leads-view:
     get:
       summary: Leads dashboard HTML
-      security: []
       responses:
         '200':
           description: Dashboard HTML
@@ -30,7 +29,6 @@ paths:
   /mail-workspace:
     get:
       summary: Mail workspace HTML
-      security: []
       responses:
         '200':
           description: Dashboard HTML
@@ -40,7 +38,6 @@ paths:
   /today:
     get:
       summary: Today dashboard HTML
-      security: []
       responses:
         '200':
           description: Dashboard HTML
@@ -50,7 +47,6 @@ paths:
   /sales-performance:
     get:
       summary: Sales performance dashboard HTML
-      security: []
       responses:
         '200':
           description: Dashboard HTML
@@ -60,13 +56,95 @@ paths:
   /replies:
     get:
       summary: Reply inbox dashboard HTML
-      security: []
       responses:
         '200':
           description: Dashboard HTML
           content:
             text/html:
               schema: { type: string }
+  /login:
+    get:
+      summary: Login page HTML
+      security: []
+      parameters:
+        - name: returnTo
+          in: query
+          schema: { type: string }
+        - name: error
+          in: query
+          schema:
+            type: string
+            enum: [not_authorized]
+      responses:
+        '200':
+          description: Login HTML
+          content:
+            text/html:
+              schema: { type: string }
+  /api/auth/google/start:
+    get:
+      summary: Start Google OAuth/OIDC authorization
+      security: []
+      parameters:
+        - name: returnTo
+          in: query
+          schema: { type: string }
+      responses:
+        '302':
+          description: Redirect to Google authorization
+  /api/auth/google/callback:
+    get:
+      summary: Complete Google OAuth/OIDC authorization and issue a session
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+      responses:
+        '302':
+          description: Session issued and redirected, or denied generically and redirected to login after clearing temporary OAuth state
+  /api/auth/local-login:
+    post:
+      summary: Issue a session for the fixed local development user
+      description: Available only in local mode from the configured loopback origin. The user cannot be selected in the request.
+      security: []
+      responses:
+        '201':
+          description: Local session issued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '403':
+          description: Local login is disabled or the origin is invalid
+  /api/auth/me:
+    get:
+      summary: Get the authenticated user and the in-memory CSRF token
+      responses:
+        '200':
+          description: Current authenticated user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthMeResponse' }
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+  /api/auth/logout:
+    post:
+      summary: Revoke the current session
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '201':
+          description: Session revoked and cookie cleared
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/CsrfRejected'
   /health:
     get:
       summary: Health check
@@ -152,6 +230,8 @@ paths:
               schema: { $ref: '#/components/schemas/ApiResponse' }
     post:
       summary: Create company
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -168,6 +248,7 @@ paths:
       summary: Block a company
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -196,6 +277,7 @@ paths:
       summary: Create a contact for a company
       parameters:
         - $ref: '#/components/parameters/CompanyId'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -214,6 +296,7 @@ paths:
       summary: Update an active contact
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -232,6 +315,7 @@ paths:
       summary: Archive an active contact
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: Archived contact
@@ -245,6 +329,7 @@ paths:
       summary: Mark an active contact as unsubscribed
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: Unsubscribed contact
@@ -270,6 +355,8 @@ paths:
               schema: { $ref: '#/components/schemas/ApiResponse' }
     post:
       summary: Create crowdfunding project
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -285,7 +372,7 @@ paths:
     post:
       summary: Import a CAMPFIRE project
       parameters:
-        - $ref: '#/components/parameters/OperatorEmail'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -301,7 +388,7 @@ paths:
     post:
       summary: Import a project from a supported source
       parameters:
-        - $ref: '#/components/parameters/OperatorEmail'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -317,7 +404,7 @@ paths:
     post:
       summary: Bulk import projects
       parameters:
-        - $ref: '#/components/parameters/OperatorEmail'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -356,6 +443,8 @@ paths:
   /api/projects/search/campfire:
     post:
       summary: Search CAMPFIRE project candidates
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -370,6 +459,8 @@ paths:
   /api/projects/search:
     post:
       summary: Search project candidates by source
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -384,6 +475,8 @@ paths:
   /api/projects/search-jobs:
     post:
       summary: Start an asynchronous project search job
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -411,6 +504,7 @@ paths:
       summary: Cancel a project search job
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: Search job response
@@ -469,6 +563,8 @@ paths:
                       data: { $ref: '#/components/schemas/LeadListData' }
     post:
       summary: Create a sales lead
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -530,6 +626,7 @@ paths:
       summary: Update opportunity details with optimistic locking
       parameters:
         - $ref: '#/components/parameters/LeadId'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -548,6 +645,7 @@ paths:
       summary: Transition an opportunity
       parameters:
         - $ref: '#/components/parameters/LeadId'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -568,6 +666,7 @@ paths:
       summary: Reopen a lost or excluded opportunity
       parameters:
         - $ref: '#/components/parameters/LeadId'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -621,6 +720,7 @@ paths:
       summary: Update a sales lead
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -637,6 +737,7 @@ paths:
       summary: Recalculate lead score
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: Score response
@@ -664,6 +765,7 @@ paths:
       summary: Create a task for a lead
       parameters:
         - $ref: '#/components/parameters/LeadId'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -680,6 +782,7 @@ paths:
       summary: Update a task
       parameters:
         - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -718,6 +821,8 @@ paths:
   /api/mails/draft:
     post:
       summary: Create a mail draft
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -744,6 +849,8 @@ paths:
               schema: { $ref: '#/components/schemas/ApiResponse' }
     post:
       summary: Save or update a mail template
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -769,6 +876,8 @@ paths:
   /api/mails/templates/import:
     post:
       summary: Import mail templates
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -785,6 +894,7 @@ paths:
       summary: Update mail subject or body
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -822,6 +932,7 @@ paths:
       summary: Update mail checklist
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -838,6 +949,7 @@ paths:
       summary: Request mail review
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: Mail response
@@ -849,6 +961,7 @@ paths:
       summary: Request mail re-review
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: Mail response
@@ -860,6 +973,7 @@ paths:
       summary: Approve a mail
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: Mail response
@@ -871,6 +985,7 @@ paths:
       summary: Reject a mail
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -887,6 +1002,7 @@ paths:
       summary: Queue an approved mail
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: Mail response
@@ -898,6 +1014,7 @@ paths:
       summary: Mark a mail as sent after manual recovery
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -914,6 +1031,7 @@ paths:
       summary: Send a queued mail through the configured provider
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: Mail response
@@ -925,6 +1043,7 @@ paths:
       summary: Record a reply for a mail
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -941,6 +1060,7 @@ paths:
       summary: Retry a mail workflow
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: Mail response
@@ -952,6 +1072,7 @@ paths:
       summary: Cancel a mail
       parameters:
         - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: Mail response
@@ -1022,6 +1143,7 @@ paths:
       summary: Generate a mail draft for a lead
       parameters:
         - $ref: '#/components/parameters/LeadId'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -1040,6 +1162,7 @@ paths:
       summary: Generate a mail draft alias for a lead
       parameters:
         - $ref: '#/components/parameters/LeadId'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -1074,6 +1197,7 @@ paths:
       summary: Save a structured lead analysis draft revision
       parameters:
         - $ref: '#/components/parameters/LeadId'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -1098,6 +1222,7 @@ paths:
       summary: Confirm a structured lead analysis revision
       parameters:
         - $ref: '#/components/parameters/LeadId'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -1122,6 +1247,7 @@ paths:
       summary: Analyze a lead
       parameters:
         - $ref: '#/components/parameters/LeadId'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: AI response
@@ -1133,6 +1259,7 @@ paths:
       summary: Polish a mail
       parameters:
         - $ref: '#/components/parameters/MailId'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: AI response
@@ -1146,6 +1273,7 @@ paths:
       summary: Check mail semantic consistency
       parameters:
         - $ref: '#/components/parameters/MailId'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: AI response
@@ -1170,6 +1298,7 @@ paths:
       summary: Classify a reply
       parameters:
         - $ref: '#/components/parameters/ReplyId'
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '201':
           description: AI response
@@ -1191,6 +1320,8 @@ paths:
   /api/t/links:
     post:
       summary: Create a tracked link
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -1228,6 +1359,8 @@ paths:
   /api/unsubscribe:
     post:
       summary: Mark a contact or email as unsubscribed
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -1241,10 +1374,22 @@ paths:
               schema: { $ref: '#/components/schemas/ApiResponse' }
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: sales_ai_session
+      description: Opaque server-managed session. Production uses the __Host-sales_ai_session cookie name.
+  responses:
+    AuthenticationRequired:
+      description: Authentication is required or the session is no longer valid
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiResponse' }
+    CsrfRejected:
+      description: Origin or CSRF token validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiResponse' }
   parameters:
     Page:
       name: page
@@ -1316,11 +1461,12 @@ components:
       in: path
       required: true
       schema: { type: string }
-    OperatorEmail:
-      name: x-operator-email
+    CsrfToken:
+      name: X-CSRF-Token
       in: header
-      required: false
-      schema: { type: string, format: email }
+      required: true
+      description: Required on every unsafe authenticated request. Obtain it from GET /api/auth/me and keep it in memory only.
+      schema: { type: string }
   schemas:
     ApiResponse:
       type: object
@@ -1331,6 +1477,29 @@ components:
           type: object
           nullable: true
           additionalProperties: true
+        error:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ErrorResponse'
+    AuthMeResponse:
+      type: object
+      required: [data, meta, error]
+      properties:
+        data:
+          type: object
+          required: [user, csrfToken, absoluteExpiresAt]
+          properties:
+            user:
+              type: object
+              required: [id, email, role]
+              properties:
+                id: { type: string, format: uuid }
+                email: { type: string, format: email }
+                role: { type: string, enum: [admin, manager, operator, viewer] }
+            csrfToken: { type: string }
+            absoluteExpiresAt: { type: string, format: date-time }
+        meta:
+          nullable: true
         error:
           nullable: true
           allOf:

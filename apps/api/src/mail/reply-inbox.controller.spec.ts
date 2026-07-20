@@ -14,7 +14,7 @@ describe('ReplyInboxController', () => {
       error: null
     });
     expect(useCase.execute).toHaveBeenCalledWith(query);
-    expect(Reflect.getMetadata(PATH_METADATA, ReplyInboxController)).toBe('replies');
+    expect(Reflect.getMetadata(PATH_METADATA, ReplyInboxController)).toBe('api/replies');
     expect(Reflect.getMetadata(PATH_METADATA, ReplyInboxController.prototype.list)).toBe('/');
     expect(Reflect.getMetadata(METHOD_METADATA, ReplyInboxController.prototype.list)).toBe(RequestMethod.GET);
   });

@@ -2,7 +2,7 @@
 
 ## 1. 現在の位置づけ
 
-この文書は現行コードの安全境界を記載する。DBに将来用のroleやblockフラグがあることだけを理由に、認証・RBAC・送信制御が実装済みとは扱わない。
+この文書は現行コードの安全境界を記載する。認証は実装済みだが、role別RBACと組織分離は未完成であるため、認証だけで外部公開可能とは扱わない。
 
 ## 2. 実装済みの安全境界
 
@@ -43,37 +43,44 @@
 
 ## 3. 認証・権限の実装状況
 
-認証方式、画面/APIの保護範囲、Googleログイン、local開発、session、CSRF、`X-Operator-Email` 廃止順は `37_AUTHENTICATION_CONTRACT.md` で設計済みである。現時点では設計のみで、実装済みとは扱わない。
+認証方式、画面/APIの保護範囲、Googleログイン、local開発、session、CSRFは `37_AUTHENTICATION_CONTRACT.md` に従って実装済みである。
 
 ### DBに定義済み
 
 `UserRole` enumは `admin`、`manager`、`operator`、`viewer` を持ち、`User.role`、`User.isActive`、`AuditLog.userId` を保存できる。
 
+### 実装済み
+
+- opaque session Cookieによるログイン/logoutとcurrent user確定
+- Google OAuth/OIDC Authorization Code + PKCEと事前登録active user限定
+- loopback専用の固定local user login
+- default denyのauthentication guard、inactive user拒否、Origin/CSRF検証
+- `X-Operator-Email` と利用者の自動作成・再有効化の廃止
+- import、分析、メールworkflow、商談、配信停止等への認証済みactor伝播
+
 ### 未実装
 
-- ログイン、logout、session/JWT、GoogleユーザーOAuth、current userの確定
-- authentication guard、routeごとの認可guard、inactive userの拒否
-- `admin` / `manager` / `operator` / `viewer` によるRBAC enforcement
-- actorを認証済みuserから取得する監査境界
+- `admin` / `manager` / `operator` / `viewer` による全routeのRBAC enforcement
+- すべての重要操作の完全なAuditLog
+- 組織ごとのデータ分離
 
-したがって、role enumの存在だけで「RBAC実装済み」と書かない。現行APIには内部操作を識別するためのheaderを受け取るrouteがあるが、これは認証の代替ではない。
+したがって、role enumと認証の存在だけで「RBAC・複数組織対応済み」と書かない。
 
-現行 `POST /api/unsubscribe` はemailまたはcontact IDだけで状態を変更できるため、認証導入時は保護対象にする。受信者向け公開配信停止は、対象と期限を署名したtokenを必要とする別routeを設計するまで公開しない。
+現行 `POST /api/unsubscribe` は認証・CSRF必須であり、社内の手動配信停止にだけ使用する。受信者向け公開配信停止は、対象と期限を署名したtokenを必要とする別routeを設計するまで公開しない。
 
 ## 4. 監査と個人情報
 
 - `AuditLog` modelと、project import・seedなど一部操作の記録は実装済み。
-- すべてのimport、分析、生成、編集、review、承認、queue、send、unsubscribe、user/role変更を認証userに紐づけて監査する仕組みは未実装。
+- import、分析、生成、編集、review、承認、queue、send記録、unsubscribe、商談操作のactor伝播または監査は実装済み。user/role変更を含む全操作監査はLA-004で完成させる。
 - `EmailEvent` はメールworkflowと追跡イベントの履歴に使う。これだけで全操作の監査を満たすとは扱わない。
 - IPはschema上 `ipHash` で保存できる。平文IPの保存、保管期間、User-Agent、メール本文とAI入力の扱いは運用・法務確認が必要である。
 - AIは実績、数値、制度、日付、社名、成果保証を創作しない。未知の情報は未知として扱う。
 
 ## 5. 未実装・将来要件
 
-- JWT/sessionまたはGoogleユーザーOAuthによる認証
-- RBACとcurrent userを利用した全API保護
+- role別RBAC
 - 認証userと拒否操作を結びつける完全なAuditLog
 - worker、Redis、scheduler、DLQ、rate limit、外部providerの真の冪等性
-- 重要操作の完全なAuditLog、監視、secret rotation、CSRF/CORS等の本番hardening
+- 重要操作の完全なAuditLog、監視、運用上のsecret rotation、本番hardening
 
 本番で実送信を有効化する場合は、少なくとも認証・RBAC、完全な操作監査、rate limit、provider障害時の運用手順を別途完了させる。

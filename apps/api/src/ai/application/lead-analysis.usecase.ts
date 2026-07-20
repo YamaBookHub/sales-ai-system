@@ -39,15 +39,15 @@ export class LeadAnalysisUseCase {
     return buildAnalysisView(lead.project, history, latestConfirmed);
   }
 
-  save(leadId: string, dto: UpdateLeadAnalysisDto) {
-    return this.append(leadId, dto, false);
+  save(leadId: string, dto: UpdateLeadAnalysisDto, userId: string | null = null) {
+    return this.append(leadId, dto, false, userId);
   }
 
-  confirm(leadId: string, dto: UpdateLeadAnalysisDto) {
-    return this.append(leadId, dto, true);
+  confirm(leadId: string, dto: UpdateLeadAnalysisDto, userId: string | null = null) {
+    return this.append(leadId, dto, true, userId);
   }
 
-  private async append(leadId: string, dto: UpdateLeadAnalysisDto, confirm: boolean) {
+  private async append(leadId: string, dto: UpdateLeadAnalysisDto, confirm: boolean, userId: string | null) {
     await this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `lead-analysis:${leadId}`);
       const lead = await tx.salesLead.findUnique({ where: { id: leadId }, include: { project: true } });
@@ -81,6 +81,7 @@ export class LeadAnalysisUseCase {
           leadId,
           projectId: lead.project.id,
           sourceGenerationId: keepsGeneration ? latest?.sourceGenerationId : null,
+          changedById: userId,
           version: currentVersion + 1,
           status: confirm ? 'confirmed' : 'draft',
           origin: 'manual',

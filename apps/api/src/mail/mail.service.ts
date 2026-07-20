@@ -96,13 +96,16 @@ export class MailService {
     };
   }
 
-  async createDraft(dto: CreateMailDraftDto) {
+  async createDraft(dto: CreateMailDraftDto, userId: string | null = null) {
     const manualInstruction = dto.manualInstruction;
     if (!manualInstruction || !manualInstruction.trim()) {
-      const result = await this.generateMailDraft.execute(dto.leadId, {
+      const generationInput = {
         templateKey: dto.templateKey,
         analysisRevisionId: dto.analysisRevisionId
-      });
+      };
+      const result = userId
+        ? await this.generateMailDraft.execute(dto.leadId, generationInput, userId)
+        : await this.generateMailDraft.execute(dto.leadId, generationInput);
 
       return result.email;
     }
@@ -165,7 +168,7 @@ export class MailService {
           subject: `${projectPlatformLabel(currentLead.project)}でのプロジェクトを拝見しご連絡いたしました`,
           body: manualInstruction,
           status: 'draft',
-          events: { create: { type: 'created' } }
+          events: { create: { type: 'created', payload: userId ? { actorUserId: userId } : undefined } }
         }
       });
 
@@ -178,56 +181,62 @@ export class MailService {
     });
   }
 
-  update(id: string, dto: UpdateMailDto) {
-    return this.prisma.outreachEmail.update({ where: { id }, data: dto });
+  update(id: string, dto: UpdateMailDto, userId: string | null = null) {
+    return this.prisma.outreachEmail.update({
+      where: { id },
+      data: {
+        ...dto,
+        events: { create: { type: 'reviewed', payload: { edited: true, ...(userId ? { actorUserId: userId } : {}) } } }
+      }
+    });
   }
 
-  requestReview(id: string) {
-    return this.requestMailReview.execute(id);
+  requestReview(id: string, userId: string | null = null) {
+    return this.requestMailReview.execute(id, userId);
   }
 
   checkDraftConsistency(id: string) {
     return this.checkMailDraftConsistency.execute(id);
   }
 
-  requestReReview(id: string) {
-    return this.requestMailReReview.execute(id);
+  requestReReview(id: string, userId: string | null = null) {
+    return this.requestMailReReview.execute(id, userId);
   }
 
-  approve(id: string) {
-    return this.approveMail.execute(id);
+  approve(id: string, userId: string | null = null) {
+    return this.approveMail.execute(id, userId);
   }
 
-  reject(id: string, dto: RejectMailDto) {
-    return this.rejectMail.execute(id, dto);
+  reject(id: string, dto: RejectMailDto, userId: string | null = null) {
+    return this.rejectMail.execute(id, dto, userId);
   }
 
-  queue(id: string) {
-    return this.queueMail.execute(id);
+  queue(id: string, userId: string | null = null) {
+    return this.queueMail.execute(id, userId);
   }
 
-  markSent(id: string, dto: MarkMailSentDto) {
-    return this.markMailSent.execute(id, dto);
+  markSent(id: string, dto: MarkMailSentDto, userId: string | null = null) {
+    return this.markMailSent.execute(id, dto, userId);
   }
 
-  sendQueued(id: string) {
-    return this.sendQueuedMail.execute(id);
+  sendQueued(id: string, userId: string) {
+    return this.sendQueuedMail.execute(id, userId);
   }
 
-  async recordReply(id: string, dto: CreateMailReplyDto) {
-    return this.recordMailReply.execute(id, dto);
+  async recordReply(id: string, dto: CreateMailReplyDto, userId: string | null = null) {
+    return userId ? this.recordMailReply.execute(id, dto, userId) : this.recordMailReply.execute(id, dto);
   }
 
-  retry(id: string) {
-    return this.retryMail.execute(id);
+  retry(id: string, userId: string | null = null) {
+    return this.retryMail.execute(id, userId);
   }
 
-  cancel(id: string) {
+  cancel(id: string, userId: string | null = null) {
     return this.prisma.outreachEmail.update({
       where: { id },
       data: {
         status: 'cancelled',
-        events: { create: { type: 'cancelled' } }
+        events: { create: { type: 'cancelled', payload: userId ? { actorUserId: userId } : undefined } }
       }
     });
   }
@@ -246,7 +255,7 @@ export class MailService {
     };
   }
 
-  async updateChecklist(emailId: string, dto: UpdateMailChecklistDto) {
+  async updateChecklist(emailId: string, dto: UpdateMailChecklistDto, userId: string | null = null) {
     await this.get(emailId);
     const now = new Date();
     const items = dto.items.length ? dto.items : DEFAULT_CHECKLIST_ITEMS.map((item) => ({ ...item, checked: false }));
@@ -278,7 +287,8 @@ export class MailService {
             checklistUpdated: true,
             complete: items.every((item) => item.checked),
             checkedCount: items.filter((item) => item.checked).length,
-            totalCount: items.length
+            totalCount: items.length,
+            ...(userId ? { actorUserId: userId } : {})
           }
         }
       });

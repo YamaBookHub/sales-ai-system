@@ -6,8 +6,7 @@ import {
   TransitionOpportunityDto,
   UpdateOpportunityDto
 } from '../opportunities.dto';
-
-const LOCAL_MANAGER = { userId: null, role: 'manager' as const };
+import { AuthenticatedPrincipal } from '../../auth/auth.types';
 
 @Injectable()
 export class ListOpportunitiesUseCase {
@@ -28,24 +27,24 @@ export class GetOpportunityUseCase {
 @Injectable()
 export class UpdateOpportunityUseCase {
   constructor(private readonly opportunities: PrismaOpportunityRepository) {}
-  execute(leadId: string, input: UpdateOpportunityDto) {
-    return this.opportunities.updateDetails(leadId, input, LOCAL_MANAGER);
+  execute(leadId: string, input: UpdateOpportunityDto, principal: AuthenticatedPrincipal) {
+    return this.opportunities.updateDetails(leadId, input, principal);
   }
 }
 
 @Injectable()
 export class TransitionOpportunityUseCase {
   constructor(private readonly opportunities: PrismaOpportunityRepository) {}
-  execute(leadId: string, input: TransitionOpportunityDto) {
-    return this.opportunities.transition(leadId, input, LOCAL_MANAGER);
+  execute(leadId: string, input: TransitionOpportunityDto, principal: AuthenticatedPrincipal) {
+    return this.opportunities.transition(leadId, input, principal);
   }
 }
 
 @Injectable()
 export class ReopenOpportunityUseCase {
   constructor(private readonly opportunities: PrismaOpportunityRepository) {}
-  execute(leadId: string, input: ReopenOpportunityDto) {
-    return this.opportunities.reopen(leadId, input, LOCAL_MANAGER);
+  execute(leadId: string, input: ReopenOpportunityDto, principal: AuthenticatedPrincipal) {
+    return this.opportunities.reopen(leadId, input, principal);
   }
 }
 

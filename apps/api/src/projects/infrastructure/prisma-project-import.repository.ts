@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ensureOpportunityForLead } from '../../leads/infrastructure/prisma-opportunity.repository';
-import { ProjectActor } from '../domain/project-actor';
 import {
   normalizeImportedCompanyName,
   normalizeSearchUrl,
@@ -11,7 +10,6 @@ import { NormalizedImportedProject } from '../domain/project-source-provider';
 
 export type ProjectImportPersistenceOptions = {
   bulk?: boolean;
-  actor?: ProjectActor;
   userId?: string | null;
 };
 
@@ -34,17 +32,6 @@ export class PrismaProjectImportRepository {
       select: { url: true }
     });
     return new Set(projects.map((project) => normalizeSearchUrl(project.url)));
-  }
-
-  async resolveActorUserId(actor?: ProjectActor) {
-    const email = actor?.operatorEmail?.trim().toLowerCase();
-    if (!email) return null;
-    const user = await this.prisma.user.upsert({
-      where: { email },
-      update: { isActive: true },
-      create: { email, name: actor?.operatorName || email, role: 'operator' }
-    });
-    return user.id;
   }
 
   async persistImportedProject(imported: NormalizedImportedProject, options: ProjectImportPersistenceOptions = {}) {

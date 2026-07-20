@@ -65,22 +65,6 @@ describe('PrismaProjectImportRepository', () => {
     expect(urls.has('https://camp-fire.jp/projects/other/view')).toBe(true);
   });
 
-  it('resolves operator email to an active user', async () => {
-    const prisma = {
-      user: {
-        upsert: jest.fn().mockResolvedValue({ id: 'user-1' })
-      }
-    };
-    const repository = new PrismaProjectImportRepository(prisma as any);
-
-    await expect(repository.resolveActorUserId({ operatorEmail: ' USER@example.COM ', operatorName: 'User' })).resolves.toBe('user-1');
-    expect(prisma.user.upsert).toHaveBeenCalledWith({
-      where: { email: 'user@example.com' },
-      update: { isActive: true },
-      create: { email: 'user@example.com', name: 'User', role: 'operator' }
-    });
-  });
-
   it('persists imported project while preserving existing lead contact fields', async () => {
     const tx = {
       $executeRawUnsafe: jest.fn(),

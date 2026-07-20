@@ -154,7 +154,7 @@ ${renderNavigationBadgesScript()}
     }
 
     async function api(path, options = {}) {
-      return window.SalesAiApi.request(path, options, { includeOperatorEmail: true });
+      return window.SalesAiApi.request(path, options);
     }
 
     function setStatus(id, message, type = '') {

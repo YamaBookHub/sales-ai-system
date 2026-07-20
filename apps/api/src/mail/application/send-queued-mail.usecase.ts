@@ -11,7 +11,7 @@ export class SendQueuedMailUseCase {
     private readonly sender: MailSender
   ) {}
 
-  async execute(id: string) {
+  async execute(id: string, userId: string) {
     const email = await this.mails.get(id);
     const checklistComplete = await this.mails.checklistComplete(id);
     assertCanSendQueued(email.status, checklistComplete);
@@ -19,15 +19,15 @@ export class SendQueuedMailUseCase {
     const idempotencyKey = buildMailSendIdempotencyKey(email);
     const request = buildMailSendRequest(email, idempotencyKey);
     this.sender.validate?.(request);
-    const claimedEmail = await this.mails.claimForSending(id, idempotencyKey);
+    const claimedEmail = await this.mails.claimForSending(id, idempotencyKey, userId);
 
     try {
       // A contact can be unsubscribed after queueing; check once more immediately before the provider call.
       await this.mails.assertDeliveryAllowed(id);
       const result = await this.sender.send(buildMailSendRequest(claimedEmail, idempotencyKey));
-      return this.mails.markSentAfterSend(id, result, idempotencyKey);
+      return this.mails.markSentAfterSend(id, result, idempotencyKey, userId);
     } catch (error) {
-      await this.mails.markFailedAfterSend(id, error, idempotencyKey);
+      await this.mails.markFailedAfterSend(id, error, idempotencyKey, userId);
       throw error;
     }
   }

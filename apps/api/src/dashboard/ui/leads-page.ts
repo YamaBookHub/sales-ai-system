@@ -5,7 +5,7 @@ export function renderLeadsPage() {
     const state = { leads: [], mails: [], aiGenerations: [], structuredAnalysis: null, structuredAnalysisLoading: false, tasks: [], assignees: [], companyContacts: [], contactsCompanyId: null, selectedContactId: null, contactsLoading: false, selectedLeadId: null, selectedLeadRecord: null, editingTaskId: null, listPage: 1, pageSize: 20, leadListMeta: { page: 1, limit: 20, total: 0, summary: { total: 0, noContact: 0, draft: 0, review: 0, queued: 0 } }, leadListRequestId: 0, leadFilterTimerId: null, summaryFilter: 'all', sort: { table: 'lead', key: 'createdAt', direction: 'desc' }, opportunitiesByLeadId: {}, opportunity: null, opportunityHistory: [], opportunityLoading: false, opportunityError: '', opportunityNotice: null, opportunityRequestId: 0 };
 
     async function api(path, options = {}) {
-      return window.SalesAiApi.request(path, options, { includeOperatorEmail: true });
+      return window.SalesAiApi.request(path, options);
     }
 
     async function loadAll() {

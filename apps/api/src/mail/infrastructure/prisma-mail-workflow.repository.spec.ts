@@ -27,7 +27,7 @@ describe('PrismaMailWorkflowRepository', () => {
     };
     const repository = new PrismaMailWorkflowRepository(prisma as any);
 
-    await expect(repository.claimForSending('mail_1', 'key_1')).resolves.toEqual({ id: 'mail_1', status: 'sending' });
+    await expect(repository.claimForSending('mail_1', 'key_1', 'user_1')).resolves.toEqual({ id: 'mail_1', status: 'sending' });
     expect(tx.outreachEmail.updateMany).toHaveBeenCalledWith({
       where: { id: 'mail_1', status: 'queued' },
       data: {
@@ -53,7 +53,7 @@ describe('PrismaMailWorkflowRepository', () => {
       data: {
         emailId: 'mail_1',
         type: 'sending',
-        payload: { idempotencyKey: 'key_1' }
+        payload: { idempotencyKey: 'key_1', actorUserId: 'user_1' }
       }
     });
   });
@@ -83,9 +83,75 @@ describe('PrismaMailWorkflowRepository', () => {
     };
     const repository = new PrismaMailWorkflowRepository(prisma as any);
 
-    await expect(repository.claimForSending('mail_1', 'key_1')).rejects.toThrow(ConflictException);
+    await expect(repository.claimForSending('mail_1', 'key_1', 'user_1')).rejects.toThrow(ConflictException);
     expect(tx.outreachEmail.findUniqueOrThrow).not.toHaveBeenCalled();
     expect(tx.emailEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('records the actor on successful and failed send events', async () => {
+    const tx = {
+      outreachEmail: {
+        findUnique: jest.fn().mockResolvedValue({ status: 'sending' }),
+        update: jest.fn()
+          .mockResolvedValueOnce({ id: 'mail_1', leadId: null })
+          .mockResolvedValueOnce({ id: 'mail_1', leadId: null })
+      },
+      salesLead: { update: jest.fn() }
+    };
+    const prisma = {
+      $transaction: jest.fn((callback) => callback(tx))
+    };
+    const repository = new PrismaMailWorkflowRepository(prisma as any);
+    const sentAt = new Date('2026-07-11T00:00:00.000Z');
+
+    await repository.markSentAfterSend(
+      'mail_1',
+      { provider: 'test', messageId: 'message_1', threadId: 'thread_1', sentAt },
+      'key_1',
+      'user_1'
+    );
+    await repository.markFailedAfterSend('mail_1', new Error('provider unavailable'), 'key_2', 'user_1');
+
+    expect(tx.outreachEmail.update).toHaveBeenNthCalledWith(1, {
+      where: { id: 'mail_1' },
+      data: {
+        status: 'sent',
+        provider: 'test',
+        gmailMessageId: 'message_1',
+        gmailThreadId: 'thread_1',
+        sentAt,
+        failedReason: null,
+        events: {
+          create: {
+            type: 'sent',
+            payload: {
+              idempotencyKey: 'key_1',
+              provider: 'test',
+              messageId: 'message_1',
+              threadId: 'thread_1',
+              actorUserId: 'user_1'
+            }
+          }
+        }
+      }
+    });
+    expect(tx.outreachEmail.update).toHaveBeenNthCalledWith(2, {
+      where: { id: 'mail_1' },
+      data: {
+        status: 'failed',
+        failedReason: 'provider unavailable',
+        events: {
+          create: {
+            type: 'failed',
+            payload: {
+              idempotencyKey: 'key_2',
+              failedReason: 'provider unavailable',
+              actorUserId: 'user_1'
+            }
+          }
+        }
+      }
+    });
   });
 
   it('rejects a legacy email when its matching address is unsubscribed', async () => {

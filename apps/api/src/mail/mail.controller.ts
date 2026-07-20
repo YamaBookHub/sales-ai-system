@@ -12,6 +12,8 @@ import {
   UpdateMailDto
 } from './mail.dto';
 import { MailService } from './mail.service';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { AuthenticatedPrincipal } from '../auth/auth.types';
 
 @Controller('mails')
 export class MailController {
@@ -23,8 +25,8 @@ export class MailController {
   }
 
   @Post('draft')
-  async createDraft(@Body() dto: CreateMailDraftDto) {
-    return ok(await this.mail.createDraft(dto));
+  async createDraft(@Body() dto: CreateMailDraftDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.createDraft(dto, principal.userId));
   }
 
   @Get('templates')
@@ -48,8 +50,8 @@ export class MailController {
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() dto: UpdateMailDto) {
-    return ok(await this.mail.update(id, dto));
+  async update(@Param('id') id: string, @Body() dto: UpdateMailDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.update(id, dto, principal.userId));
   }
 
   @Get(':id/consistency')
@@ -63,58 +65,58 @@ export class MailController {
   }
 
   @Patch(':id/checklist')
-  async updateChecklist(@Param('id') id: string, @Body() dto: UpdateMailChecklistDto) {
-    return ok(await this.mail.updateChecklist(id, dto));
+  async updateChecklist(@Param('id') id: string, @Body() dto: UpdateMailChecklistDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.updateChecklist(id, dto, principal.userId));
   }
 
   @Post(':id/request-review')
-  async requestReview(@Param('id') id: string) {
-    return ok(await this.mail.requestReview(id));
+  async requestReview(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.requestReview(id, principal.userId));
   }
 
   @Post(':id/request-rereview')
-  async requestReReview(@Param('id') id: string) {
-    return ok(await this.mail.requestReReview(id));
+  async requestReReview(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.requestReReview(id, principal.userId));
   }
 
   @Post(':id/approve')
-  async approve(@Param('id') id: string) {
-    return ok(await this.mail.approve(id));
+  async approve(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.approve(id, principal.userId));
   }
 
   @Post(':id/reject')
-  async reject(@Param('id') id: string, @Body() dto: RejectMailDto) {
-    return ok(await this.mail.reject(id, dto));
+  async reject(@Param('id') id: string, @Body() dto: RejectMailDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.reject(id, dto, principal.userId));
   }
 
   @Post(':id/queue')
-  async queue(@Param('id') id: string) {
-    return ok(await this.mail.queue(id));
+  async queue(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.queue(id, principal.userId));
   }
 
   @Post(':id/mark-sent')
-  async markSent(@Param('id') id: string, @Body() dto: MarkMailSentDto) {
-    return ok(await this.mail.markSent(id, dto));
+  async markSent(@Param('id') id: string, @Body() dto: MarkMailSentDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.markSent(id, dto, principal.userId));
   }
 
   @Post(':id/send')
-  async sendQueued(@Param('id') id: string) {
-    return ok(await this.mail.sendQueued(id));
+  async sendQueued(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.sendQueued(id, principal.userId));
   }
 
   @Post(':id/replies')
-  async recordReply(@Param('id') id: string, @Body() dto: CreateMailReplyDto) {
-    return ok(await this.mail.recordReply(id, dto));
+  async recordReply(@Param('id') id: string, @Body() dto: CreateMailReplyDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.recordReply(id, dto, principal.userId));
   }
 
   @Post(':id/retry')
-  async retry(@Param('id') id: string) {
-    return ok(await this.mail.retry(id));
+  async retry(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.retry(id, principal.userId));
   }
 
   @Post(':id/cancel')
-  async cancel(@Param('id') id: string) {
-    return ok(await this.mail.cancel(id));
+  async cancel(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.mail.cancel(id, principal.userId));
   }
 
   @Get('threads/:gmailThreadId')

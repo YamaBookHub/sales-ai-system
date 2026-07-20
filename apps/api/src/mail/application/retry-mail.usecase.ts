@@ -6,14 +6,13 @@ import { PrismaMailWorkflowRepository } from '../infrastructure/prisma-mail-work
 export class RetryMailUseCase {
   constructor(private readonly mails: PrismaMailWorkflowRepository) {}
 
-  async execute(id: string) {
+  async execute(id: string, userId: string | null = null) {
     const email = await this.mails.get(id);
     assertCanRetry(email.status);
-    return this.mails.transitionIfDeliveryAllowed(
-      id,
-      'queued',
-      'retried',
-      { retryCount: { increment: 1 } }
-    );
+    return userId
+      ? this.mails.transitionIfDeliveryAllowed(
+        id, 'queued', 'retried', { retryCount: { increment: 1 } }, undefined, userId
+      )
+      : this.mails.transitionIfDeliveryAllowed(id, 'queued', 'retried', { retryCount: { increment: 1 } });
   }
 }

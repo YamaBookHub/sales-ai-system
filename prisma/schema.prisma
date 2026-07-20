@@ -162,14 +162,15 @@ enum AttachmentType {
 }
 
 model User {
-  id        String    @id @default(uuid()) @db.Uuid
-  email     String    @unique
-  name      String?
-  role      UserRole  @default(operator)
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique
+  googleSubject String?   @unique
+  name          String?
+  role          UserRole  @default(operator)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
   audits                  AuditLog[]
   tasks                   Task[]
@@ -177,8 +178,30 @@ model User {
   ownedOpportunities      Opportunity[]             @relation("OpportunityOwner")
   opportunityStageChanges OpportunityStageHistory[] @relation("OpportunityStageChanger")
   leadAnalysisChanges     LeadAnalysisRevision[]    @relation("LeadAnalysisChanger")
+  sessions                UserSession[]
 
   @@index([role, isActive])
+}
+
+model UserSession {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  tokenHash     String    @unique
+  csrfTokenHash String
+  absoluteExpiresAt DateTime
+  idleExpiresAt DateTime
+  lastSeenAt    DateTime  @default(now())
+  revokedAt     DateTime?
+  ipHash        String?
+  userAgentHash String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([absoluteExpiresAt])
+  @@index([idleExpiresAt])
 }
 
 model CrowdfundingPlatform {

@@ -51,7 +51,7 @@ Baseline:
 | 26 | SM-001 | P1 | complete | Terra T3 + Sol audit | SO-005, LL-001 | 2026-07-19 / JST期間・担当者・取得元filter、送信4指標・失注理由、97 suites 393 tests・実DB9 suites 32 tests・verify成功 | 営業成績 |
 | 27 | LA-001 | P1 | deferred | Sol T4 | LL-004 | - | 本番送信を再優先化するまで後回し |
 | 28 | LA-002 | 公開前 | complete | Sol T4 | LR-002 | 2026-07-19 / session・Google OAuth・local/test・保護範囲・CSRF・header廃止・rollback契約 | 認証設計 |
-| 29 | LA-003 | 公開前 | pending | Terra T3 + Sol audit | LA-002 | - | 認証実装 |
+| 29 | LA-003 | 公開前 | complete | Terra T3 + Sol audit | LA-002 | 2026-07-19 / Cookie session・Google OIDC・local/test session・CSRF・actor固定、OpenAPI 90 operations、107 suites 422 tests・Prisma・build成功 | 認証実装 |
 | 30 | LA-004 | 公開前 | pending | Sol T4 | LA-003 | - | 単一組織内のRBAC・監査 |
 | 31 | LA-007 | 公開前 | pending | Sol T4 -> Terra | LA-004 | - | 組織ごとのデータ分離 |
 | 32 | LA-005 | 公開前 | pending | Sol T4 -> Terra | LA-003, LS-006 | - | job所有者・永続化 |
@@ -117,3 +117,5 @@ Baseline:
 | 2026-07-19 | LM-005 | Terra T3 + Sol read-only audit + main | complete | OpenAI実行前の概算費用をDB台帳へ予約し、月額上限と同時実行をguard。JST当月summary API、日本語429、既存費用backfill、Gemini・ローカル継続を実装。OpenAPI 81 operations、93 suites 380 tests、実DB8 suites 27 tests、build成功。実OpenAI・ブラウザ・port 3000は未使用 |
 | 2026-07-19 | SM-001 | Terra T3 + Sol read-only audit + main | complete | 実送信日時を正本に、送信数・返信率・商談率・受注率・失注理由をDB集計。JST期間、現・過去担当者、取得元、送信後の時系列、重複除外、終了境界、ゼロ件を固定し、連続条件変更の旧応答も遮断。OpenAPI 84 operations、97 suites 393 tests、実DB9 suites 32 tests、Prisma・build成功。ブラウザとport 3000はユーザー指示により未実行 |
 | 2026-07-19 | LA-002 | Sol T4 design agents + main | complete | opaque session、Google OAuth/OIDC、local/test login、current user、Cookie/CSRF、画面/API保護範囲、bootstrap admin、`X-Operator-Email` 廃止順、単一組織制限、LA-003実装順・必須test・rollbackを契約化。コード・DB・OpenAPIは未変更 |
+| 2026-07-19 | LA-003 | Terra T3 + Sol read-only audit + main | start | session DB、Google OIDC、local login、CSRF、保護範囲、actor伝播、bootstrap adminの実装を開始 |
+| 2026-07-19 | LA-003 | Terra T3 + Sol read-only audit + main | complete | opaque Cookie session、Google Authorization Code + PKCE/OIDC検証、loopback限定local login、test専用session helper、CSRF、画面/API保護、current user伝播、初期admin作成を実装。OAuth失敗時のstate破棄、実送信actor、保護mutation 48件のCSRF仕様も監査後に補強。OpenAPI 90 operations、107 suites 422 tests、Prisma・build成功。DB integrationとブラウザは実行環境制限およびユーザー指示により未実行 |

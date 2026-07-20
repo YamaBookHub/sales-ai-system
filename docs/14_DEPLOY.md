@@ -6,7 +6,7 @@
 - DBはPostgreSQL、ORMはPrismaである。
 - 現行package scriptsにはAPIのstart、test、Prisma validate/generate/migrate/seedがある。
 - worker、scheduler、Redis、DLQ、production用Dockerfile、`npm run lint`、`npm run start:worker`、`npm run start:scheduler` は未実装である。デプロイ手順に実装済みのscriptとして記載しない。
-- 認証は `37_AUTHENTICATION_CONTRACT.md` で設計済みだが未実装である。LA-003の認証とLA-004のRBAC・監査が完了するまではstaging/productionへ公開しない。組織分離が完了するまでは複数顧客向けに公開しない。
+- 認証は `37_AUTHENTICATION_CONTRACT.md` に従って実装済みである。LA-004のRBAC・監査が完了するまではstaging/productionへ公開しない。組織分離が完了するまでは複数顧客向けに公開しない。
 
 ## 2. 環境変数
 
@@ -17,6 +17,22 @@
 | 変数 | 必須条件 | 説明 |
 |---|---|---|
 | `DATABASE_URL` | API起動時に必須 | PostgreSQL接続URL |
+
+### 利用者認証で使用
+
+| 変数 | 必須条件 | 説明 |
+|---|---|---|
+| `APP_ENV` | 必須 | `local` / `test` / `staging` / `production` |
+| `AUTH_MODE` | 必須 | localは`local`、testは`test`、staging/productionは`google` |
+| `APP_BASE_URL` | 必須 | 公開origin。staging/productionはHTTPS必須 |
+| `AUTH_DEV_USER_EMAIL` | local login時に必須 | local seedに存在する固定active user |
+| `SESSION_SECRETS` | staging/productionで必須 | session token HMAC secret。32文字以上、rotation時はカンマ区切り |
+| `CSRF_SECRET` | staging/productionで必須 | CSRF token HMAC secret。32文字以上 |
+| `GOOGLE_AUTH_CLIENT_ID` / `GOOGLE_AUTH_CLIENT_SECRET` | Google login時に必須 | 利用者ログイン専用。Gmail送信用とは共用しない |
+| `GOOGLE_AUTH_REDIRECT_URI` | Google login時に必須 | HTTPS callback URL |
+| `GOOGLE_ALLOWED_DOMAINS` | 任意 | 許可するGoogle Workspace domainのカンマ区切り |
+| `AUTH_BOOTSTRAP_ADMIN_ENABLED` | 初期admin作成時だけ`true` | 通常は`false` |
+| `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_NAME` | 初期admin作成時 | 既存userの再有効化・自動昇格は行わない |
 
 ### AI機能で使用
 
@@ -86,6 +102,12 @@ npm run prisma:migrate
 npm run prisma:generate
 ```
 
+初期adminが必要な環境ではmigration後に一度だけ実行し、完了後にflagを無効化する。
+
+```bash
+AUTH_BOOTSTRAP_ADMIN_ENABLED=true npm run auth:bootstrap-admin
+```
+
 seedを明示的に実行する場合は `npm run prisma:seed` を使う。production向け `prisma migrate deploy` 専用scriptはまだないため、production手順は運用環境でmigration適用方法を確定してから追加する。
 
 ### integration test
@@ -113,9 +135,7 @@ npm run test:integration
 - Redisを使う共有queue/worker/scheduler/DLQ
 - 複数instance間のjob所有者、TTL、cancel、再起動後復旧
 - production用Dockerfile、CI verify script、監視、alert webhook
-- 認証、JWT/session、GoogleユーザーOAuth、RBAC
+- role別RBAC、完全な操作監査、組織ごとのデータ分離
 - Gmail providerの外部API retryと真の冪等送信
 
-認証用の `APP_ENV`、`AUTH_MODE`、session/CSRF secret、Google利用者ログインcredential、bootstrap admin設定はLA-003で実装と同時に `.env.example` と本表へ追加する。Gmail送信用OAuth credentialとは共用しない。
-
-これらは将来要件であり、現行APIのデプロイ手順に存在するものとして扱わない。
+利用者認証credentialとGmail送信用OAuth credentialは共用しない。

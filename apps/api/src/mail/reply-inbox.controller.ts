@@ -3,7 +3,9 @@ import { ok } from '../common/api-response';
 import { ListReplyInboxUseCase } from './application/list-reply-inbox.usecase';
 import { ReplyInboxQueryDto } from './reply-inbox.dto';
 
-@Controller('replies')
+// Keep the public API at /api/replies while allowing the protected HTML page
+// to use /replies without both routes matching the global-prefix exclusion.
+@Controller('api/replies')
 export class ReplyInboxController {
   constructor(private readonly listReplyInbox: ListReplyInboxUseCase) {}
 

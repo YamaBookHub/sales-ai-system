@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { ProjectActor } from '../domain/project-actor';
 import { ProjectSourceProvider } from '../domain/project-source-provider';
 import { CampfireProjectSourceProvider } from '../infrastructure/campfire-project-source.provider';
 import { MakuakeProjectSourceProvider } from '../infrastructure/makuake-project-source.provider';
@@ -14,12 +13,12 @@ export class ImportProjectUseCase {
     private readonly makuakeProvider: MakuakeProjectSourceProvider
   ) {}
 
-  import(dto: ImportProjectDto, actor: ProjectActor = {}) {
-    return this.importWithProvider(this.providerFor(dto.source), dto.url, { actor });
+  import(dto: ImportProjectDto, userId: string | null = null) {
+    return this.importWithProvider(this.providerFor(dto.source), dto.url, { userId });
   }
 
-  importCampfire(dto: ImportCampfireProjectDto, actor: ProjectActor = {}) {
-    return this.import({ source: 'campfire', url: dto.url }, actor);
+  importCampfire(dto: ImportCampfireProjectDto, userId: string | null = null) {
+    return this.import({ source: 'campfire', url: dto.url }, userId);
   }
 
   private async importWithProvider(provider: ProjectSourceProvider, url: string, options: ImportOptions = {}) {
@@ -28,8 +27,7 @@ export class ImportProjectUseCase {
     if (imported.project.status !== 'active') {
       throw new BadRequestException('現在公開中・募集中のプロジェクトだけ取り込めます。終了済み・公開前のURLは対象外です。');
     }
-    const userId = options.userId ?? (await this.projectImportRepository.resolveActorUserId(options.actor));
-    const result = await this.projectImportRepository.persistImportedProject(imported, { ...options, userId });
+    const result = await this.projectImportRepository.persistImportedProject(imported, options);
 
     return {
       ...result,
@@ -47,7 +45,6 @@ export class ImportProjectUseCase {
 
 type ImportOptions = {
   bulk?: boolean;
-  actor?: ProjectActor;
   userId?: string | null;
 };
 

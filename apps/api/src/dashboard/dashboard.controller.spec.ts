@@ -1,6 +1,5 @@
 import { PATH_METADATA } from '@nestjs/common/constants';
 import { DashboardController } from './dashboard.controller';
-import { renderRepliesPage } from './ui/replies-page';
 
 describe('DashboardController HTML contracts', () => {
   const controller = new DashboardController();
@@ -51,6 +50,7 @@ describe('DashboardController HTML contracts', () => {
     expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.mailWorkspace)).toBe('mail-workspace');
     expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.today)).toBe('today');
     expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.salesPerformance)).toBe('sales-performance');
+    expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.replies)).toBe('replies');
     expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.index)).toBe('/');
   });
 
@@ -99,7 +99,7 @@ describe('DashboardController HTML contracts', () => {
   });
 
   it('returns Reply Inbox HTML with API and safety-state markers', () => {
-    const html = renderRepliesPage();
+    const html = controller.replies();
 
     expectHtmlResponse(html);
     expectTopNavigation(html);

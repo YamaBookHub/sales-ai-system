@@ -213,7 +213,7 @@ export class LeadsService {
     return withTaskSummary(lead);
   }
 
-  async update(id: string, dto: UpdateLeadDto) {
+  async update(id: string, dto: UpdateLeadDto, userId?: string) {
     const {
       companyName,
       projectTitle,
@@ -357,7 +357,7 @@ export class LeadsService {
           data: { ...projectData, ...(platform ? { platformId: platform.id } : {}) }
         });
       }
-      return tx.salesLead.update({
+      const updated = await tx.salesLead.update({
         where: { id },
         data: { ...leadData, ...leadPolicy },
         include: {
@@ -366,12 +366,63 @@ export class LeadsService {
           scores: { orderBy: { createdAt: 'desc' }, take: 1 }
         }
       });
+      if (userId) {
+        await tx.auditLog.create({
+          data: {
+            userId,
+            action: 'lead.updated',
+            entityType: 'SalesLead',
+            entityId: id,
+            before: leadAuditSnapshot(lead),
+            after: leadAuditSnapshot(updated)
+          }
+        });
+      }
+      return updated;
     });
   }
 
   async score(id: string) {
     return this.scoreLeadUseCase.execute(id);
   }
+}
+
+function leadAuditSnapshot(lead: {
+  status: LeadStatus;
+  priority: LeadPriority;
+  score: number;
+  reason: string | null;
+  ownerMemo: string | null;
+  contactEmail: string | null;
+  contactFormUrl: string | null;
+  siteMessageUrl: string | null;
+  sendMethod: string | null;
+  nextActionAt: Date | null;
+  sentAt: Date | null;
+  nextFollowUpAt: Date | null;
+  company: { name: string; websiteUrl: string | null; inquiryUrl: string | null };
+  project: { title: string; url: string; platform: { type: PlatformType } } | null;
+}) {
+  return {
+    companyName: lead.company.name,
+    companyWebsiteUrl: lead.company.websiteUrl,
+    companyInquiryUrl: lead.company.inquiryUrl,
+    projectTitle: lead.project?.title ?? null,
+    projectUrl: lead.project?.url ?? null,
+    projectSource: lead.project?.platform.type ?? null,
+    status: lead.status,
+    priority: lead.priority,
+    score: lead.score,
+    reason: lead.reason,
+    ownerMemo: lead.ownerMemo,
+    contactEmail: lead.contactEmail,
+    contactFormUrl: lead.contactFormUrl,
+    siteMessageUrl: lead.siteMessageUrl,
+    sendMethod: lead.sendMethod,
+    nextActionAt: lead.nextActionAt?.toISOString() ?? null,
+    sentAt: lead.sentAt?.toISOString() ?? null,
+    nextFollowUpAt: lead.nextFollowUpAt?.toISOString() ?? null
+  };
 }
 
 type LeadListFilters = {

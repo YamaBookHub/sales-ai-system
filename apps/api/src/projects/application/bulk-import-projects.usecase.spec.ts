@@ -22,7 +22,6 @@ describe('BulkImportProjectsUseCase', () => {
       analyzeLead: jest.fn().mockResolvedValue({ id: 'generation_1' })
     };
     const repository = {
-      resolveActorUserId: jest.fn().mockResolvedValue('user_1'),
       persistImportedProject: jest.fn().mockResolvedValue({
         company: { id: 'company_1' },
         project: { id: 'project_1' },
@@ -52,7 +51,7 @@ describe('BulkImportProjectsUseCase', () => {
       source: 'campfire',
       urls: ['https://camp-fire.jp/projects/1/view?utm=1', 'https://camp-fire.jp/projects/1/view/'],
       analyze: true
-    });
+    }, 'user_1');
 
     expect(campfireProvider.import).toHaveBeenCalledTimes(1);
     expect(repository.persistImportedProject).toHaveBeenCalledWith(

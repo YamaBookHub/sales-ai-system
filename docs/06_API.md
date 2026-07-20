@@ -9,6 +9,23 @@
 - JSONレスポンスは原則 `{ data, meta, error }`。成功時は `error: null`、`meta` は原則 `null`。
 - HTML画面と開封計測画像、クリックリダイレクトはこのwrapperの対象外。
 - page/limit はcontrollerが数値化する。既定値は `page=1`、`limit=20`。Reply Inboxのlimit上限は100。
+- `GET /health`、`GET /login`、Google認証開始/callback、local限定login、開封画像、クリックredirect以外はsession認証が必須。
+- ブラウザ認証はserver管理のopaque session Cookieを使う。JWTや任意の利用者headerは使用しない。
+- 認証済みのPOST/PATCH/DELETEは、同一originに加えて `GET /api/auth/me` が返す `csrfToken` を `X-CSRF-Token` headerで送る。
+- 認証エラーは401、CSRF・利用停止・許可されていないログインは403。保護画面の未認証アクセスは `/login` へredirectする。
+
+## 認証
+
+| Method | Path | 認証 | 用途 |
+|---|---|---|---|
+| GET | `/login` | 公開 | ログイン画面 |
+| GET | `/api/auth/google/start` | 公開 | Google OAuth/OIDC開始 |
+| GET | `/api/auth/google/callback` | 公開 | callback検証とsession発行 |
+| POST | `/api/auth/local-login` | local限定公開 | 固定した既存active userのsession発行 |
+| GET | `/api/auth/me` | 必須 | current user、CSRF token、session絶対期限 |
+| POST | `/api/auth/logout` | 必須 + CSRF | current session失効 |
+
+local loginは `APP_ENV=local`、`AUTH_MODE=local`、loopback origin、`AUTH_DEV_USER_EMAIL` の既存active userという全条件を要求し、requestから利用者を選択できない。
 
 ## 画面・health
 
@@ -31,9 +48,9 @@
 | POST | `/api/companies/{id}/block` | path `id` | `BlockCompanyDto` |
 | GET | `/api/projects` | `page`, `limit`, `status` | - |
 | POST | `/api/projects` | - | `CreateProjectDto` |
-| POST | `/api/projects/import/campfire` | header `x-operator-email` optional | `ImportCampfireProjectDto` |
-| POST | `/api/projects/import` | header `x-operator-email` optional | `ImportProjectDto` |
-| POST | `/api/projects/bulk-import` | header `x-operator-email` optional | `BulkImportProjectsDto` |
+| POST | `/api/projects/import/campfire` | - | `ImportCampfireProjectDto` |
+| POST | `/api/projects/import` | - | `ImportProjectDto` |
+| POST | `/api/projects/bulk-import` | - | `BulkImportProjectsDto` |
 | GET | `/api/projects/categories/campfire` | - | - |
 | GET | `/api/projects/categories` | `source`（既定 `campfire`） | - |
 | POST | `/api/projects/search/campfire` | - | `SearchCampfireProjectsDto` |

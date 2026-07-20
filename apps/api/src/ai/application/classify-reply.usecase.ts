@@ -6,7 +6,7 @@ import { classifyReplyText } from '../domain/reply-classifier';
 export class ClassifyReplyUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(replyId: string) {
+  async execute(replyId: string, userId: string | null = null) {
     const reply = await this.prisma.emailReply.findUnique({
       where: { id: replyId },
       include: { email: true }
@@ -35,6 +35,18 @@ export class ClassifyReplyUseCase {
           data: {
             status: classification.leadStatus,
             nextActionAt: classification.nextActionAt
+          }
+        });
+      }
+
+      if (userId) {
+        await tx.auditLog.create({
+          data: {
+            userId,
+            action: 'reply.classify',
+            entityType: 'EmailReply',
+            entityId: replyId,
+            after: { category: classification.category, confidence: classification.confidence }
           }
         });
       }

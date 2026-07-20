@@ -4,7 +4,6 @@ import { AiService } from '../ai/ai.service';
 import { runWithConcurrency } from '../common/concurrency';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectSearchJobManager } from './application/project-search-job.manager';
-import { ProjectActor } from './domain/project-actor';
 import {
   buildBulkImportSummary,
   BulkImportAnalysisResult,
@@ -101,17 +100,16 @@ export class ProjectsService {
     return this.providerFor(source).categories();
   }
 
-  importProject(dto: ImportProjectDto, actor: ProjectActor = {}) {
-    return this.importWithProvider(this.providerFor(dto.source), dto.url, { actor });
+  importProject(dto: ImportProjectDto, userId: string | null = null) {
+    return this.importWithProvider(this.providerFor(dto.source), dto.url, { userId });
   }
 
-  async importCampfire(dto: ImportCampfireProjectDto, actor: ProjectActor = {}) {
-    return this.importProject({ source: 'campfire', url: dto.url }, actor);
+  async importCampfire(dto: ImportCampfireProjectDto, userId: string | null = null) {
+    return this.importProject({ source: 'campfire', url: dto.url }, userId);
   }
 
-  async bulkImport(dto: BulkImportProjectsDto, actor: ProjectActor = {}) {
+  async bulkImport(dto: BulkImportProjectsDto, userId: string | null = null) {
     const provider = this.providerFor(dto.source);
-    const userId = await this.projectImportRepository.resolveActorUserId(actor);
     const urlInputs = uniqueNormalizedUrlInputs(dto.urls, (url) => provider.normalizeUrl(url));
     const importConcurrency = clampConcurrency(dto.importConcurrency, 1, 4, 4);
     const analysisConcurrency = clampConcurrency(dto.analysisConcurrency, 1, 4, 3);
@@ -120,7 +118,7 @@ export class ProjectsService {
 
     await runWithConcurrency(urlInputs, importConcurrency, async (item) => {
       try {
-        const result = await this.importWithProvider(provider, item.url, { bulk: true, actor, userId });
+        const result = await this.importWithProvider(provider, item.url, { bulk: true, userId });
         imported.push({
           originalUrl: item.originalUrl,
           url: item.url,
@@ -138,7 +136,7 @@ export class ProjectsService {
     if (dto.analyze !== false && imported.length) {
       await runWithConcurrency(imported, analysisConcurrency, async (item) => {
         try {
-          await this.ai.analyzeLead(item.leadId);
+          await this.ai.analyzeLead(item.leadId, userId);
           analysisItems.push({ leadId: item.leadId, status: 'analyzed' });
         } catch (error) {
           analysisItems.push({ leadId: item.leadId, status: 'failed', message: error instanceof Error ? error.message : 'AI分析に失敗しました' });
@@ -163,8 +161,7 @@ export class ProjectsService {
     if (imported.project.status !== 'active') {
       throw new BadRequestException('現在公開中・募集中のプロジェクトだけ取り込めます。終了済み・公開前のURLは対象外です。');
     }
-    const userId = options.userId ?? (await this.projectImportRepository.resolveActorUserId(options.actor));
-    const result = await this.projectImportRepository.persistImportedProject(imported, { ...options, userId });
+    const result = await this.projectImportRepository.persistImportedProject(imported, options);
 
     return {
       ...result,
@@ -182,7 +179,6 @@ export class ProjectsService {
 
 type ImportOptions = {
   bulk?: boolean;
-  actor?: ProjectActor;
   userId?: string | null;
 };
 

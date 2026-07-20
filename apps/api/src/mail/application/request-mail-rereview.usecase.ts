@@ -6,15 +6,18 @@ import { PrismaMailWorkflowRepository } from '../infrastructure/prisma-mail-work
 export class RequestMailReReviewUseCase {
   constructor(private readonly mails: PrismaMailWorkflowRepository) {}
 
-  async execute(id: string) {
+  async execute(id: string, userId: string | null = null) {
     const email = await this.mails.get(id);
     assertCanRequestReReview(email.status);
-    return this.mails.transitionIfDeliveryAllowed(
+    const args = [
       id,
       'in_review',
       'reviewed',
       { failedReason: null },
       { reReview: true }
-    );
+    ] as const;
+    return userId
+      ? this.mails.transitionIfDeliveryAllowed(...args, userId)
+      : this.mails.transitionIfDeliveryAllowed(...args);
   }
 }

@@ -11,7 +11,7 @@ import { requireLatestConfirmedAnalysis } from './confirmed-analysis.reader';
 export class GenerateMailDraftUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(leadId: string, dto: GenerateMailDto) {
+  async execute(leadId: string, dto: GenerateMailDto, userId: string | null = null) {
     const leadExists = await this.prisma.salesLead.findUnique({ where: { id: leadId }, select: { id: true } });
     if (!leadExists) throw new NotFoundException('Lead not found');
 
@@ -65,7 +65,7 @@ export class GenerateMailDraftUseCase {
           subject: draft.subject,
           body: draft.body,
           status: 'draft',
-          events: { create: { type: 'generated' } }
+          events: { create: { type: 'generated', payload: userId ? { actorUserId: userId } : undefined } }
         }
       });
       await tx.salesLead.update({ where: { id: leadId }, data: { status: 'drafted' } });

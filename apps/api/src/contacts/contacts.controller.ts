@@ -2,6 +2,8 @@ import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { ok } from '../common/api-response';
 import { ContactsService } from './contacts.service';
 import { CreateContactDto, UpdateContactDto } from './contacts.dto';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { AuthenticatedPrincipal } from '../auth/auth.types';
 
 @Controller()
 export class ContactsController {
@@ -28,7 +30,7 @@ export class ContactsController {
   }
 
   @Post('contacts/:id/unsubscribe')
-  async unsubscribe(@Param('id') id: string) {
-    return ok(await this.contacts.unsubscribe(id));
+  async unsubscribe(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.contacts.unsubscribe(id, principal.userId));
   }
 }

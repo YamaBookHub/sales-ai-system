@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ok } from '../common/api-response';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { AuthenticatedPrincipal } from '../auth/auth.types';
 import {
   GetOpportunityUseCase,
   ListOpportunitiesUseCase,
@@ -40,25 +42,28 @@ export class OpportunitiesController {
   @Patch('leads/:leadId/opportunity')
   async update(
     @Param('leadId', new ParseUUIDPipe()) leadId: string,
-    @Body() dto: UpdateOpportunityDto
+    @Body() dto: UpdateOpportunityDto,
+    @CurrentUser() principal: AuthenticatedPrincipal
   ) {
-    return ok(await this.updateOpportunity.execute(leadId, dto));
+    return ok(await this.updateOpportunity.execute(leadId, dto, principal));
   }
 
   @Post('leads/:leadId/opportunity/transitions')
   async transition(
     @Param('leadId', new ParseUUIDPipe()) leadId: string,
-    @Body() dto: TransitionOpportunityDto
+    @Body() dto: TransitionOpportunityDto,
+    @CurrentUser() principal: AuthenticatedPrincipal
   ) {
-    return ok(await this.transitionOpportunity.execute(leadId, dto));
+    return ok(await this.transitionOpportunity.execute(leadId, dto, principal));
   }
 
   @Post('leads/:leadId/opportunity/reopen')
   async reopen(
     @Param('leadId', new ParseUUIDPipe()) leadId: string,
-    @Body() dto: ReopenOpportunityDto
+    @Body() dto: ReopenOpportunityDto,
+    @CurrentUser() principal: AuthenticatedPrincipal
   ) {
-    return ok(await this.reopenOpportunity.execute(leadId, dto));
+    return ok(await this.reopenOpportunity.execute(leadId, dto, principal));
   }
 
   @Get('leads/:leadId/opportunity/history')

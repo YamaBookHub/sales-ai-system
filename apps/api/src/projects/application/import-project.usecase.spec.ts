@@ -20,7 +20,6 @@ describe('ImportProjectUseCase', () => {
 
   const createDeps = () => {
     const repository = {
-      resolveActorUserId: jest.fn().mockResolvedValue('user_1'),
       persistImportedProject: jest.fn().mockResolvedValue({
         company: { id: 'company_1' },
         project: { id: 'project_1' },
@@ -47,15 +46,13 @@ describe('ImportProjectUseCase', () => {
 
     const result = await useCase.import(
       { source: 'campfire', url: 'https://camp-fire.jp/projects/1/view?utm=1' },
-      { operatorEmail: 'operator@example.com' }
+      'user_1'
     );
 
     expect(campfireProvider.import).toHaveBeenCalledWith('https://camp-fire.jp/projects/1/view');
-    expect(repository.resolveActorUserId).toHaveBeenCalledWith({ operatorEmail: 'operator@example.com' });
     expect(repository.persistImportedProject).toHaveBeenCalledWith(
       importedProject,
       expect.objectContaining({
-        actor: { operatorEmail: 'operator@example.com' },
         userId: 'user_1'
       })
     );

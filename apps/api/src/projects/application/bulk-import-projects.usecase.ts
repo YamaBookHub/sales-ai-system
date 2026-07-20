@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { AiService } from '../../ai/ai.service';
 import { runWithConcurrency } from '../../common/concurrency';
-import { ProjectActor } from '../domain/project-actor';
 import {
   buildBulkImportSummary,
   BulkImportAnalysisResult,
@@ -24,9 +23,8 @@ export class BulkImportProjectsUseCase {
     private readonly makuakeProvider: MakuakeProjectSourceProvider
   ) {}
 
-  async execute(dto: BulkImportProjectsDto, actor: ProjectActor = {}) {
+  async execute(dto: BulkImportProjectsDto, userId: string | null = null) {
     const provider = this.providerFor(dto.source);
-    const userId = await this.projectImportRepository.resolveActorUserId(actor);
     const urlInputs = uniqueNormalizedUrlInputs(dto.urls, (url) => provider.normalizeUrl(url));
     const importConcurrency = clampConcurrency(dto.importConcurrency, 1, 4, 4);
     const analysisConcurrency = clampConcurrency(dto.analysisConcurrency, 1, 4, 3);
@@ -35,7 +33,7 @@ export class BulkImportProjectsUseCase {
 
     await runWithConcurrency(urlInputs, importConcurrency, async (item) => {
       try {
-        const result = await this.importWithProvider(provider, item.url, { bulk: true, actor, userId });
+        const result = await this.importWithProvider(provider, item.url, { bulk: true, userId });
         imported.push({
           originalUrl: item.originalUrl,
           url: item.url,
@@ -78,8 +76,7 @@ export class BulkImportProjectsUseCase {
     if (imported.project.status !== 'active') {
       throw new BadRequestException('現在公開中・募集中のプロジェクトだけ取り込めます。終了済み・公開前のURLは対象外です。');
     }
-    const userId = options.userId ?? (await this.projectImportRepository.resolveActorUserId(options.actor));
-    const result = await this.projectImportRepository.persistImportedProject(imported, { ...options, userId });
+    const result = await this.projectImportRepository.persistImportedProject(imported, options);
 
     return {
       ...result,
@@ -97,7 +94,6 @@ export class BulkImportProjectsUseCase {
 
 type ImportOptions = {
   bulk?: boolean;
-  actor?: ProjectActor;
   userId?: string | null;
 };
 

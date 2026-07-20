@@ -46,9 +46,10 @@ export class PrismaMailWorkflowRepository {
     status: EmailStatus,
     eventType: EmailEventType,
     extra: Record<string, unknown> = {},
-    payload?: Prisma.InputJsonObject
+    payload?: Prisma.InputJsonObject,
+    actorUserId?: string | null
   ) {
-    return this.prisma.$transaction((tx) => this.transitionInTransaction(tx, id, status, eventType, extra, payload));
+    return this.prisma.$transaction((tx) => this.transitionInTransaction(tx, id, status, eventType, extra, withActor(payload, actorUserId)));
   }
 
   transitionIfDeliveryAllowed(
@@ -56,7 +57,8 @@ export class PrismaMailWorkflowRepository {
     status: EmailStatus,
     eventType: EmailEventType,
     extra: Record<string, unknown> = {},
-    payload?: Prisma.InputJsonObject
+    payload?: Prisma.InputJsonObject,
+    actorUserId?: string | null
   ) {
     return this.prisma.$transaction(async (tx) => {
       const destination = await assertPersistedMailContactEligible(tx, id, { lock: true });
@@ -66,12 +68,12 @@ export class PrismaMailWorkflowRepository {
         status,
         eventType,
         { ...destinationFields(destination), ...extra },
-        payload
+        withActor(payload, actorUserId)
       );
     });
   }
 
-  async claimForSending(id: string, idempotencyKey: string) {
+  async claimForSending(id: string, idempotencyKey: string, actorUserId: string) {
     const email = await this.prisma.$transaction(async (tx) => {
       const destination = await assertPersistedMailContactEligible(tx, id, { lock: true });
       const updated = await tx.outreachEmail.updateMany({
@@ -99,7 +101,7 @@ export class PrismaMailWorkflowRepository {
         data: {
           emailId: id,
           type: 'sending',
-          payload: { idempotencyKey }
+          payload: withActor({ idempotencyKey }, actorUserId)
         }
       });
 
@@ -116,7 +118,8 @@ export class PrismaMailWorkflowRepository {
   markSentAfterSend(
     id: string,
     result: { provider: string; messageId?: string; threadId?: string; sentAt: Date },
-    idempotencyKey: string
+    idempotencyKey: string,
+    actorUserId: string
   ) {
     return this.transition(
       id,
@@ -134,13 +137,14 @@ export class PrismaMailWorkflowRepository {
         provider: result.provider,
         messageId: result.messageId,
         threadId: result.threadId
-      }
+      },
+      actorUserId
     );
   }
 
-  markFailedAfterSend(id: string, error: unknown, idempotencyKey: string) {
+  markFailedAfterSend(id: string, error: unknown, idempotencyKey: string, actorUserId: string) {
     const failedReason = error instanceof Error ? error.message : '送信に失敗しました';
-    return this.transition(id, 'failed', 'failed', { failedReason }, { idempotencyKey, failedReason });
+    return this.transition(id, 'failed', 'failed', { failedReason }, { idempotencyKey, failedReason }, actorUserId);
   }
 
   private async ensureDefaultChecklist(emailId: string) {
@@ -213,4 +217,8 @@ function destinationFields(destination: { type: string; value: string; key: stri
     destinationValue: destination.value,
     destinationKey: destination.key
   };
+}
+
+function withActor(payload: Prisma.InputJsonObject | undefined, actorUserId?: string | null): Prisma.InputJsonObject | undefined {
+  return actorUserId ? { ...(payload || {}), actorUserId } : payload;
 }

@@ -184,6 +184,7 @@ Phase C、Phase E、`UX-D02`、`UX-F01`、`UX-D03`、`UX-F02`、`UX-D04`、`UX-F
 | UX-I08 | 2026-07-12 | GPT-5 current surface | T1 | medium | audit | 3 render module contract、53 suites・151 tests・build・diff-check、3主要DOM、5 route/API 200を確認 | complete: uncommitted |
 | Phase C | 2026-07-12 | GPT-5 current surface | T4 | high | audit | 主操作、sticky context、2ペイン、4タブ、次案件、未保存検知を実dataで通し確認 | pass: 92 tests / build / browser OK |
 | Phase E | 2026-07-12 | GPT-5 current surface | T4 | high | audit | data mapping、summary filter、補助出力、対応理由、右詳細を実dataで通し確認 | pass: 92 tests / build / browser OK |
+| LA-003 | 2026-07-19 | GPT-5.6 Terra + Sol audit | T3/T4 | high | audit | 認証は公開前の境界変更であり、実装をTerra、security reviewをSolへ分離 | complete: 107 suites / 422 tests / OpenAPI / Prisma / build OK |
 
 Event:
 

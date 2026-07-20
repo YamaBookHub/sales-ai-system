@@ -471,14 +471,14 @@ Relation: `User?`。Index: `[entityType, entityId]`, `action`, `createdAt`。
 
 ### 4.2 未実装または未完了
 
-- `UserRole`、`User.isActive`、`AuditLog.userId` はDBにあるが、ログイン、current user、認証guard、JWT/session、GoogleユーザーOAuth、RBACによるroute保護は未実装。
+- `UserSession`、`User.googleSubject`、opaque Cookie session、current user、Google OAuth/OIDC、認証guardは実装済み。role別RBACと組織scopeは未実装。
 - Redis、共有queue、worker、scheduler、DLQ、送信予約の自動実行に対応するmodel/module/scriptはない。
 - `OutreachEmail` のprovider送信はGmail OAuthの最小実装のみ。provider側の真の冪等性、外部APIの一般的retry方針、送信監査の詳細化は未完了。
 - すべての重要操作をcurrent userに紐づけたAuditLogへ記録する仕組みは未実装。
 
 ### 4.3 将来要件
 
-- 認証設計・実装後のRBACと全操作監査。
+- 認証済みprincipalを使うRBACと全操作監査。
 - worker/Redis/DLQを含む共有queueと、本番送信を再開する場合のrate limit・retry・冪等性。
 - 面談、提案、契約、請求、SNS分析、収集job履歴などの専用model。現時点ではschemaに追加しない。
 

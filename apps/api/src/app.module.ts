@@ -10,10 +10,12 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
 import { TrackingModule } from './tracking/tracking.module';
 import { PerformanceModule } from './performance/performance.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
     PrismaModule,
+    AuthModule,
     DashboardModule,
     HealthModule,
     CompaniesModule,

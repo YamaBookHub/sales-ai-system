@@ -3,6 +3,7 @@ import { renderDashboardPage } from './ui/dashboard-page';
 import { renderLeadsPage } from './ui/leads-page';
 import { renderSalesPerformancePage } from './ui/sales-performance-page';
 import { renderTodayPage } from './ui/today-page';
+import { renderRepliesPage } from './ui/replies-page';
 
 @Controller()
 export class DashboardController {
@@ -28,6 +29,12 @@ export class DashboardController {
   @Header('Content-Type', 'text/html; charset=utf-8')
   salesPerformance() {
     return renderSalesPerformancePage();
+  }
+
+  @Get('replies')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  replies() {
+    return renderRepliesPage();
   }
 
   @Get()

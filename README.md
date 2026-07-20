@@ -33,6 +33,7 @@ npm install
 cp .env.example .env
 npm run prisma:validate
 npm run prisma:generate
+npm run prisma:migrate
 npm run build
 npm run start
 ```
@@ -51,6 +52,22 @@ npm run start
 Dockerを使わない場合は、PostgreSQLを用意して `.env` の `DATABASE_URL` を接続先に変更してください。
 
 DBなしでもアプリ自体は起動できますが、Company / Project / Lead / Mail などDBを使うAPIは接続先DBが必要です。
+
+## ローカルログイン
+
+`.env` は次を設定します。`AUTH_DEV_USER_EMAIL` はseed済みのactive userである必要があります。
+
+```env
+HOST="127.0.0.1"
+APP_ENV="local"
+AUTH_MODE="local"
+APP_BASE_URL="http://127.0.0.1:3000"
+AUTH_DEV_USER_EMAIL="admin@example.com"
+```
+
+`http://127.0.0.1:3000/` を開くとログイン画面へ移動します。「ローカル環境でログイン」を押すと、固定した開発ユーザーで利用できます。任意のメールアドレスを入力して利用者を切り替える仕組みではありません。
+
+staging/productionはGoogleログイン、HTTPS、強いsession/CSRF secret、事前登録済みactive userが必須です。初期adminを作成する場合は通常seedと分離した `npm run auth:bootstrap-admin` を使用します。詳細は `docs/14_DEPLOY.md` を参照してください。
 
 ## ローカル営業画面
 
@@ -72,15 +89,17 @@ http://localhost:3000/
 ## API疎通確認
 
 ```bash
-curl http://localhost:3000/health
-curl http://localhost:3000/api/companies
-curl http://localhost:3000/api/leads
+curl http://127.0.0.1:3000/health
 ```
+
+`/health`、ログイン、認証callback、開封・クリック計測以外はsession認証が必要です。変更系APIはさらに `GET /api/auth/me` が返すCSRF tokenを `X-CSRF-Token` で送ります。通常確認はログイン済み画面から行ってください。
 
 CAMPFIRE URL取り込み:
 
 ```bash
-curl -X POST http://localhost:3000/api/projects/import/campfire \
+curl -X POST http://127.0.0.1:3000/api/projects/import/campfire \
+  -b /tmp/sales-ai.cookies \
+  -H "X-CSRF-Token: {GET /api/auth/me で取得した値}" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://camp-fire.jp/projects/935270/view"}'
 ```
@@ -88,7 +107,9 @@ curl -X POST http://localhost:3000/api/projects/import/campfire \
 AIメール下書き生成:
 
 ```bash
-curl -X POST http://localhost:3000/api/ai/leads/{leadId}/email-draft \
+curl -X POST http://127.0.0.1:3000/api/ai/leads/{leadId}/email-draft \
+  -b /tmp/sales-ai.cookies \
+  -H "X-CSRF-Token: {GET /api/auth/me で取得した値}" \
   -H "Content-Type: application/json" \
   -d '{"templateKey":"normal","tone":"low_sales_pressure"}'
 ```

@@ -23,32 +23,32 @@ export class AiService {
     private readonly openAiBudgetService: OpenAiBudgetService
   ) {}
 
-  async analyzeLead(leadId: string) {
-    return this.analyzeLeadUseCase.execute(leadId);
+  async analyzeLead(leadId: string, userId: string | null = null) {
+    return this.analyzeLeadUseCase.execute(leadId, userId);
   }
 
-  async generateMailDraft(leadId: string, dto: GenerateMailDto) {
-    return this.generateMailDraftUseCase.execute(leadId, dto);
+  async generateMailDraft(leadId: string, dto: GenerateMailDto, userId: string | null = null) {
+    return this.generateMailDraftUseCase.execute(leadId, dto, userId);
   }
 
   getLeadAnalysis(leadId: string) {
     return this.leadAnalysisUseCase.get(leadId);
   }
 
-  saveLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto) {
-    return this.leadAnalysisUseCase.save(leadId, dto);
+  saveLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto, userId: string | null = null) {
+    return this.leadAnalysisUseCase.save(leadId, dto, userId);
   }
 
-  confirmLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto) {
-    return this.leadAnalysisUseCase.confirm(leadId, dto);
+  confirmLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto, userId: string | null = null) {
+    return this.leadAnalysisUseCase.confirm(leadId, dto, userId);
   }
 
-  async polishMail(mailId: string, model?: SelectableAiModel) {
-    return this.polishMailUseCase.execute(mailId, model);
+  async polishMail(mailId: string, model?: SelectableAiModel, userId: string | null = null) {
+    return this.polishMailUseCase.execute(mailId, model, userId);
   }
 
-  async classifyReply(replyId: string) {
-    return this.classifyReplyUseCase.execute(replyId);
+  async classifyReply(replyId: string, userId: string | null = null) {
+    return this.classifyReplyUseCase.execute(replyId, userId);
   }
 
   async listLeadGenerations(leadId: string) {

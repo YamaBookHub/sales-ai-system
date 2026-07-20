@@ -322,7 +322,7 @@ server paginationを必須とし、Lead、Company、Project、Platform、次の�
 
 ## 権限
 
-現在はログイン未実装のため、`SO-005` のローカル単一利用では `changedById = null` と `source = manual/system` を許可する。認証導入後はリクエスト本文のユーザーIDを信用せず、認証contextから変更者を取得する。
+手動の商談更新は認証contextから変更者を取得し、リクエスト本文のユーザーIDを信用しない。system連動だけは `source = system` とし、利用者不在を許可する。
 
 | role | 閲覧 | 項目更新 | 通常前方遷移 | 失注 | 受注 | 再開・担当変更 |
 |---|---|---|---|---|---|---|
@@ -332,7 +332,7 @@ server paginationを必須とし、Lead、Company、Project、Platform、次の�
 | admin | 可 | 全件 | 全件 | 可 | 可 | 可。受注訂正も可 |
 | system | 対象外 | 指定項目のみ | 外部業務イベントによる前方遷移のみ | 不可 | 不可 | 不可 |
 
-認証導入前にUIを隠すだけで権限を実装した扱いにはしない。SO-005ではpolicyを分離し、後続の認証guardから同じpolicyを呼べる形にする。
+UIを隠すだけで権限を実装した扱いにはしない。現行は認証済みprincipalを既存policyへ渡し、LA-004で全routeのrole enforcementを監査する。
 
 ## 排他・冪等性
 

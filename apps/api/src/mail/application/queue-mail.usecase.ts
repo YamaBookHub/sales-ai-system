@@ -6,10 +6,12 @@ import { PrismaMailWorkflowRepository } from '../infrastructure/prisma-mail-work
 export class QueueMailUseCase {
   constructor(private readonly mails: PrismaMailWorkflowRepository) {}
 
-  async execute(id: string) {
+  async execute(id: string, userId: string | null = null) {
     const email = await this.mails.get(id);
     const checklistComplete = await this.mails.checklistComplete(id);
     assertCanQueue(email.status, checklistComplete);
-    return this.mails.transitionIfDeliveryAllowed(id, 'queued', 'queued');
+    return userId
+      ? this.mails.transitionIfDeliveryAllowed(id, 'queued', 'queued', {}, undefined, userId)
+      : this.mails.transitionIfDeliveryAllowed(id, 'queued', 'queued');
   }
 }

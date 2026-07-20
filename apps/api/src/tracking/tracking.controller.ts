@@ -2,6 +2,9 @@ import { Body, Controller, Get, Header, Param, Post, Redirect } from '@nestjs/co
 import { ok } from '../common/api-response';
 import { TrackingService } from './tracking.service';
 import { CreateTrackedLinkDto, UnsubscribeDto } from './tracking.dto';
+import { Public } from '../auth/public.decorator';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { AuthenticatedPrincipal } from '../auth/auth.types';
 
 const GIF_1X1 = Buffer.from('R0lGODlhAQABAPAAAP///wAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==', 'base64');
 
@@ -10,6 +13,7 @@ export class TrackingController {
   constructor(private readonly tracking: TrackingService) {}
 
   @Get('t/open/:emailId.png')
+  @Public()
   @Header('Content-Type', 'image/gif')
   async trackOpen(@Param('emailId') emailId: string) {
     await this.tracking.trackOpen(emailId);
@@ -27,13 +31,14 @@ export class TrackingController {
   }
 
   @Get('t/click/:token')
+  @Public()
   @Redirect()
   async trackClick(@Param('token') token: string) {
     return { url: await this.tracking.resolveClick(token), statusCode: 302 };
   }
 
   @Post('unsubscribe')
-  async unsubscribe(@Body() dto: UnsubscribeDto) {
-    return ok(await this.tracking.unsubscribe(dto));
+  async unsubscribe(@Body() dto: UnsubscribeDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.tracking.unsubscribe(dto, principal.userId));
   }
 }

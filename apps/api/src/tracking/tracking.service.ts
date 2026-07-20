@@ -124,12 +124,23 @@ export class TrackingService {
     });
   }
 
-  async unsubscribe(dto: UnsubscribeDto) {
+  async unsubscribe(dto: UnsubscribeDto, userId?: string) {
     if (dto.contactId) {
       const contact = await this.prisma.contactPerson.update({
         where: { id: dto.contactId },
         data: { isUnsubscribed: true, unsubscribedAt: new Date(), isPrimary: false }
       });
+      if (userId) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId,
+            action: 'contact.unsubscribed',
+            entityType: 'ContactPerson',
+            entityId: contact.id,
+            after: { isUnsubscribed: true, source: 'tracking_api' }
+          }
+        });
+      }
       return { contactId: contact.id, isUnsubscribed: true };
     }
 
@@ -141,6 +152,16 @@ export class TrackingService {
       });
       if (result.count === 0) {
         return { email, isUnsubscribed: false, message: '一致する有効な連絡先が見つかりません。' };
+      }
+      if (userId) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId,
+            action: 'contacts.unsubscribed_by_email',
+            entityType: 'ContactPerson',
+            after: { email, updatedCount: result.count, source: 'tracking_api' }
+          }
+        });
       }
       return { email, isUnsubscribed: true, updatedCount: result.count };
     }
