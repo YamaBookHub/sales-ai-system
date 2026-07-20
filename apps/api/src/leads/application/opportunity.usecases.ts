@@ -1,12 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaOpportunityRepository } from '../infrastructure/prisma-opportunity.repository';
+import { OpportunityActor, PrismaOpportunityRepository } from '../infrastructure/prisma-opportunity.repository';
 import {
   ListOpportunitiesQueryDto,
   ReopenOpportunityDto,
   TransitionOpportunityDto,
   UpdateOpportunityDto
 } from '../opportunities.dto';
-import { AuthenticatedPrincipal } from '../../auth/auth.types';
 
 @Injectable()
 export class ListOpportunitiesUseCase {
@@ -27,24 +26,24 @@ export class GetOpportunityUseCase {
 @Injectable()
 export class UpdateOpportunityUseCase {
   constructor(private readonly opportunities: PrismaOpportunityRepository) {}
-  execute(leadId: string, input: UpdateOpportunityDto, principal: AuthenticatedPrincipal) {
-    return this.opportunities.updateDetails(leadId, input, principal);
+  execute(leadId: string, input: UpdateOpportunityDto, actor: OpportunityActor) {
+    return this.opportunities.updateDetails(leadId, input, actor);
   }
 }
 
 @Injectable()
 export class TransitionOpportunityUseCase {
   constructor(private readonly opportunities: PrismaOpportunityRepository) {}
-  execute(leadId: string, input: TransitionOpportunityDto, principal: AuthenticatedPrincipal) {
-    return this.opportunities.transition(leadId, input, principal);
+  execute(leadId: string, input: TransitionOpportunityDto, actor: OpportunityActor) {
+    return this.opportunities.transition(leadId, input, actor);
   }
 }
 
 @Injectable()
 export class ReopenOpportunityUseCase {
   constructor(private readonly opportunities: PrismaOpportunityRepository) {}
-  execute(leadId: string, input: ReopenOpportunityDto, principal: AuthenticatedPrincipal) {
-    return this.opportunities.reopen(leadId, input, principal);
+  execute(leadId: string, input: ReopenOpportunityDto, actor: OpportunityActor) {
+    return this.opportunities.reopen(leadId, input, actor);
   }
 }
 

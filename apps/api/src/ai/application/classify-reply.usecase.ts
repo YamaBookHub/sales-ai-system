@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { AuditActor } from '../../audit/audit-actor';
 import { classifyReplyText } from '../domain/reply-classifier';
 
 @Injectable()
 export class ClassifyReplyUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(replyId: string, userId: string | null = null) {
+  async execute(replyId: string, actor: AuditActor | null = null) {
     const reply = await this.prisma.emailReply.findUnique({
       where: { id: replyId },
       include: { email: true }
@@ -39,10 +40,11 @@ export class ClassifyReplyUseCase {
         });
       }
 
-      if (userId) {
+      if (actor) {
         await tx.auditLog.create({
           data: {
-            userId,
+            userId: actor.userId,
+            sessionId: actor.sessionId,
             action: 'reply.classify',
             entityType: 'EmailReply',
             entityId: replyId,

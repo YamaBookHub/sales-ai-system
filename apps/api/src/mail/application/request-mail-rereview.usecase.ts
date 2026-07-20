@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AuditActor } from '../../audit/audit-actor';
 import { assertCanRequestReReview } from '../domain/mail-policy';
 import { PrismaMailWorkflowRepository } from '../infrastructure/prisma-mail-workflow.repository';
 
@@ -6,7 +7,7 @@ import { PrismaMailWorkflowRepository } from '../infrastructure/prisma-mail-work
 export class RequestMailReReviewUseCase {
   constructor(private readonly mails: PrismaMailWorkflowRepository) {}
 
-  async execute(id: string, userId: string | null = null) {
+  async execute(id: string, actor: AuditActor | null = null) {
     const email = await this.mails.get(id);
     assertCanRequestReReview(email.status);
     const args = [
@@ -16,8 +17,8 @@ export class RequestMailReReviewUseCase {
       { failedReason: null },
       { reReview: true }
     ] as const;
-    return userId
-      ? this.mails.transitionIfDeliveryAllowed(...args, userId)
+    return actor
+      ? this.mails.transitionIfDeliveryAllowed(...args, actor)
       : this.mails.transitionIfDeliveryAllowed(...args);
   }
 }

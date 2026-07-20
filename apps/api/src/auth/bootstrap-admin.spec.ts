@@ -56,6 +56,8 @@ describe('bootstrapAdmin', () => {
     expect(tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ action: 'auth.bootstrap_admin.created', userId: admin.id })
     });
+    expect(JSON.stringify(tx.auditLog.create.mock.calls[0][0])).not.toContain(admin.email);
+    expect(JSON.stringify(tx.auditLog.create.mock.calls[0][0])).not.toContain(admin.name);
   });
 
   it('does not reactivate or promote an existing user', async () => {

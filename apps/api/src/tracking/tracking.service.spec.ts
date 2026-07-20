@@ -1,7 +1,8 @@
 import { TrackingService } from './tracking.service';
 
 describe('TrackingService', () => {
-  const createPrisma = () => ({
+  const createPrisma = () => {
+    const prisma = {
     outreachEmail: {
       findUnique: jest.fn().mockResolvedValue({ id: 'mail_1' })
     },
@@ -38,8 +39,14 @@ describe('TrackingService', () => {
     contactPerson: {
       update: jest.fn().mockResolvedValue({ id: 'contact_1' }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 })
-    }
-  });
+      },
+      auditLog: { create: jest.fn() }
+    };
+    return {
+      ...prisma,
+      $transaction: jest.fn(async (callback: (transaction: typeof prisma) => unknown) => callback(prisma))
+    };
+  };
 
   it('creates a company material tracked link', async () => {
     const prisma = createPrisma();
@@ -61,6 +68,27 @@ describe('TrackingService', () => {
         token: expect.any(String)
       })
     });
+  });
+
+  it('records a tracked-link audit without retaining the original URL', async () => {
+    const prisma = createPrisma();
+    const service = new TrackingService(prisma as any);
+
+    await service.createTrackedLink({
+      emailId: 'mail_1',
+      originalUrl: 'https://example.com/private.pdf',
+      label: 'company_material'
+    }, { userId: 'user-1', sessionId: 'session-1' });
+
+    const audit = prisma.auditLog.create.mock.calls[0][0].data;
+    expect(audit).toMatchObject({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      action: 'tracked_link.created',
+      entityType: 'TrackedLink',
+      entityId: 'link_1'
+    });
+    expect(JSON.stringify(audit)).not.toContain('private.pdf');
   });
 
   it('records material click and raises lead appointment angle', async () => {

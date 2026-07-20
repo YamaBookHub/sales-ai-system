@@ -8,6 +8,7 @@ import { readAuthConfig } from './auth.config';
 import { AuthService } from './auth.service';
 import { AUTH_CONFIG } from './auth.tokens';
 import { GoogleOidcService } from './google-oidc.service';
+import { RbacGuard } from './rbac.guard';
 
 @Module({
   controllers: [AuthController],
@@ -17,6 +18,7 @@ import { GoogleOidcService } from './google-oidc.service';
     GoogleOidcService,
     AuthService,
     { provide: APP_GUARD, useClass: AuthSecurityGuard },
+    { provide: APP_GUARD, useClass: RbacGuard },
     { provide: APP_FILTER, useClass: AuthExceptionFilter }
   ],
   exports: [AuthService]

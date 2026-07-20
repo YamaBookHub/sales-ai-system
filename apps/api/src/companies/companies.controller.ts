@@ -3,7 +3,9 @@ import { ok } from '../common/api-response';
 import { BlockCompanyDto, CreateCompanyDto } from './companies.dto';
 import { CompaniesService } from './companies.service';
 import { RequirePermissions } from '../auth/require-permissions.decorator';
-import { AuditAction } from '../audit/audit-action.decorator';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { AuthenticatedPrincipal } from '../auth/auth.types';
+import { auditActor } from '../audit/audit-actor';
 
 @Controller('companies')
 @RequirePermissions('workspace.read')
@@ -17,15 +19,13 @@ export class CompaniesController {
 
   @Post()
   @RequirePermissions('records.write')
-  @AuditAction('company.created', 'Company', [])
-  async create(@Body() dto: CreateCompanyDto) {
-    return ok(await this.companies.create(dto));
+  async create(@Body() dto: CreateCompanyDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.companies.create(dto, auditActor(principal)));
   }
 
   @Post(':id/block')
   @RequirePermissions('compliance.manage')
-  @AuditAction('company.blocked', 'Company', ['id'])
-  async block(@Param('id') id: string, @Body() dto: BlockCompanyDto) {
-    return ok(await this.companies.block(id, dto));
+  async block(@Param('id') id: string, @Body() dto: BlockCompanyDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.companies.block(id, dto, auditActor(principal)));
   }
 }

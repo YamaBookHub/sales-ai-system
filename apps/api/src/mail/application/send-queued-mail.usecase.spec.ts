@@ -2,7 +2,7 @@ import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { SendQueuedMailUseCase } from './send-queued-mail.usecase';
 
 describe('SendQueuedMailUseCase', () => {
-  const actorUserId = 'user_1';
+  const actor = { userId: 'user_1', sessionId: 'session_1' };
   const email = {
     id: 'mail_1',
     status: 'queued',
@@ -38,8 +38,8 @@ describe('SendQueuedMailUseCase', () => {
     const { mails, sender } = createDeps();
     const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
 
-    await expect(useCase.execute(email.id, actorUserId)).resolves.toEqual({ ...email, status: 'sent' });
-    expect(mails.claimForSending).toHaveBeenCalledWith(email.id, 'mail:mail_1:retry:0', actorUserId);
+    await expect(useCase.execute(email.id, actor)).resolves.toEqual({ ...email, status: 'sent' });
+    expect(mails.claimForSending).toHaveBeenCalledWith(email.id, 'mail:mail_1:retry:0', actor);
     expect(sender.send).toHaveBeenCalledWith({
       idempotencyKey: 'mail:mail_1:retry:0',
       toEmail: 'to@example.com',
@@ -50,7 +50,7 @@ describe('SendQueuedMailUseCase', () => {
       email.id,
       expect.objectContaining({ provider: 'test', messageId: 'message_1', threadId: 'thread_1' }),
       'mail:mail_1:retry:0',
-      actorUserId
+      actor
     );
   });
 
@@ -59,7 +59,7 @@ describe('SendQueuedMailUseCase', () => {
     mails.get.mockResolvedValue({ ...email, status: 'approved' });
     const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
 
-    await expect(useCase.execute(email.id, actorUserId)).rejects.toThrow(ConflictException);
+    await expect(useCase.execute(email.id, actor)).rejects.toThrow(ConflictException);
     expect(mails.claimForSending).not.toHaveBeenCalled();
     expect(sender.send).not.toHaveBeenCalled();
   });
@@ -69,7 +69,7 @@ describe('SendQueuedMailUseCase', () => {
     mails.checklistComplete.mockResolvedValue(false);
     const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
 
-    await expect(useCase.execute(email.id, actorUserId)).rejects.toThrow(ConflictException);
+    await expect(useCase.execute(email.id, actor)).rejects.toThrow(ConflictException);
     expect(mails.claimForSending).not.toHaveBeenCalled();
     expect(sender.send).not.toHaveBeenCalled();
   });
@@ -79,13 +79,13 @@ describe('SendQueuedMailUseCase', () => {
     sender.send.mockRejectedValue(new ServiceUnavailableException('provider missing'));
     const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
 
-    await expect(useCase.execute(email.id, actorUserId)).rejects.toThrow(ServiceUnavailableException);
-    expect(mails.claimForSending).toHaveBeenCalledWith(email.id, 'mail:mail_1:retry:0', actorUserId);
+    await expect(useCase.execute(email.id, actor)).rejects.toThrow(ServiceUnavailableException);
+    expect(mails.claimForSending).toHaveBeenCalledWith(email.id, 'mail:mail_1:retry:0', actor);
     expect(mails.markFailedAfterSend).toHaveBeenCalledWith(
       email.id,
       expect.any(ServiceUnavailableException),
       'mail:mail_1:retry:0',
-      actorUserId
+      actor
     );
   });
 
@@ -94,7 +94,7 @@ describe('SendQueuedMailUseCase', () => {
     mails.claimForSending.mockRejectedValue(new ConflictException('already sending'));
     const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
 
-    await expect(useCase.execute(email.id, actorUserId)).rejects.toThrow(ConflictException);
+    await expect(useCase.execute(email.id, actor)).rejects.toThrow(ConflictException);
     expect(sender.send).not.toHaveBeenCalled();
     expect(mails.markFailedAfterSend).not.toHaveBeenCalled();
   });
@@ -104,13 +104,13 @@ describe('SendQueuedMailUseCase', () => {
     mails.assertDeliveryAllowed.mockRejectedValue(new ConflictException('unsubscribed'));
     const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
 
-    await expect(useCase.execute(email.id, actorUserId)).rejects.toThrow(ConflictException);
+    await expect(useCase.execute(email.id, actor)).rejects.toThrow(ConflictException);
     expect(sender.send).not.toHaveBeenCalled();
     expect(mails.markFailedAfterSend).toHaveBeenCalledWith(
       email.id,
       expect.any(ConflictException),
       'mail:mail_1:retry:0',
-      actorUserId
+      actor
     );
   });
 
@@ -122,7 +122,7 @@ describe('SendQueuedMailUseCase', () => {
     });
     const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
 
-    await expect(useCase.execute(email.id, actorUserId)).rejects.toThrow(ServiceUnavailableException);
+    await expect(useCase.execute(email.id, actor)).rejects.toThrow(ServiceUnavailableException);
     expect(sender.validate).toHaveBeenCalledWith(expect.objectContaining({ sendMethod: 'site_message' }));
     expect(mails.claimForSending).not.toHaveBeenCalled();
     expect(mails.markFailedAfterSend).not.toHaveBeenCalled();

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditActor } from '../audit/audit-actor';
 import {
   COMPANY_MATERIAL_LINK_LABEL,
   materialEngagementForClickCount,
@@ -12,36 +13,42 @@ import { CreateTrackedLinkDto, UnsubscribeDto } from './tracking.dto';
 export class TrackingService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createTrackedLink(dto: CreateTrackedLinkDto) {
-    const email = await this.prisma.outreachEmail.findUnique({ where: { id: dto.emailId } });
-    if (!email) {
-      throw new NotFoundException('Mail not found');
-    }
-
-    const label = dto.label || COMPANY_MATERIAL_LINK_LABEL;
-    const existing = await this.prisma.trackedLink.findFirst({
-      where: { emailId: dto.emailId, originalUrl: dto.originalUrl, label }
-    });
-    if (existing) {
-      return {
-        ...existing,
-        trackingPath: `/t/click/${existing.token}`
-      };
-    }
-
-    const link = await this.prisma.trackedLink.create({
-      data: {
-        emailId: dto.emailId,
-        token: createTrackingToken(),
-        originalUrl: dto.originalUrl,
-        label
+  async createTrackedLink(dto: CreateTrackedLinkDto, actor?: AuditActor) {
+    return this.prisma.$transaction(async (tx) => {
+      const email = await tx.outreachEmail.findUnique({ where: { id: dto.emailId } });
+      if (!email) {
+        throw new NotFoundException('Mail not found');
       }
-    });
 
-    return {
-      ...link,
-      trackingPath: `/t/click/${link.token}`
-    };
+      const label = dto.label || COMPANY_MATERIAL_LINK_LABEL;
+      const existing = await tx.trackedLink.findFirst({
+        where: { emailId: dto.emailId, originalUrl: dto.originalUrl, label }
+      });
+      if (existing) {
+        return { ...existing, trackingPath: `/t/click/${existing.token}` };
+      }
+
+      const link = await tx.trackedLink.create({
+        data: {
+          emailId: dto.emailId,
+          token: createTrackingToken(),
+          originalUrl: dto.originalUrl,
+          label
+        }
+      });
+      if (actor) {
+        await tx.auditLog.create({
+          data: {
+            ...actor,
+            action: 'tracked_link.created',
+            entityType: 'TrackedLink',
+            entityId: link.id,
+            after: { trackedLinkId: link.id, emailId: link.emailId, label: link.label ?? null }
+          }
+        });
+      }
+      return { ...link, trackingPath: `/t/click/${link.token}` };
+    });
   }
 
   async getMailEngagement(emailId: string) {
@@ -124,46 +131,55 @@ export class TrackingService {
     });
   }
 
-  async unsubscribe(dto: UnsubscribeDto, userId?: string) {
+  async unsubscribe(dto: UnsubscribeDto, actor?: AuditActor) {
     if (dto.contactId) {
-      const contact = await this.prisma.contactPerson.update({
-        where: { id: dto.contactId },
-        data: { isUnsubscribed: true, unsubscribedAt: new Date(), isPrimary: false }
-      });
-      if (userId) {
-        await this.prisma.auditLog.create({
-          data: {
-            userId,
-            action: 'contact.unsubscribed',
-            entityType: 'ContactPerson',
-            entityId: contact.id,
-            after: { isUnsubscribed: true, source: 'tracking_api' }
-          }
+      return this.prisma.$transaction(async (tx) => {
+        const contact = await tx.contactPerson.update({
+          where: { id: dto.contactId },
+          data: { isUnsubscribed: true, unsubscribedAt: new Date(), isPrimary: false }
         });
-      }
-      return { contactId: contact.id, isUnsubscribed: true };
+        if (actor) {
+          await tx.auditLog.create({
+            data: {
+              ...actor,
+              action: 'contact.unsubscribed',
+              entityType: 'ContactPerson',
+              entityId: contact.id,
+              after: { contactId: contact.id, isUnsubscribed: true, source: 'tracking_api' }
+            }
+          });
+        }
+        return { contactId: contact.id, isUnsubscribed: true };
+      });
     }
 
     if (dto.email) {
       const email = dto.email.trim();
-      const result = await this.prisma.contactPerson.updateMany({
-        where: { email: { equals: email, mode: 'insensitive' }, deletedAt: null },
-        data: { isUnsubscribed: true, unsubscribedAt: new Date(), isPrimary: false }
-      });
-      if (result.count === 0) {
-        return { email, isUnsubscribed: false, message: '一致する有効な連絡先が見つかりません。' };
-      }
-      if (userId) {
-        await this.prisma.auditLog.create({
-          data: {
-            userId,
-            action: 'contacts.unsubscribed_by_email',
-            entityType: 'ContactPerson',
-            after: { email, updatedCount: result.count, source: 'tracking_api' }
-          }
+      return this.prisma.$transaction(async (tx) => {
+        const result = await tx.contactPerson.updateMany({
+          where: { email: { equals: email, mode: 'insensitive' }, deletedAt: null },
+          data: { isUnsubscribed: true, unsubscribedAt: new Date(), isPrimary: false }
         });
-      }
-      return { email, isUnsubscribed: true, updatedCount: result.count };
+        if (result.count === 0) {
+          return { email, isUnsubscribed: false, message: '一致する有効な連絡先が見つかりません。' };
+        }
+        if (actor) {
+          await tx.auditLog.create({
+            data: {
+              ...actor,
+              action: 'contacts.unsubscribed_by_email',
+              entityType: 'ContactPerson',
+              after: {
+                emailHash: hashForAudit(email),
+                updatedCount: result.count,
+                isUnsubscribed: true,
+                source: 'tracking_api'
+              }
+            }
+          });
+        }
+        return { email, isUnsubscribed: true, updatedCount: result.count };
+      });
     }
 
     return { isUnsubscribed: false, message: 'email or contactId is required' };
@@ -172,4 +188,8 @@ export class TrackingService {
 
 function createTrackingToken() {
   return randomBytes(18).toString('base64url');
+}
+
+function hashForAudit(value: string) {
+  return createHash('sha256').update(value.trim().toLowerCase()).digest('hex');
 }

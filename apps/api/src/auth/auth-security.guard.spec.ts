@@ -69,4 +69,5 @@ describe('AuthSecurityGuard', () => {
     }))).rejects.toBeInstanceOf(AuthenticationRequiredException);
     expect(auth.authenticate).toHaveBeenCalledWith(undefined);
   });
+
 });

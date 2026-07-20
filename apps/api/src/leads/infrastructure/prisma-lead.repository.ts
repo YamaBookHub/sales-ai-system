@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LeadPriority } from '@prisma/client';
 import { LeadScoreResult } from '../domain/lead-score';
+import { AuditActor } from '../../audit/audit-actor';
 
 @Injectable()
 export class PrismaLeadRepository {
@@ -22,7 +23,7 @@ export class PrismaLeadRepository {
     return lead;
   }
 
-  async recordScore(leadId: string, leadScore: LeadScoreResult, priority?: LeadPriority) {
+  async recordScore(leadId: string, leadScore: LeadScoreResult, priority?: LeadPriority, actor?: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
       const score = await tx.leadScore.create({
         data: {
@@ -31,13 +32,30 @@ export class PrismaLeadRepository {
         }
       });
 
-      await tx.salesLead.update({
+      const lead = await tx.salesLead.update({
         where: { id: leadId },
         data: {
           score: leadScore.totalScore,
           ...(priority ? { priority } : {})
         }
       });
+      if (actor) {
+        await tx.auditLog.create({
+          data: {
+            ...actor,
+            action: 'lead.scored',
+            entityType: 'SalesLead',
+            entityId: leadId,
+            after: {
+              leadId,
+              scoreId: score.id,
+              totalScore: lead.score,
+              priority: lead.priority,
+              scoreComponents: ['amountScore', 'supporterScore', 'urgencyScore', 'fitScore', 'activityScore']
+            }
+          }
+        });
+      }
 
       return score;
     });

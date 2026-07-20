@@ -1,5 +1,6 @@
 import { LeadStatus, TaskStatus } from '@prisma/client';
 import { TaskRecord, TaskView } from './task';
+import { AuditActor } from '../../audit/audit-actor';
 
 export const TASK_REPOSITORY = Symbol('TASK_REPOSITORY');
 export type TaskScope = 'active' | 'all';
@@ -26,8 +27,8 @@ export interface TaskRepository {
   findLead(id: string): Promise<TaskLead | null>;
   listByLead(leadId: string, scope: TaskScope): Promise<TaskView[]>;
   findTask(id: string): Promise<TaskRecord | null>;
-  create(input: CreateTaskRecord): Promise<TaskView>;
-  update(id: string, input: UpdateTaskRecord): Promise<TaskView>;
+  create(input: CreateTaskRecord, actor?: AuditActor): Promise<TaskView>;
+  update(id: string, input: UpdateTaskRecord, actor?: AuditActor): Promise<TaskView>;
   findAssignee(id: string): Promise<TaskAssignee | null>;
   listAssignees(): Promise<TaskAssignee[]>;
 }

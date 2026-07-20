@@ -199,4 +199,43 @@ describe('LeadsService detail editing', () => {
     await expect(service.update('lead-1', { projectTitle: '失敗する更新', ownerMemo: '保存しない' })).rejects.toThrow('project update failed');
     expect(tx.salesLead.update).not.toHaveBeenCalled();
   });
+
+  it('creates a lead and records only safe state with the authenticated session', async () => {
+    const lead = {
+      id: 'lead-2',
+      companyId: 'company-1',
+      projectId: 'project-1',
+      status: 'discovered',
+      priority: 'medium',
+      score: 0,
+      source: 'manual',
+      nextActionAt: null,
+      sentAt: null,
+      nextFollowUpAt: null
+    };
+    const tx = {
+      salesLead: { create: jest.fn().mockResolvedValue(lead) },
+      opportunity: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({ id: 'opportunity-1', version: 1 }) },
+      opportunityStageHistory: { create: jest.fn().mockResolvedValue({ id: 'history-1' }) },
+      auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
+      $executeRawUnsafe: jest.fn().mockResolvedValue(1)
+    };
+    const prisma = { $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)) };
+    const service = new LeadsService(prisma as any, {} as any);
+
+    await service.create({ companyId: 'company-1', projectId: 'project-1', ownerMemo: 'free text memo' }, {
+      userId: 'user-1',
+      sessionId: 'session-1'
+    });
+
+    const audit = tx.auditLog.create.mock.calls[0][0].data;
+    expect(audit).toMatchObject({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      action: 'lead.created',
+      entityType: 'SalesLead',
+      entityId: 'lead-2'
+    });
+    expect(JSON.stringify(audit)).not.toContain('free text memo');
+  });
 });

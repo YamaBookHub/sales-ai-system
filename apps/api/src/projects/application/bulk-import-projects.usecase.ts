@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { AiService } from '../../ai/ai.service';
+import type { AuditActor } from '../../audit/audit-actor';
 import { runWithConcurrency } from '../../common/concurrency';
 import {
   buildBulkImportSummary,
@@ -23,7 +24,7 @@ export class BulkImportProjectsUseCase {
     private readonly makuakeProvider: MakuakeProjectSourceProvider
   ) {}
 
-  async execute(dto: BulkImportProjectsDto, userId: string | null = null) {
+  async execute(dto: BulkImportProjectsDto, actor: AuditActor | null = null) {
     const provider = this.providerFor(dto.source);
     const urlInputs = uniqueNormalizedUrlInputs(dto.urls, (url) => provider.normalizeUrl(url));
     const importConcurrency = clampConcurrency(dto.importConcurrency, 1, 4, 4);
@@ -33,7 +34,7 @@ export class BulkImportProjectsUseCase {
 
     await runWithConcurrency(urlInputs, importConcurrency, async (item) => {
       try {
-        const result = await this.importWithProvider(provider, item.url, { bulk: true, userId });
+        const result = await this.importWithProvider(provider, item.url, { bulk: true, actor });
         imported.push({
           originalUrl: item.originalUrl,
           url: item.url,
@@ -51,7 +52,7 @@ export class BulkImportProjectsUseCase {
     if (dto.analyze !== false && imported.length) {
       await runWithConcurrency(imported, analysisConcurrency, async (item) => {
         try {
-          await this.ai.analyzeLead(item.leadId);
+          await this.ai.analyzeLead(item.leadId, actor);
           analysisItems.push({ leadId: item.leadId, status: 'analyzed' });
         } catch (error) {
           analysisItems.push({ leadId: item.leadId, status: 'failed', message: error instanceof Error ? error.message : 'AI分析に失敗しました' });
@@ -65,7 +66,7 @@ export class BulkImportProjectsUseCase {
       items,
       analysisItems
     });
-    await this.projectImportRepository.recordBulkImportAudit(userId, summary);
+    await this.projectImportRepository.recordBulkImportAudit(actor, summary);
 
     return summary;
   }
@@ -94,7 +95,7 @@ export class BulkImportProjectsUseCase {
 
 type ImportOptions = {
   bulk?: boolean;
-  userId?: string | null;
+  actor?: AuditActor | null;
 };
 
 function normalizeProjectSource(source?: string): ProjectSource {

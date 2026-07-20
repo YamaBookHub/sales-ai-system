@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { mailAuditActionForTransition, PrismaMailWorkflowRepository } from './prisma-mail-workflow.repository';
 
 describe('PrismaMailWorkflowRepository', () => {
+  const actor = { userId: 'user_1', sessionId: 'session_1' };
   it.each([
     ['in_review', 'reviewed', undefined, 'mail.review_requested'],
     ['in_review', 'reviewed', { reReview: true }, 'mail.rereview_requested'],
@@ -42,7 +43,7 @@ describe('PrismaMailWorkflowRepository', () => {
     };
     const repository = new PrismaMailWorkflowRepository(prisma as any);
 
-    await expect(repository.claimForSending('mail_1', 'key_1', 'user_1')).resolves.toEqual({ id: 'mail_1', status: 'sending' });
+    await expect(repository.claimForSending('mail_1', 'key_1', actor)).resolves.toEqual({ id: 'mail_1', status: 'sending' });
     expect(tx.outreachEmail.updateMany).toHaveBeenCalledWith({
       where: { id: 'mail_1', status: 'queued' },
       data: {
@@ -74,6 +75,7 @@ describe('PrismaMailWorkflowRepository', () => {
     expect(tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         userId: 'user_1',
+        sessionId: 'session_1',
         action: 'mail.send_started',
         entityType: 'OutreachEmail',
         entityId: 'mail_1'
@@ -107,7 +109,7 @@ describe('PrismaMailWorkflowRepository', () => {
     };
     const repository = new PrismaMailWorkflowRepository(prisma as any);
 
-    await expect(repository.claimForSending('mail_1', 'key_1', 'user_1')).rejects.toThrow(ConflictException);
+    await expect(repository.claimForSending('mail_1', 'key_1', actor)).rejects.toThrow(ConflictException);
     expect(tx.outreachEmail.findUniqueOrThrow).not.toHaveBeenCalled();
     expect(tx.emailEvent.create).not.toHaveBeenCalled();
     expect(tx.auditLog.create).not.toHaveBeenCalled();
@@ -134,9 +136,9 @@ describe('PrismaMailWorkflowRepository', () => {
       'mail_1',
       { provider: 'test', messageId: 'message_1', threadId: 'thread_1', sentAt },
       'key_1',
-      'user_1'
+      actor
     );
-    await repository.markFailedAfterSend('mail_1', new Error('provider unavailable'), 'key_2', 'user_1');
+    await repository.markFailedAfterSend('mail_1', new Error('provider unavailable'), 'key_2', actor);
 
     expect(tx.outreachEmail.update).toHaveBeenNthCalledWith(1, {
       where: { id: 'mail_1' },
@@ -179,10 +181,10 @@ describe('PrismaMailWorkflowRepository', () => {
       }
     });
     expect(tx.auditLog.create).toHaveBeenNthCalledWith(1, {
-      data: expect.objectContaining({ userId: 'user_1', action: 'mail.sent', entityId: 'mail_1' })
+      data: expect.objectContaining({ userId: 'user_1', sessionId: 'session_1', action: 'mail.sent', entityId: 'mail_1' })
     });
     expect(tx.auditLog.create).toHaveBeenNthCalledWith(2, {
-      data: expect.objectContaining({ userId: 'user_1', action: 'mail.send_failed', entityId: 'mail_1' })
+      data: expect.objectContaining({ userId: 'user_1', sessionId: 'session_1', action: 'mail.send_failed', entityId: 'mail_1' })
     });
   });
 

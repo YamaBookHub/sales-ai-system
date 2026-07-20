@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ReplyCategory } from '@prisma/client';
+import { AuditActor } from '../../audit/audit-actor';
 import { classifyReplyText } from '../../ai/domain/reply-classifier';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateMailReplyDto } from '../mail.dto';
@@ -12,7 +13,7 @@ const TERMINAL_CATEGORIES: ReplyCategory[] = ['unsubscribe', 'not_interested'];
 export class RecordMailReplyUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(emailId: string, dto: CreateMailReplyDto, userId: string | null = null) {
+  async execute(emailId: string, dto: CreateMailReplyDto, actor: AuditActor | null = null) {
     const receivedAt = dto.receivedAt ? new Date(dto.receivedAt) : new Date();
     const classification = classifyReplyText(dto.body, receivedAt);
 
@@ -113,11 +114,11 @@ export class RecordMailReplyUseCase {
             confidence: classification.confidence,
             nextActionAt: classification.nextActionAt?.toISOString() ?? null,
             taskId: task?.id ?? null,
-            ...(userId ? { actorUserId: userId } : {})
+            ...(actor ? { actorUserId: actor.userId } : {})
           }
         }
       });
-      await recordMailAudit(tx, userId, 'mail.reply_recorded', email.id, {
+      await recordMailAudit(tx, actor, 'mail.reply_recorded', email.id, {
         before: mailAuditState(email),
         after: {
           ...mailAuditState(email),

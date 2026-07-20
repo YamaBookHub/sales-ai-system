@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { AuditActor } from '../../audit/audit-actor';
 import { AiClientService } from '../ai-client.service';
 import type { SelectableAiModel } from '../ai.dto';
 import { aiProviderForModel } from '../domain/ai-model';
@@ -13,7 +14,7 @@ export class PolishMailUseCase {
     private readonly aiClient: AiClientService
   ) {}
 
-  async execute(mailId: string, model?: SelectableAiModel, userId: string | null = null) {
+  async execute(mailId: string, model?: SelectableAiModel, actor: AuditActor | null = null) {
     const email = await this.prisma.outreachEmail.findUnique({
       where: { id: mailId },
       include: {
@@ -56,7 +57,7 @@ export class PolishMailUseCase {
           body: draft.body,
           status: 'draft',
           failedReason: null,
-          events: { create: { type: 'generated', payload: { source: `${provider}_polish`, model: draft.model, ...(userId ? { actorUserId: userId } : {}) } } }
+          events: { create: { type: 'generated', payload: { source: `${provider}_polish`, model: draft.model, ...(actor ? { actorUserId: actor.userId } : {}) } } }
         }
       });
 
@@ -82,6 +83,20 @@ export class PolishMailUseCase {
           costUsd: draft.usage.costUsd
         }
       });
+
+      if (actor) {
+        await tx.auditLog.create({
+          data: {
+            userId: actor.userId,
+            sessionId: actor.sessionId,
+            action: 'mail.polished',
+            entityType: 'OutreachEmail',
+            entityId: updatedEmail.id,
+            before: { status: email.status },
+            after: { status: updatedEmail.status, model: draft.model, provider }
+          }
+        });
+      }
 
       return { email: updatedEmail, aiGeneration };
     });

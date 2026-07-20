@@ -3,6 +3,10 @@ import { RecordMailReplyUseCase } from './record-mail-reply.usecase';
 
 describe('RecordMailReplyUseCase', () => {
   const receivedAt = '2026-07-11T03:00:00.000Z';
+  const actor = {
+    userId: '11111111-1111-4111-8111-111111111111',
+    sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  };
 
   function createSubject(email: { id: string; companyId: string; contactId: string | null; leadId: string | null } | null = {
     id: 'mail_1', companyId: 'company_1', contactId: 'contact_1', leadId: 'lead_1'
@@ -108,10 +112,15 @@ describe('RecordMailReplyUseCase', () => {
       fromEmail: 'contact@example.com',
       body: 'ぜひZoomで打ち合わせしたいです。候補日をください。',
       receivedAt
-    }, '11111111-1111-4111-8111-111111111111');
+    }, actor);
 
     expect(tx.auditLog.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ action: 'mail.reply_recorded', entityId: 'mail_1' })
+      data: expect.objectContaining({
+        userId: actor.userId,
+        sessionId: actor.sessionId,
+        action: 'mail.reply_recorded',
+        entityId: 'mail_1'
+      })
     });
     const serialized = JSON.stringify(tx.auditLog.create.mock.calls[0][0]);
     expect(serialized).not.toContain('contact@example.com');

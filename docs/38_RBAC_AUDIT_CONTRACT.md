@@ -91,7 +91,7 @@ OpenAPIの各保護operationには、実装の `@RequirePermissions` と同じ `
 
 必須actionの例は次のとおり。
 
-`project.imported`、`project.created`、`lead.created`、`lead.updated`、`lead.scored`、`analysis.generated`、`analysis.edited`、`analysis.confirmed`、`mail.created`、`mail.updated`、`mail.review_requested`、`mail.rereview_requested`、`mail.rejected`、`mail.approved`、`mail.queued`、`mail.send_started`、`mail.sent`、`mail.send_failed`、`mail.marked_sent`、`contact.unsubscribed`、`company.blocked`、`opportunity.transitioned`、`opportunity.reopened`、`user.created`、`user.role_changed`、`user.deactivated`、`user.reactivated`、`user.sessions_revoked`。
+`projects.import`、`projects.bulk_import.item`、`projects.bulk_import`、`project.created`、`lead.created`、`lead.updated`、`lead.scored`、`analysis.generated`、`analysis.edited`、`analysis.confirmed`、`mail.generated`、`mail.created`、`mail.edited`、`mail.review_requested`、`mail.rereview_requested`、`mail.rejected`、`mail.approved`、`mail.queued`、`mail.send_started`、`mail.sent`、`mail.send_failed`、`mail.marked_sent`、`contact.unsubscribed`、`company.blocked`、`opportunity.updated`、`opportunity.transitioned`、`opportunity.reopened`、`user.created`、`user.role_changed`、`user.deactivated`、`user.reactivated`、`user.sessions_revoked`。
 
 ### 5.2 保存禁止情報
 
@@ -99,6 +99,8 @@ OpenAPIの各保護operationには、実装の `@RequirePermissions` と同じ `
 - メール編集は本文そのものではなく、変更フィールド名とcontent hashなどの検証用情報だけを保存する。
 - 平文IPは保存せず、必要な場合は既存の `ipHash` を使う。
 - `before` / `after` は社名や状態などの最小限の安全なsnapshotに限定する。
+- 管理APIは、移行前の既存AuditLogに禁止情報が残っていても、キー名と値を再検査してmaskしてから返す。
+- 業務更新後に別処理で監査を書く共通interceptorは使わない。監査失敗時は業務更新もrollbackする明示的なtransactionだけを使う。
 
 権限拒否は `authorization.denied` として、actor、session、要求permission、routeを本文やsecretなしで記録してよい。拒否された操作は業務データを変更しない。
 

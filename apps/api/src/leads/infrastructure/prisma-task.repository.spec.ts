@@ -6,6 +6,7 @@ describe('PrismaTaskRepository', () => {
     return {
       id: 'task_1',
       leadId: 'lead_1',
+      assigneeId: 'user_1',
       title: '確認する',
       description: null,
       status: 'todo',
@@ -41,5 +42,31 @@ describe('PrismaTaskRepository', () => {
     await repository.listByLead('lead_1', 'all');
 
     expect((prisma.task.findMany as jest.Mock).mock.calls[0][0].where).toEqual({ leadId: 'lead_1' });
+  });
+
+  it('creates a task and its safe audit entry in one transaction', async () => {
+    const tx = {
+      task: { create: jest.fn().mockResolvedValue(taskRecord()) },
+      auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) }
+    };
+    const prisma = { $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)) };
+    const repository = new PrismaTaskRepository(prisma as any);
+
+    await repository.create({ leadId: 'lead_1', title: 'free text title', description: 'free text body' }, {
+      userId: 'user-1',
+      sessionId: 'session-1'
+    });
+
+    expect(tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'user-1',
+        sessionId: 'session-1',
+        action: 'task.created',
+        entityType: 'Task',
+        entityId: 'task_1',
+        after: { taskId: 'task_1', leadId: 'lead_1', assigneeId: 'user_1', status: 'todo' }
+      })
+    });
+    expect(JSON.stringify(tx.auditLog.create.mock.calls[0][0].data)).not.toContain('free text');
   });
 });

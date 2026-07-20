@@ -9,7 +9,7 @@ import { SearchProjectsUseCase } from './application/search-projects.usecase';
 import { BulkImportProjectsDto, CreateProjectDto, ImportCampfireProjectDto, ImportProjectDto, SearchCampfireProjectsDto, SearchProjectsDto } from './projects.dto';
 import { ProjectsService } from './projects.service';
 import { RequirePermissions } from '../auth/require-permissions.decorator';
-import { AuditAction } from '../audit/audit-action.decorator';
+import { auditActor } from '../audit/audit-actor';
 
 @Controller('projects')
 @RequirePermissions('workspace.read')
@@ -28,27 +28,26 @@ export class ProjectsController {
 
   @Post()
   @RequirePermissions('prospecting.execute')
-  @AuditAction('project.created', 'CrowdfundingProject', [])
-  async create(@Body() dto: CreateProjectDto) {
-    return ok(await this.projects.create(dto));
+  async create(@Body() dto: CreateProjectDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.projects.create(dto, auditActor(principal)));
   }
 
   @Post('import/campfire')
   @RequirePermissions('prospecting.execute')
   async importCampfire(@Body() dto: ImportCampfireProjectDto, @CurrentUser() principal: AuthenticatedPrincipal) {
-    return ok(await this.importProjects.importCampfire(dto, principal.userId));
+    return ok(await this.importProjects.importCampfire(dto, auditActor(principal)));
   }
 
   @Post('import')
   @RequirePermissions('prospecting.execute')
   async importProject(@Body() dto: ImportProjectDto, @CurrentUser() principal: AuthenticatedPrincipal) {
-    return ok(await this.importProjects.import(dto, principal.userId));
+    return ok(await this.importProjects.import(dto, auditActor(principal)));
   }
 
   @Post('bulk-import')
   @RequirePermissions('prospecting.execute')
   async bulkImport(@Body() dto: BulkImportProjectsDto, @CurrentUser() principal: AuthenticatedPrincipal) {
-    return ok(await this.bulkImportProjects.execute(dto, principal.userId));
+    return ok(await this.bulkImportProjects.execute(dto, auditActor(principal)));
   }
 
   @Get('categories/campfire')

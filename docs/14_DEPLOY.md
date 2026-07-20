@@ -6,7 +6,7 @@
 - DBはPostgreSQL、ORMはPrismaである。
 - 現行package scriptsにはAPIのstart、test、Prisma validate/generate/migrate/seedがある。
 - worker、scheduler、Redis、DLQ、production用Dockerfile、`npm run lint`、`npm run start:worker`、`npm run start:scheduler` は未実装である。デプロイ手順に実装済みのscriptとして記載しない。
-- 認証は `37_AUTHENTICATION_CONTRACT.md` に従って実装済みである。LA-004のRBAC・監査が完了するまではstaging/productionへ公開しない。組織分離が完了するまでは複数顧客向けに公開しない。
+- 認証と単一組織内のRBAC・監査は `37_AUTHENTICATION_CONTRACT.md` と `38_RBAC_AUDIT_CONTRACT.md` に従って実装済みである。組織分離が完了するまでは複数顧客向けに公開しない。
 
 ## 2. 環境変数
 

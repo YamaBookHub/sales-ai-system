@@ -10,6 +10,7 @@ import {
   TaskScope,
   UpdateTaskRecord
 } from '../domain/task.repository';
+import { AuditActor } from '../../audit/audit-actor';
 
 const taskInclude = {
   assignee: { select: { id: true, name: true, email: true } }
@@ -36,23 +37,55 @@ export class PrismaTaskRepository implements TaskRepository {
     return this.prisma.task.findUnique({ where: { id }, include: taskInclude }) as Promise<TaskRecord | null>;
   }
 
-  async create(input: CreateTaskRecord): Promise<TaskView> {
-    const task = await this.prisma.task.create({
-      data: {
-        leadId: input.leadId,
-        title: input.title,
-        description: input.description,
-        dueAt: input.dueAt,
-        assigneeId: input.assigneeId
-      },
-      include: taskInclude
+  async create(input: CreateTaskRecord, actor?: AuditActor): Promise<TaskView> {
+    return this.prisma.$transaction(async (tx) => {
+      const task = await tx.task.create({
+        data: {
+          leadId: input.leadId,
+          title: input.title,
+          description: input.description,
+          dueAt: input.dueAt,
+          assigneeId: input.assigneeId
+        },
+        include: taskInclude
+      });
+      if (actor) {
+        await tx.auditLog.create({
+          data: {
+            ...actor,
+            action: 'task.created',
+            entityType: 'Task',
+            entityId: task.id,
+            after: { taskId: task.id, leadId: task.leadId, assigneeId: task.assigneeId, status: task.status }
+          }
+        });
+      }
+      return toTaskView(task as TaskRecord);
     });
-    return toTaskView(task as TaskRecord);
   }
 
-  async update(id: string, input: UpdateTaskRecord): Promise<TaskView> {
-    const task = await this.prisma.task.update({ where: { id }, data: input, include: taskInclude });
-    return toTaskView(task as TaskRecord);
+  async update(id: string, input: UpdateTaskRecord, actor?: AuditActor): Promise<TaskView> {
+    return this.prisma.$transaction(async (tx) => {
+      const task = await tx.task.update({ where: { id }, data: input, include: taskInclude });
+      if (actor) {
+        await tx.auditLog.create({
+          data: {
+            ...actor,
+            action: 'task.updated',
+            entityType: 'Task',
+            entityId: task.id,
+            after: {
+              taskId: task.id,
+              leadId: task.leadId,
+              assigneeId: task.assigneeId,
+              status: task.status,
+              changedFields: Object.keys(input).sort()
+            }
+          }
+        });
+      }
+      return toTaskView(task as TaskRecord);
+    });
   }
 
   findAssignee(id: string): Promise<TaskAssignee | null> {

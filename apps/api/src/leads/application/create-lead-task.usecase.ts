@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { canCreateTaskForLead } from '../domain/task';
 import { CreateTaskRecord, TASK_REPOSITORY, TaskRepository } from '../domain/task.repository';
+import { AuditActor } from '../../audit/audit-actor';
 
 export type CreateLeadTaskInput = {
   title: string;
@@ -13,7 +14,7 @@ export type CreateLeadTaskInput = {
 export class CreateLeadTaskUseCase {
   constructor(@Inject(TASK_REPOSITORY) private readonly tasks: TaskRepository) {}
 
-  async execute(leadId: string, input: CreateLeadTaskInput) {
+  async execute(leadId: string, input: CreateLeadTaskInput, actor?: AuditActor) {
     const lead = await this.tasks.findLead(leadId);
     if (!lead) throw new NotFoundException('Lead not found');
     if (!canCreateTaskForLead(lead.status)) throw new ConflictException('Cannot create a task for a terminal lead');
@@ -31,7 +32,7 @@ export class CreateLeadTaskUseCase {
       dueAt: parseDate(input.dueAt),
       assigneeId: input.assigneeId
     };
-    return this.tasks.create(record);
+    return actor ? this.tasks.create(record, actor) : this.tasks.create(record);
   }
 }
 

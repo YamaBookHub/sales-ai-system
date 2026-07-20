@@ -9,6 +9,7 @@ import { PolishMailUseCase } from './application/polish-mail.usecase';
 import { OpenAiBudgetService } from './application/openai-budget.service';
 import { GenerateMailDto, UpdateLeadAnalysisDto } from './ai.dto';
 import type { SelectableAiModel } from './ai.dto';
+import type { AuditActor } from '../audit/audit-actor';
 
 @Injectable()
 export class AiService {
@@ -23,32 +24,32 @@ export class AiService {
     private readonly openAiBudgetService: OpenAiBudgetService
   ) {}
 
-  async analyzeLead(leadId: string, userId: string | null = null) {
-    return this.analyzeLeadUseCase.execute(leadId, userId);
+  async analyzeLead(leadId: string, actor: AuditActor | null = null) {
+    return this.analyzeLeadUseCase.execute(leadId, actor);
   }
 
-  async generateMailDraft(leadId: string, dto: GenerateMailDto, userId: string | null = null) {
-    return this.generateMailDraftUseCase.execute(leadId, dto, userId);
+  async generateMailDraft(leadId: string, dto: GenerateMailDto, actor: AuditActor | null = null) {
+    return this.generateMailDraftUseCase.execute(leadId, dto, actor);
   }
 
   getLeadAnalysis(leadId: string) {
     return this.leadAnalysisUseCase.get(leadId);
   }
 
-  saveLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto, userId: string | null = null) {
-    return this.leadAnalysisUseCase.save(leadId, dto, userId);
+  saveLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto, actor: AuditActor | null = null) {
+    return this.leadAnalysisUseCase.save(leadId, dto, actor);
   }
 
-  confirmLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto, userId: string | null = null) {
-    return this.leadAnalysisUseCase.confirm(leadId, dto, userId);
+  confirmLeadAnalysis(leadId: string, dto: UpdateLeadAnalysisDto, actor: AuditActor | null = null) {
+    return this.leadAnalysisUseCase.confirm(leadId, dto, actor);
   }
 
-  async polishMail(mailId: string, model?: SelectableAiModel, userId: string | null = null) {
-    return this.polishMailUseCase.execute(mailId, model, userId);
+  async polishMail(mailId: string, model?: SelectableAiModel, actor: AuditActor | null = null) {
+    return this.polishMailUseCase.execute(mailId, model, actor);
   }
 
-  async classifyReply(replyId: string, userId: string | null = null) {
-    return this.classifyReplyUseCase.execute(replyId, userId);
+  async classifyReply(replyId: string, actor: AuditActor | null = null) {
+    return this.classifyReplyUseCase.execute(replyId, actor);
   }
 
   async listLeadGenerations(leadId: string) {

@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { AuditActor } from '../../audit/audit-actor';
 import { resolveMailRecipient } from '../../mail/infrastructure/contact-recipient.resolver';
 import { assertLeadContactEligible } from '../../mail/infrastructure/contact-eligibility.reader';
 import { GenerateMailDto } from '../ai.dto';
@@ -11,7 +12,10 @@ import { requireLatestConfirmedAnalysis } from './confirmed-analysis.reader';
 export class GenerateMailDraftUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(leadId: string, dto: GenerateMailDto, userId: string | null = null) {
+  async execute(leadId: string, dto: GenerateMailDto, actorInput: AuditActor | string | null = null) {
+    // Legacy internal callers may only provide a user ID. Do not create an audit
+    // record without a session context; authenticated controller paths pass AuditActor.
+    const actor = typeof actorInput === 'string' ? null : actorInput;
     const leadExists = await this.prisma.salesLead.findUnique({ where: { id: leadId }, select: { id: true } });
     if (!leadExists) throw new NotFoundException('Lead not found');
 
@@ -65,7 +69,7 @@ export class GenerateMailDraftUseCase {
           subject: draft.subject,
           body: draft.body,
           status: 'draft',
-          events: { create: { type: 'generated', payload: userId ? { actorUserId: userId } : undefined } }
+          events: { create: { type: 'generated', payload: actor ? { actorUserId: actor.userId } : undefined } }
         }
       });
       await tx.salesLead.update({ where: { id: leadId }, data: { status: 'drafted' } });
@@ -91,6 +95,23 @@ export class GenerateMailDraftUseCase {
           costUsd: 0
         }
       });
+      if (actor) {
+        await tx.auditLog.create({
+          data: {
+            userId: actor.userId,
+            sessionId: actor.sessionId,
+            action: 'mail.generated',
+            entityType: 'OutreachEmail',
+            entityId: email.id,
+            after: {
+              leadId,
+              analysisRevisionId: analysisRevision.id,
+              templateKey: dto.templateKey,
+              model: draft.model
+            }
+          }
+        });
+      }
       return { email, aiGeneration, draft };
     });
 

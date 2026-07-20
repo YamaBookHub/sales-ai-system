@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ProjectSourceProvider } from '../domain/project-source-provider';
+import type { AuditActor } from '../../audit/audit-actor';
 import { CampfireProjectSourceProvider } from '../infrastructure/campfire-project-source.provider';
 import { MakuakeProjectSourceProvider } from '../infrastructure/makuake-project-source.provider';
 import { PrismaProjectImportRepository } from '../infrastructure/prisma-project-import.repository';
@@ -13,12 +14,12 @@ export class ImportProjectUseCase {
     private readonly makuakeProvider: MakuakeProjectSourceProvider
   ) {}
 
-  import(dto: ImportProjectDto, userId: string | null = null) {
-    return this.importWithProvider(this.providerFor(dto.source), dto.url, { userId });
+  import(dto: ImportProjectDto, actor: AuditActor | null = null) {
+    return this.importWithProvider(this.providerFor(dto.source), dto.url, { actor });
   }
 
-  importCampfire(dto: ImportCampfireProjectDto, userId: string | null = null) {
-    return this.import({ source: 'campfire', url: dto.url }, userId);
+  importCampfire(dto: ImportCampfireProjectDto, actor: AuditActor | null = null) {
+    return this.import({ source: 'campfire', url: dto.url }, actor);
   }
 
   private async importWithProvider(provider: ProjectSourceProvider, url: string, options: ImportOptions = {}) {
@@ -45,7 +46,7 @@ export class ImportProjectUseCase {
 
 type ImportOptions = {
   bulk?: boolean;
-  userId?: string | null;
+  actor?: AuditActor | null;
 };
 
 function normalizeProjectSource(source?: string): ProjectSource {

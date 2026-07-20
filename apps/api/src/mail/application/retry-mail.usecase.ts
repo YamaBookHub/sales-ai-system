@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AuditActor } from '../../audit/audit-actor';
 import { assertCanRetry } from '../domain/mail-policy';
 import { PrismaMailWorkflowRepository } from '../infrastructure/prisma-mail-workflow.repository';
 
@@ -6,12 +7,12 @@ import { PrismaMailWorkflowRepository } from '../infrastructure/prisma-mail-work
 export class RetryMailUseCase {
   constructor(private readonly mails: PrismaMailWorkflowRepository) {}
 
-  async execute(id: string, userId: string | null = null) {
+  async execute(id: string, actor: AuditActor | null = null) {
     const email = await this.mails.get(id);
     assertCanRetry(email.status);
-    return userId
+    return actor
       ? this.mails.transitionIfDeliveryAllowed(
-        id, 'queued', 'retried', { retryCount: { increment: 1 } }, undefined, userId
+        id, 'queued', 'retried', { retryCount: { increment: 1 } }, undefined, actor
       )
       : this.mails.transitionIfDeliveryAllowed(id, 'queued', 'retried', { retryCount: { increment: 1 } });
   }

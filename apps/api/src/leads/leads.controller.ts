@@ -5,7 +5,7 @@ import { LeadsService } from './leads.service';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AuthenticatedPrincipal } from '../auth/auth.types';
 import { RequirePermissions } from '../auth/require-permissions.decorator';
-import { AuditAction } from '../audit/audit-action.decorator';
+import { auditActor } from '../audit/audit-actor';
 
 @Controller('leads')
 @RequirePermissions('workspace.read')
@@ -24,9 +24,8 @@ export class LeadsController {
 
   @Post()
   @RequirePermissions('records.write')
-  @AuditAction('lead.created', 'SalesLead', [])
-  async create(@Body() dto: CreateLeadDto) {
-    return ok(await this.leads.create(dto));
+  async create(@Body() dto: CreateLeadDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.leads.create(dto, auditActor(principal)));
   }
 
   @Get(':id')
@@ -41,13 +40,12 @@ export class LeadsController {
     @Body() dto: UpdateLeadDto,
     @CurrentUser() principal: AuthenticatedPrincipal
   ) {
-    return ok(await this.leads.update(id, dto, principal.userId));
+    return ok(await this.leads.update(id, dto, auditActor(principal)));
   }
 
   @Post(':id/score')
   @RequirePermissions('records.write')
-  @AuditAction('lead.scored', 'SalesLead', ['id'])
-  async score(@Param('id') id: string) {
-    return ok(await this.leads.score(id));
+  async score(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.leads.score(id, auditActor(principal)));
   }
 }

@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { Prisma } from '@prisma/client';
+import { AuditActor } from '../../audit/audit-actor';
 
 export type MailAuditAction =
   | 'mail.created'
@@ -16,7 +17,9 @@ export type MailAuditAction =
   | 'mail.send_failed'
   | 'mail.retried'
   | 'mail.cancelled'
-  | 'mail.reply_recorded';
+  | 'mail.reply_recorded'
+  | 'mail_template.saved'
+  | 'mail_template.imported';
 
 type AuditClient = Pick<Prisma.TransactionClient, 'auditLog'>;
 
@@ -36,18 +39,20 @@ type MailAuditStateSource = {
  */
 export async function recordMailAudit(
   tx: AuditClient,
-  userId: string | null | undefined,
+  actor: AuditActor | null | undefined,
   action: MailAuditAction,
   emailId: string,
-  details: { before?: Record<string, unknown>; after?: Record<string, unknown> } = {}
+  details: { before?: Record<string, unknown>; after?: Record<string, unknown> } = {},
+  entityType = 'OutreachEmail'
 ) {
-  if (!userId) return;
+  if (!actor) return;
 
   await tx.auditLog.create({
     data: {
-      userId,
+      userId: actor.userId,
+      sessionId: actor.sessionId,
       action,
-      entityType: 'OutreachEmail',
+      entityType,
       entityId: emailId,
       ...(details.before ? { before: details.before as Prisma.InputJsonObject } : {}),
       ...(details.after ? { after: details.after as Prisma.InputJsonObject } : {})

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { AuditActor } from '../../audit/audit-actor';
 import { ensureOpportunityForLead } from '../../leads/infrastructure/prisma-opportunity.repository';
 import {
   normalizeImportedCompanyName,
@@ -10,7 +11,7 @@ import { NormalizedImportedProject } from '../domain/project-source-provider';
 
 export type ProjectImportPersistenceOptions = {
   bulk?: boolean;
-  userId?: string | null;
+  actor?: AuditActor | null;
 };
 
 export type BulkImportAuditSummary = {
@@ -180,13 +181,13 @@ export class PrismaProjectImportRepository {
       await tx.auditLog.create({
         data: {
           action: options.bulk ? 'projects.bulk_import.item' : 'projects.import',
-          userId: options.userId,
+          userId: options.actor?.userId ?? null,
+          sessionId: options.actor?.sessionId ?? null,
           entityType: 'SalesLead',
           entityId: lead.id,
           after: {
             source: imported.source,
             platform: imported.platform.name,
-            projectUrl,
             projectId: project.id,
             companyId: company.id
           }
@@ -197,11 +198,12 @@ export class PrismaProjectImportRepository {
     });
   }
 
-  async recordBulkImportAudit(userId: string | null | undefined, summary: BulkImportAuditSummary) {
+  async recordBulkImportAudit(actor: AuditActor | null | undefined, summary: BulkImportAuditSummary) {
     await this.prisma.auditLog.create({
       data: {
         action: 'projects.bulk_import',
-        userId,
+        userId: actor?.userId ?? null,
+        sessionId: actor?.sessionId ?? null,
         entityType: 'Project',
         after: {
           source: summary.source,

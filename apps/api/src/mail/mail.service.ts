@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { EmailStatus } from '@prisma/client';
+import { EmailStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditActor } from '../audit/audit-actor';
 import { ApproveMailUseCase } from './application/approve-mail.usecase';
 import { CheckMailDraftConsistencyUseCase } from './application/check-mail-draft-consistency.usecase';
 import { MarkMailSentUseCase } from './application/mark-mail-sent.usecase';
@@ -76,36 +77,39 @@ export class MailService {
     return this.prisma.mailTemplate.findUnique({ where: { key } });
   }
 
-  saveTemplate(dto: SaveMailTemplateDto) {
+  saveTemplate(dto: SaveMailTemplateDto, actor: AuditActor | null = null) {
     const data = normalizeTemplate(dto);
-    return this.prisma.mailTemplate.upsert({
-      where: { key: data.key },
-      update: data,
-      create: data
+    return this.prisma.$transaction((tx) => this.saveTemplateInTransaction(tx, data, actor, 'mail_template.saved'));
+  }
+
+  async importTemplates(dto: ImportMailTemplatesDto, actor: AuditActor | null = null) {
+    return this.prisma.$transaction(async (tx) => {
+      const templates = [];
+      for (const template of dto.templates) {
+        templates.push(await this.saveTemplateInTransaction(
+          tx,
+          normalizeTemplate(template),
+          actor,
+          'mail_template.imported'
+        ));
+      }
+
+      return {
+        imported: templates.length,
+        templates
+      };
     });
   }
 
-  async importTemplates(dto: ImportMailTemplatesDto) {
-    const templates = [];
-    for (const template of dto.templates) {
-      templates.push(await this.saveTemplate(template));
-    }
-
-    return {
-      imported: templates.length,
-      templates
-    };
-  }
-
-  async createDraft(dto: CreateMailDraftDto, userId: string | null = null) {
+  async createDraft(dto: CreateMailDraftDto, actor: AuditActor | null = null) {
     const manualInstruction = dto.manualInstruction;
     if (!manualInstruction || !manualInstruction.trim()) {
       const generationInput = {
         templateKey: dto.templateKey,
         analysisRevisionId: dto.analysisRevisionId
       };
-      const result = userId
-        ? await this.generateMailDraft.execute(dto.leadId, generationInput, userId)
+      const result = actor
+        ? await this.generateMailDraft.execute(dto.leadId, generationInput, actor)
         : await this.generateMailDraft.execute(dto.leadId, generationInput);
 
       return result.email;
@@ -169,7 +173,7 @@ export class MailService {
           subject: `${projectPlatformLabel(currentLead.project)}でのプロジェクトを拝見しご連絡いたしました`,
           body: manualInstruction,
           status: 'draft',
-          events: { create: { type: 'created', payload: userId ? { actorUserId: userId } : undefined } }
+          events: { create: { type: 'created', payload: actor ? { actorUserId: actor.userId } : undefined } }
         }
       });
 
@@ -177,7 +181,7 @@ export class MailService {
         where: { id: currentLead.id },
         data: { status: 'drafted' }
       });
-      await recordMailAudit(tx, userId, 'mail.created', email.id, {
+      await recordMailAudit(tx, actor, 'mail.created', email.id, {
         after: mailAuditState(email)
       });
 
@@ -185,7 +189,7 @@ export class MailService {
     });
   }
 
-  update(id: string, dto: UpdateMailDto, userId: string | null = null) {
+  update(id: string, dto: UpdateMailDto, actor: AuditActor | null = null) {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.outreachEmail.findUnique({ where: { id } });
       if (!before) throw new NotFoundException('Mail not found');
@@ -194,10 +198,10 @@ export class MailService {
         where: { id },
         data: {
           ...dto,
-          events: { create: { type: 'reviewed', payload: { edited: true, ...(userId ? { actorUserId: userId } : {}) } } }
+          events: { create: { type: 'reviewed', payload: { edited: true, ...(actor ? { actorUserId: actor.userId } : {}) } } }
         }
       });
-      await recordMailAudit(tx, userId, 'mail.edited', id, {
+      await recordMailAudit(tx, actor, 'mail.edited', id, {
         before: mailAuditState(before),
         after: { ...mailAuditState(email), ...edit }
       });
@@ -205,47 +209,47 @@ export class MailService {
     });
   }
 
-  requestReview(id: string, userId: string | null = null) {
-    return this.requestMailReview.execute(id, userId);
+  requestReview(id: string, actor: AuditActor | null = null) {
+    return this.requestMailReview.execute(id, actor);
   }
 
   checkDraftConsistency(id: string) {
     return this.checkMailDraftConsistency.execute(id);
   }
 
-  requestReReview(id: string, userId: string | null = null) {
-    return this.requestMailReReview.execute(id, userId);
+  requestReReview(id: string, actor: AuditActor | null = null) {
+    return this.requestMailReReview.execute(id, actor);
   }
 
-  approve(id: string, userId: string | null = null) {
-    return this.approveMail.execute(id, userId);
+  approve(id: string, actor: AuditActor | null = null) {
+    return this.approveMail.execute(id, actor);
   }
 
-  reject(id: string, dto: RejectMailDto, userId: string | null = null) {
-    return this.rejectMail.execute(id, dto, userId);
+  reject(id: string, dto: RejectMailDto, actor: AuditActor | null = null) {
+    return this.rejectMail.execute(id, dto, actor);
   }
 
-  queue(id: string, userId: string | null = null) {
-    return this.queueMail.execute(id, userId);
+  queue(id: string, actor: AuditActor | null = null) {
+    return this.queueMail.execute(id, actor);
   }
 
-  markSent(id: string, dto: MarkMailSentDto, userId: string | null = null) {
-    return this.markMailSent.execute(id, dto, userId);
+  markSent(id: string, dto: MarkMailSentDto, actor: AuditActor | null = null) {
+    return this.markMailSent.execute(id, dto, actor);
   }
 
-  sendQueued(id: string, userId: string) {
-    return this.sendQueuedMail.execute(id, userId);
+  sendQueued(id: string, actor: AuditActor) {
+    return this.sendQueuedMail.execute(id, actor);
   }
 
-  async recordReply(id: string, dto: CreateMailReplyDto, userId: string | null = null) {
-    return userId ? this.recordMailReply.execute(id, dto, userId) : this.recordMailReply.execute(id, dto);
+  async recordReply(id: string, dto: CreateMailReplyDto, actor: AuditActor | null = null) {
+    return actor ? this.recordMailReply.execute(id, dto, actor) : this.recordMailReply.execute(id, dto);
   }
 
-  retry(id: string, userId: string | null = null) {
-    return this.retryMail.execute(id, userId);
+  retry(id: string, actor: AuditActor | null = null) {
+    return this.retryMail.execute(id, actor);
   }
 
-  cancel(id: string, userId: string | null = null) {
+  cancel(id: string, actor: AuditActor | null = null) {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.outreachEmail.findUnique({ where: { id } });
       if (!before) throw new NotFoundException('Mail not found');
@@ -253,10 +257,10 @@ export class MailService {
         where: { id },
         data: {
           status: 'cancelled',
-          events: { create: { type: 'cancelled', payload: userId ? { actorUserId: userId } : undefined } }
+          events: { create: { type: 'cancelled', payload: actor ? { actorUserId: actor.userId } : undefined } }
         }
       });
-      await recordMailAudit(tx, userId, 'mail.cancelled', id, {
+      await recordMailAudit(tx, actor, 'mail.cancelled', id, {
         before: mailAuditState(before),
         after: mailAuditState(email)
       });
@@ -278,7 +282,7 @@ export class MailService {
     };
   }
 
-  async updateChecklist(emailId: string, dto: UpdateMailChecklistDto, userId: string | null = null) {
+  async updateChecklist(emailId: string, dto: UpdateMailChecklistDto, actor: AuditActor | null = null) {
     await this.get(emailId);
     const now = new Date();
     const items = dto.items.length ? dto.items : DEFAULT_CHECKLIST_ITEMS.map((item) => ({ ...item, checked: false }));
@@ -313,11 +317,11 @@ export class MailService {
             complete: items.every((item) => item.checked),
             checkedCount: items.filter((item) => item.checked).length,
             totalCount: items.length,
-            ...(userId ? { actorUserId: userId } : {})
+            ...(actor ? { actorUserId: actor.userId } : {})
           }
         }
       });
-      await recordMailAudit(tx, userId, 'mail.checklist_updated', emailId, {
+      await recordMailAudit(tx, actor, 'mail.checklist_updated', emailId, {
         before: mailAuditState(email),
         after: { ...mailAuditState(email), ...checklistAuditSummary(items) }
       });
@@ -330,6 +334,30 @@ export class MailService {
     const emails = await this.prisma.outreachEmail.findMany({ where: { gmailThreadId } });
     const replies = await this.prisma.emailReply.findMany({ where: { email: { gmailThreadId } } });
     return { gmailThreadId, emails, replies };
+  }
+
+  private async saveTemplateInTransaction(
+    tx: Prisma.TransactionClient,
+    data: ReturnType<typeof normalizeTemplate>,
+    actor: AuditActor | null,
+    action: 'mail_template.saved' | 'mail_template.imported'
+  ) {
+    const before = await tx.mailTemplate.findUnique({
+      where: { key: data.key },
+      select: { id: true, key: true, channel: true, isActive: true }
+    });
+    const template = await tx.mailTemplate.upsert({
+      where: { key: data.key },
+      update: data,
+      create: data
+    });
+
+    await recordMailAudit(tx, actor, action, template.id, {
+      before: templateAuditState(before),
+      after: templateAuditState(template)
+    }, 'MailTemplate');
+
+    return template;
   }
 
   private async get(id: string) {
@@ -368,6 +396,16 @@ function normalizeTemplate(dto: SaveMailTemplateDto) {
     body: dto.body.trim(),
     description: dto.description?.trim() || null,
     isActive: dto.isActive ?? true
+  };
+}
+
+function templateAuditState(template: { key: string; channel: string; isActive: boolean } | null) {
+  if (!template) return { exists: false };
+  return {
+    exists: true,
+    key: template.key,
+    channel: template.channel,
+    isActive: template.isActive
   };
 }
 

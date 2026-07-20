@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { AuditActor } from '../../audit/audit-actor';
 import { assertCanSendQueued } from '../domain/mail-policy';
 import { MAIL_SENDER, MailSender } from '../domain/mail-sender';
 import { PrismaMailWorkflowRepository } from '../infrastructure/prisma-mail-workflow.repository';
@@ -11,7 +12,7 @@ export class SendQueuedMailUseCase {
     private readonly sender: MailSender
   ) {}
 
-  async execute(id: string, userId: string) {
+  async execute(id: string, actor: AuditActor) {
     const email = await this.mails.get(id);
     const checklistComplete = await this.mails.checklistComplete(id);
     assertCanSendQueued(email.status, checklistComplete);
@@ -19,15 +20,15 @@ export class SendQueuedMailUseCase {
     const idempotencyKey = buildMailSendIdempotencyKey(email);
     const request = buildMailSendRequest(email, idempotencyKey);
     this.sender.validate?.(request);
-    const claimedEmail = await this.mails.claimForSending(id, idempotencyKey, userId);
+    const claimedEmail = await this.mails.claimForSending(id, idempotencyKey, actor);
 
     try {
       // A contact can be unsubscribed after queueing; check once more immediately before the provider call.
       await this.mails.assertDeliveryAllowed(id);
       const result = await this.sender.send(buildMailSendRequest(claimedEmail, idempotencyKey));
-      return this.mails.markSentAfterSend(id, result, idempotencyKey, userId);
+      return this.mails.markSentAfterSend(id, result, idempotencyKey, actor);
     } catch (error) {
-      await this.mails.markFailedAfterSend(id, error, idempotencyKey, userId);
+      await this.mails.markFailedAfterSend(id, error, idempotencyKey, actor);
       throw error;
     }
   }

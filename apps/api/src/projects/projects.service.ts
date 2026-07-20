@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ProjectStatus } from '@prisma/client';
 import { AiService } from '../ai/ai.service';
+import type { AuditActor } from '../audit/audit-actor';
 import { runWithConcurrency } from '../common/concurrency';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectSearchJobManager } from './application/project-search-job.manager';
@@ -42,18 +43,42 @@ export class ProjectsService {
     return { items, page, limit, total };
   }
 
-  create(dto: CreateProjectDto) {
-    return this.prisma.crowdfundingProject.create({
-      data: {
-        platformId: dto.platformId,
-        companyId: dto.companyId,
-        title: dto.title,
-        url: dto.url,
-        status: dto.status ?? 'unknown',
-        amount: dto.amount ?? 0,
-        supporterCount: dto.supporterCount ?? 0,
-        category: dto.category
+  async create(dto: CreateProjectDto, actor: AuditActor | null = null) {
+    return this.prisma.$transaction(async (tx) => {
+      const project = await tx.crowdfundingProject.create({
+        data: {
+          platformId: dto.platformId,
+          companyId: dto.companyId,
+          title: dto.title,
+          url: dto.url,
+          status: dto.status ?? 'unknown',
+          amount: dto.amount ?? 0,
+          supporterCount: dto.supporterCount ?? 0,
+          category: dto.category
+        }
+      });
+
+      if (actor) {
+        await tx.auditLog.create({
+          data: {
+            userId: actor.userId,
+            sessionId: actor.sessionId,
+            action: 'project.created',
+            entityType: 'CrowdfundingProject',
+            entityId: project.id,
+            after: {
+              platformId: project.platformId,
+              companyId: project.companyId,
+              status: project.status,
+              amount: project.amount,
+              supporterCount: project.supporterCount,
+              category: project.category
+            }
+          }
+        });
       }
+
+      return project;
     });
   }
 
@@ -100,15 +125,15 @@ export class ProjectsService {
     return this.providerFor(source).categories();
   }
 
-  importProject(dto: ImportProjectDto, userId: string | null = null) {
-    return this.importWithProvider(this.providerFor(dto.source), dto.url, { userId });
+  importProject(dto: ImportProjectDto, actor: AuditActor | null = null) {
+    return this.importWithProvider(this.providerFor(dto.source), dto.url, { actor });
   }
 
-  async importCampfire(dto: ImportCampfireProjectDto, userId: string | null = null) {
-    return this.importProject({ source: 'campfire', url: dto.url }, userId);
+  async importCampfire(dto: ImportCampfireProjectDto, actor: AuditActor | null = null) {
+    return this.importProject({ source: 'campfire', url: dto.url }, actor);
   }
 
-  async bulkImport(dto: BulkImportProjectsDto, userId: string | null = null) {
+  async bulkImport(dto: BulkImportProjectsDto, actor: AuditActor | null = null) {
     const provider = this.providerFor(dto.source);
     const urlInputs = uniqueNormalizedUrlInputs(dto.urls, (url) => provider.normalizeUrl(url));
     const importConcurrency = clampConcurrency(dto.importConcurrency, 1, 4, 4);
@@ -118,7 +143,7 @@ export class ProjectsService {
 
     await runWithConcurrency(urlInputs, importConcurrency, async (item) => {
       try {
-        const result = await this.importWithProvider(provider, item.url, { bulk: true, userId });
+        const result = await this.importWithProvider(provider, item.url, { bulk: true, actor });
         imported.push({
           originalUrl: item.originalUrl,
           url: item.url,
@@ -136,7 +161,7 @@ export class ProjectsService {
     if (dto.analyze !== false && imported.length) {
       await runWithConcurrency(imported, analysisConcurrency, async (item) => {
         try {
-          await this.ai.analyzeLead(item.leadId, userId);
+          await this.ai.analyzeLead(item.leadId, actor);
           analysisItems.push({ leadId: item.leadId, status: 'analyzed' });
         } catch (error) {
           analysisItems.push({ leadId: item.leadId, status: 'failed', message: error instanceof Error ? error.message : 'AI分析に失敗しました' });
@@ -150,7 +175,7 @@ export class ProjectsService {
       items,
       analysisItems
     });
-    await this.projectImportRepository.recordBulkImportAudit(userId, summary);
+    await this.projectImportRepository.recordBulkImportAudit(actor, summary);
 
     return summary;
   }
@@ -179,7 +204,7 @@ export class ProjectsService {
 
 type ImportOptions = {
   bulk?: boolean;
-  userId?: string | null;
+  actor?: AuditActor | null;
 };
 
 function normalizeProjectSource(source?: string): ProjectSource {

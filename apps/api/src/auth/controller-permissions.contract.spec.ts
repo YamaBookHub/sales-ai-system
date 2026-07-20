@@ -14,7 +14,7 @@ import { SalesPerformanceController } from '../performance/sales-performance.con
 import { ProjectsController } from '../projects/projects.controller';
 import { TrackingController } from '../tracking/tracking.controller';
 import { UsersController } from '../users/users.controller';
-import { AUDIT_ACTION_METADATA, AuditActionMetadata } from '../audit/audit-action.decorator';
+import { AuditController } from '../audit/audit.controller';
 
 type ControllerClass = new (...args: any[]) => unknown;
 type Permission = string;
@@ -36,7 +36,8 @@ describe('controller permission metadata contract', () => {
       [SalesPerformanceController, 'reports.read'],
       [ProjectsController, 'workspace.read'],
       [TrackingController, 'workspace.read'],
-      [UsersController, 'user.manage']
+      [UsersController, 'user.manage'],
+      [AuditController, 'audit.read']
     ];
 
     for (const [controller, permission] of defaults) {
@@ -102,30 +103,4 @@ describe('controller permission metadata contract', () => {
     }
   });
 
-  it('marks only the non-transaction mutation audit boundaries', () => {
-    const audits: Array<[ControllerClass, string, AuditActionMetadata]> = [
-      [CompaniesController, 'create', { action: 'company.created', entityType: 'Company', idParamCandidates: [] }],
-      [CompaniesController, 'block', { action: 'company.blocked', entityType: 'Company', idParamCandidates: ['id'] }],
-      [ContactsController, 'create', { action: 'contact.created', entityType: 'ContactPerson', idParamCandidates: [] }],
-      [ContactsController, 'update', { action: 'contact.updated', entityType: 'ContactPerson', idParamCandidates: ['id'] }],
-      [ContactsController, 'archive', { action: 'contact.archived', entityType: 'ContactPerson', idParamCandidates: ['id'] }],
-      [LeadsController, 'create', { action: 'lead.created', entityType: 'SalesLead', idParamCandidates: [] }],
-      [LeadsController, 'score', { action: 'lead.scored', entityType: 'SalesLead', idParamCandidates: ['id'] }],
-      [TasksController, 'create', { action: 'task.created', entityType: 'Task', idParamCandidates: [] }],
-      [TasksController, 'update', { action: 'task.updated', entityType: 'Task', idParamCandidates: ['taskId'] }],
-      [OpportunitiesController, 'transition', { action: 'opportunity.transitioned', entityType: 'Opportunity', idParamCandidates: [] }],
-      [OpportunitiesController, 'reopen', { action: 'opportunity.reopened', entityType: 'Opportunity', idParamCandidates: [] }],
-      [ProjectsController, 'create', { action: 'project.created', entityType: 'CrowdfundingProject', idParamCandidates: [] }],
-      [TrackingController, 'createTrackedLink', { action: 'tracked_link.created', entityType: 'TrackedLink', idParamCandidates: [] }]
-    ];
-
-    for (const [controller, method, metadata] of audits) {
-      const handler = (controller as any).prototype[method];
-      expect(Reflect.getMetadata(AUDIT_ACTION_METADATA, handler)).toEqual(metadata);
-    }
-
-    expect(Reflect.getMetadata(AUDIT_ACTION_METADATA, MailController.prototype.approve)).toBeUndefined();
-    expect(Reflect.getMetadata(AUDIT_ACTION_METADATA, AiController.prototype.analyzeLead)).toBeUndefined();
-    expect(Reflect.getMetadata(AUDIT_ACTION_METADATA, ContactsController.prototype.unsubscribe)).toBeUndefined();
-  });
 });

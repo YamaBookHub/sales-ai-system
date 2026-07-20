@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { ImportProjectUseCase } from './import-project.usecase';
 
 describe('ImportProjectUseCase', () => {
+  const actor = { userId: 'user_1', sessionId: 'session_1' };
   const importedProject = {
     source: 'campfire',
     platform: { type: 'campfire', name: 'CAMPFIRE', baseUrl: 'https://camp-fire.jp' },
@@ -46,14 +47,14 @@ describe('ImportProjectUseCase', () => {
 
     const result = await useCase.import(
       { source: 'campfire', url: 'https://camp-fire.jp/projects/1/view?utm=1' },
-      'user_1'
+      actor
     );
 
     expect(campfireProvider.import).toHaveBeenCalledWith('https://camp-fire.jp/projects/1/view');
     expect(repository.persistImportedProject).toHaveBeenCalledWith(
       importedProject,
       expect.objectContaining({
-        userId: 'user_1'
+        actor
       })
     );
     expect(result).toMatchObject({

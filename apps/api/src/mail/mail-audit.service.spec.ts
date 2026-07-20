@@ -2,6 +2,7 @@ import { MailService } from './mail.service';
 
 describe('MailService audit logging', () => {
   const userId = '11111111-1111-4111-8111-111111111111';
+  const actor = { userId, sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
   const mail = {
     id: '22222222-2222-4222-8222-222222222222',
     status: 'draft',
@@ -45,11 +46,12 @@ describe('MailService audit logging', () => {
   it('records only changed fields and hashes for a successful edit', async () => {
     const { service, tx } = createService();
 
-    await service.update(mail.id, { subject: '更新後の件名', body: '更新後の本文' }, userId);
+    await service.update(mail.id, { subject: '更新後の件名', body: '更新後の本文' }, actor);
 
     expect(tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         userId,
+        sessionId: actor.sessionId,
         action: 'mail.edited',
         entityType: 'OutreachEmail',
         entityId: mail.id,
@@ -70,11 +72,12 @@ describe('MailService audit logging', () => {
 
     await service.updateChecklist(mail.id, {
       items: [{ key: 'company_name', label: '会社名', checked: true }]
-    }, userId);
+    }, actor);
 
     expect(tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         userId,
+        sessionId: actor.sessionId,
         action: 'mail.checklist_updated',
         after: expect.objectContaining({ changedKeys: ['company_name'], checkedCount: 1, complete: true })
       })
@@ -85,17 +88,17 @@ describe('MailService audit logging', () => {
     const { service, tx } = createService();
     tx.outreachEmail.findUnique.mockResolvedValue(null);
 
-    await expect(service.update(mail.id, { subject: '更新後の件名' }, userId)).rejects.toThrow('Mail not found');
+    await expect(service.update(mail.id, { subject: '更新後の件名' }, actor)).rejects.toThrow('Mail not found');
     expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
   it('audits a successful cancellation without retaining mail content', async () => {
     const { service, tx } = createService();
 
-    await service.cancel(mail.id, userId);
+    await service.cancel(mail.id, actor);
 
     expect(tx.auditLog.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ userId, action: 'mail.cancelled', entityId: mail.id })
+      data: expect.objectContaining({ userId, sessionId: actor.sessionId, action: 'mail.cancelled', entityId: mail.id })
     });
     expect(JSON.stringify(tx.auditLog.create.mock.calls[0][0])).not.toContain('秘匿する本文');
   });

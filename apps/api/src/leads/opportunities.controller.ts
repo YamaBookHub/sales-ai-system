@@ -18,7 +18,7 @@ import {
   UpdateOpportunityDto
 } from './opportunities.dto';
 import { RequirePermissions } from '../auth/require-permissions.decorator';
-import { AuditAction } from '../audit/audit-action.decorator';
+import { auditActor } from '../audit/audit-actor';
 
 @Controller()
 @RequirePermissions('workspace.read')
@@ -49,29 +49,27 @@ export class OpportunitiesController {
     @Body() dto: UpdateOpportunityDto,
     @CurrentUser() principal: AuthenticatedPrincipal
   ) {
-    return ok(await this.updateOpportunity.execute(leadId, dto, principal));
+    return ok(await this.updateOpportunity.execute(leadId, dto, opportunityActor(principal)));
   }
 
   @Post('leads/:leadId/opportunity/transitions')
   @RequirePermissions('opportunity.write')
-  @AuditAction('opportunity.transitioned', 'Opportunity', [])
   async transition(
     @Param('leadId', new ParseUUIDPipe()) leadId: string,
     @Body() dto: TransitionOpportunityDto,
     @CurrentUser() principal: AuthenticatedPrincipal
   ) {
-    return ok(await this.transitionOpportunity.execute(leadId, dto, principal));
+    return ok(await this.transitionOpportunity.execute(leadId, dto, opportunityActor(principal)));
   }
 
   @Post('leads/:leadId/opportunity/reopen')
   @RequirePermissions('opportunity.reopen')
-  @AuditAction('opportunity.reopened', 'Opportunity', [])
   async reopen(
     @Param('leadId', new ParseUUIDPipe()) leadId: string,
     @Body() dto: ReopenOpportunityDto,
     @CurrentUser() principal: AuthenticatedPrincipal
   ) {
-    return ok(await this.reopenOpportunity.execute(leadId, dto, principal));
+    return ok(await this.reopenOpportunity.execute(leadId, dto, opportunityActor(principal)));
   }
 
   @Get('leads/:leadId/opportunity/history')
@@ -81,4 +79,8 @@ export class OpportunitiesController {
   ) {
     return ok(await this.listHistory.execute(leadId, query.page, query.limit));
   }
+}
+
+function opportunityActor(principal: AuthenticatedPrincipal) {
+  return { ...auditActor(principal), role: principal.role };
 }

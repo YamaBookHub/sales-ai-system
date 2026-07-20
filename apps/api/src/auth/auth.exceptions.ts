@@ -20,6 +20,6 @@ export class CsrfValidationException extends ForbiddenException {
 
 export class AuthorizationDeniedException extends ForbiddenException {
   constructor() {
-    super({ code: 'AUTHORIZATION_DENIED', message: 'ログインを完了できませんでした。' });
+    super({ code: 'AUTHORIZATION_DENIED', message: 'この操作を行う権限がありません。' });
   }
 }

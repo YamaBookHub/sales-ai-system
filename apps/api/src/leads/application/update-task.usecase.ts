@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Inject, Injectable, NotFoundExc
 import { transitionTaskStatus } from '../domain/task-policy';
 import { TASK_REPOSITORY, TaskRepository, UpdateTaskRecord } from '../domain/task.repository';
 import { TaskStatus } from '@prisma/client';
+import { AuditActor } from '../../audit/audit-actor';
 
 export type UpdateTaskInput = {
   title?: string;
@@ -15,7 +16,7 @@ export type UpdateTaskInput = {
 export class UpdateTaskUseCase {
   constructor(@Inject(TASK_REPOSITORY) private readonly tasks: TaskRepository) {}
 
-  async execute(taskId: string, input: UpdateTaskInput) {
+  async execute(taskId: string, input: UpdateTaskInput, actor?: AuditActor) {
     const current = await this.tasks.findTask(taskId);
     if (!current) throw new NotFoundException('Task not found');
     if (input.assigneeId && !(await this.tasks.findAssignee(input.assigneeId))) {
@@ -37,7 +38,7 @@ export class UpdateTaskUseCase {
       patch.status = input.status;
       patch.doneAt = transition.doneAt;
     }
-    return this.tasks.update(taskId, patch);
+    return actor ? this.tasks.update(taskId, patch, actor) : this.tasks.update(taskId, patch);
   }
 }
 

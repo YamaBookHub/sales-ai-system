@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { LeadAnalysisRevision } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { AuditActor } from '../../audit/audit-actor';
 import { UpdateLeadAnalysisDto } from '../ai.dto';
 import {
   editedAnalysisFields,
@@ -39,15 +40,15 @@ export class LeadAnalysisUseCase {
     return buildAnalysisView(lead.project, history, latestConfirmed);
   }
 
-  save(leadId: string, dto: UpdateLeadAnalysisDto, userId: string | null = null) {
-    return this.append(leadId, dto, false, userId);
+  save(leadId: string, dto: UpdateLeadAnalysisDto, actor: AuditActor | null = null) {
+    return this.append(leadId, dto, false, actor);
   }
 
-  confirm(leadId: string, dto: UpdateLeadAnalysisDto, userId: string | null = null) {
-    return this.append(leadId, dto, true, userId);
+  confirm(leadId: string, dto: UpdateLeadAnalysisDto, actor: AuditActor | null = null) {
+    return this.append(leadId, dto, true, actor);
   }
 
-  private async append(leadId: string, dto: UpdateLeadAnalysisDto, confirm: boolean, userId: string | null) {
+  private async append(leadId: string, dto: UpdateLeadAnalysisDto, confirm: boolean, actor: AuditActor | null) {
     await this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `lead-analysis:${leadId}`);
       const lead = await tx.salesLead.findUnique({ where: { id: leadId }, include: { project: true } });
@@ -76,12 +77,12 @@ export class LeadAnalysisUseCase {
       }
 
       const keepsGeneration = Boolean(latest && latest.projectId === lead.project.id && latest.sourceFingerprint === fingerprint);
-      await tx.leadAnalysisRevision.create({
+      const revision = await tx.leadAnalysisRevision.create({
         data: {
           leadId,
           projectId: lead.project.id,
           sourceGenerationId: keepsGeneration ? latest?.sourceGenerationId : null,
-          changedById: userId,
+          changedById: actor?.userId ?? null,
           version: currentVersion + 1,
           status: confirm ? 'confirmed' : 'draft',
           origin: 'manual',
@@ -93,6 +94,24 @@ export class LeadAnalysisUseCase {
           editedFields: editedAnalysisFields(latest, values)
         }
       });
+      if (actor) {
+        await tx.auditLog.create({
+          data: {
+            userId: actor.userId,
+            sessionId: actor.sessionId,
+            action: confirm ? 'analysis.confirmed' : 'analysis.edited',
+            entityType: 'LeadAnalysisRevision',
+            entityId: revision.id,
+            before: latest ? { version: latest.version, status: latest.status } : undefined,
+            after: {
+              leadId,
+              version: revision.version,
+              status: revision.status,
+              editedFields: revision.editedFields
+            }
+          }
+        });
+      }
     });
     return this.get(leadId);
   }

@@ -4,6 +4,10 @@ import { MailService } from './mail.service';
 
 describe('MailService draft creation', () => {
   const analysisRevisionId = '00000000-0000-4000-8000-000000000001';
+  const actor = {
+    userId: '11111111-1111-4111-8111-111111111111',
+    sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  };
   const lead = {
     id: 'lead_1',
     companyId: 'company_1',
@@ -124,13 +128,14 @@ describe('MailService draft creation', () => {
       analysisRevisionId,
       templateKey: 'normal',
       manualInstruction: '手動で作成した本文'
-    }, '11111111-1111-4111-8111-111111111111');
+    }, actor);
 
     expect(tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         action: 'mail.created',
         entityType: 'OutreachEmail',
-        entityId: 'mail_manual'
+        entityId: 'mail_manual',
+        sessionId: actor.sessionId
       })
     });
     expect(JSON.stringify(tx.auditLog.create.mock.calls[0][0])).not.toContain('手動で作成した本文');

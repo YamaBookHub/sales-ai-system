@@ -15,6 +15,7 @@ import {
 } from './leads.dto';
 import { ScoreLeadUseCase } from './application/score-lead.usecase';
 import { ensureOpportunityForLead } from './infrastructure/prisma-opportunity.repository';
+import { AuditActor } from '../audit/audit-actor';
 
 @Injectable()
 export class LeadsService {
@@ -134,7 +135,7 @@ export class LeadsService {
     };
   }
 
-  create(dto: CreateLeadDto) {
+  create(dto: CreateLeadDto, actor?: AuditActor) {
     const leadData = compactData({
       source: dto.source ?? 'manual',
       ownerMemo: dto.ownerMemo,
@@ -164,6 +165,17 @@ export class LeadsService {
         }
       });
       await ensureOpportunityForLead(tx, lead.id);
+      if (actor) {
+        await tx.auditLog.create({
+          data: {
+            ...actor,
+            action: 'lead.created',
+            entityType: 'SalesLead',
+            entityId: lead.id,
+            after: leadAuditSnapshot(lead)
+          }
+        });
+      }
       return lead;
     });
   }
@@ -213,7 +225,7 @@ export class LeadsService {
     return withTaskSummary(lead);
   }
 
-  async update(id: string, dto: UpdateLeadDto, userId?: string) {
+  async update(id: string, dto: UpdateLeadDto, actor?: AuditActor) {
     const {
       companyName,
       projectTitle,
@@ -366,15 +378,23 @@ export class LeadsService {
           scores: { orderBy: { createdAt: 'desc' }, take: 1 }
         }
       });
-      if (userId) {
+      if (actor) {
         await tx.auditLog.create({
           data: {
-            userId,
+            ...actor,
             action: 'lead.updated',
             entityType: 'SalesLead',
             entityId: id,
             before: leadAuditSnapshot(lead),
-            after: leadAuditSnapshot(updated)
+            after: {
+              ...leadAuditSnapshot(updated),
+              changedFields: Array.from(new Set([
+                ...Object.keys(companyData),
+                ...Object.keys(projectData),
+                ...Object.keys(leadData),
+                ...Object.keys(leadPolicy)
+              ])).sort()
+            }
           }
         });
       }
@@ -382,43 +402,31 @@ export class LeadsService {
     });
   }
 
-  async score(id: string) {
-    return this.scoreLeadUseCase.execute(id);
+  async score(id: string, actor?: AuditActor) {
+    return this.scoreLeadUseCase.execute(id, actor);
   }
 }
 
 function leadAuditSnapshot(lead: {
+  id: string;
+  companyId: string;
+  projectId: string | null;
   status: LeadStatus;
   priority: LeadPriority;
   score: number;
-  reason: string | null;
-  ownerMemo: string | null;
-  contactEmail: string | null;
-  contactFormUrl: string | null;
-  siteMessageUrl: string | null;
-  sendMethod: string | null;
+  source: string;
   nextActionAt: Date | null;
   sentAt: Date | null;
   nextFollowUpAt: Date | null;
-  company: { name: string; websiteUrl: string | null; inquiryUrl: string | null };
-  project: { title: string; url: string; platform: { type: PlatformType } } | null;
 }) {
   return {
-    companyName: lead.company.name,
-    companyWebsiteUrl: lead.company.websiteUrl,
-    companyInquiryUrl: lead.company.inquiryUrl,
-    projectTitle: lead.project?.title ?? null,
-    projectUrl: lead.project?.url ?? null,
-    projectSource: lead.project?.platform.type ?? null,
+    leadId: lead.id,
+    companyId: lead.companyId,
+    projectId: lead.projectId,
     status: lead.status,
     priority: lead.priority,
     score: lead.score,
-    reason: lead.reason,
-    ownerMemo: lead.ownerMemo,
-    contactEmail: lead.contactEmail,
-    contactFormUrl: lead.contactFormUrl,
-    siteMessageUrl: lead.siteMessageUrl,
-    sendMethod: lead.sendMethod,
+    source: lead.source,
     nextActionAt: lead.nextActionAt?.toISOString() ?? null,
     sentAt: lead.sentAt?.toISOString() ?? null,
     nextFollowUpAt: lead.nextFollowUpAt?.toISOString() ?? null

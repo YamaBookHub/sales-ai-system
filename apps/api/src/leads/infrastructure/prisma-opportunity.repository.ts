@@ -23,6 +23,7 @@ import {
 
 export type OpportunityActor = {
   userId: string | null;
+  sessionId?: string | null;
   role: OpportunityRole;
 };
 
@@ -188,6 +189,7 @@ export class PrismaOpportunityRepository {
       await tx.auditLog.create({
         data: {
           userId: actor.userId,
+          sessionId: actor.sessionId ?? null,
           action: 'opportunity.updated',
           entityType: 'Opportunity',
           entityId: current.id,
@@ -372,6 +374,17 @@ async function persistTransition(
       data: { status: 'cancelled', doneAt: null }
     });
   }
+  await tx.auditLog.create({
+    data: {
+      userId: actor.userId,
+      sessionId: actor.sessionId ?? null,
+      action: reopen ? 'opportunity.reopened' : 'opportunity.transitioned',
+      entityType: 'Opportunity',
+      entityId: current.id,
+      before: opportunityAuditSnapshot(current),
+      after: opportunityAuditSnapshot(updated)
+    }
+  });
   return updated;
 }
 
@@ -478,7 +491,8 @@ function opportunitySnapshot(value: {
 }
 
 function opportunityAuditSnapshot(value: Parameters<typeof opportunitySnapshot>[0]) {
-  return opportunitySnapshot(value);
+  const { lossReasonDetail: _lossReasonDetail, ...safeSnapshot } = opportunitySnapshot(value);
+  return safeSnapshot;
 }
 
 function dateRange(field: 'expectedCloseDate' | 'updatedAt', from?: string, to?: string): Prisma.OpportunityWhereInput {

@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { EmailEventType, EmailStatus, Prisma } from '@prisma/client';
+import { AuditActor } from '../../audit/audit-actor';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DEFAULT_CHECKLIST_ITEMS } from '../mail-checklist.defaults';
 import { leadStatusForEmailStatus } from '../domain/mail-policy';
@@ -48,10 +49,10 @@ export class PrismaMailWorkflowRepository {
     eventType: EmailEventType,
     extra: Record<string, unknown> = {},
     payload?: Prisma.InputJsonObject,
-    actorUserId?: string | null
+    actor?: AuditActor | null
   ) {
     return this.prisma.$transaction((tx) => this.transitionInTransaction(
-      tx, id, status, eventType, extra, withActor(payload, actorUserId), actorUserId
+      tx, id, status, eventType, extra, withActor(payload, actor), actor
     ));
   }
 
@@ -61,7 +62,7 @@ export class PrismaMailWorkflowRepository {
     eventType: EmailEventType,
     extra: Record<string, unknown> = {},
     payload?: Prisma.InputJsonObject,
-    actorUserId?: string | null
+    actor?: AuditActor | null
   ) {
     return this.prisma.$transaction(async (tx) => {
       const destination = await assertPersistedMailContactEligible(tx, id, { lock: true });
@@ -71,13 +72,13 @@ export class PrismaMailWorkflowRepository {
         status,
         eventType,
         { ...destinationFields(destination), ...extra },
-        withActor(payload, actorUserId),
-        actorUserId
+        withActor(payload, actor),
+        actor
       );
     });
   }
 
-  async claimForSending(id: string, idempotencyKey: string, actorUserId: string) {
+  async claimForSending(id: string, idempotencyKey: string, actor: AuditActor) {
     const email = await this.prisma.$transaction(async (tx) => {
       const destination = await assertPersistedMailContactEligible(tx, id, { lock: true });
       const before = await tx.outreachEmail.findUnique({ where: { id } });
@@ -106,10 +107,10 @@ export class PrismaMailWorkflowRepository {
         data: {
           emailId: id,
           type: 'sending',
-          payload: withActor({ idempotencyKey }, actorUserId)
+          payload: withActor({ idempotencyKey }, actor)
         }
       });
-      await recordMailAudit(tx, actorUserId, 'mail.send_started', id, {
+      await recordMailAudit(tx, actor, 'mail.send_started', id, {
         before: mailAuditState(before),
         after: mailAuditState(claimedEmail)
       });
@@ -128,7 +129,7 @@ export class PrismaMailWorkflowRepository {
     id: string,
     result: { provider: string; messageId?: string; threadId?: string; sentAt: Date },
     idempotencyKey: string,
-    actorUserId: string
+    actor: AuditActor
   ) {
     return this.transition(
       id,
@@ -147,13 +148,13 @@ export class PrismaMailWorkflowRepository {
         messageId: result.messageId,
         threadId: result.threadId
       },
-      actorUserId
+      actor
     );
   }
 
-  markFailedAfterSend(id: string, error: unknown, idempotencyKey: string, actorUserId: string) {
+  markFailedAfterSend(id: string, error: unknown, idempotencyKey: string, actor: AuditActor) {
     const failedReason = error instanceof Error ? error.message : '送信に失敗しました';
-    return this.transition(id, 'failed', 'failed', { failedReason }, { idempotencyKey, failedReason }, actorUserId);
+    return this.transition(id, 'failed', 'failed', { failedReason }, { idempotencyKey, failedReason }, actor);
   }
 
   private async ensureDefaultChecklist(emailId: string) {
@@ -178,7 +179,7 @@ export class PrismaMailWorkflowRepository {
     eventType: EmailEventType,
     extra: Record<string, unknown>,
     payload?: Prisma.InputJsonObject,
-    actorUserId?: string | null
+    actor?: AuditActor | null
   ) {
     const current = await tx.outreachEmail.findUnique({
       where: { id },
@@ -215,7 +216,7 @@ export class PrismaMailWorkflowRepository {
       });
     }
 
-    await recordMailAudit(tx, actorUserId, mailAuditActionForTransition(status, eventType, payload), id, {
+    await recordMailAudit(tx, actor, mailAuditActionForTransition(status, eventType, payload), id, {
       before: mailAuditState(current),
       after: mailAuditState(email)
     });
@@ -252,6 +253,6 @@ function destinationFields(destination: { type: string; value: string; key: stri
   };
 }
 
-function withActor(payload: Prisma.InputJsonObject | undefined, actorUserId?: string | null): Prisma.InputJsonObject | undefined {
-  return actorUserId ? { ...(payload || {}), actorUserId } : payload;
+function withActor(payload: Prisma.InputJsonObject | undefined, actor?: AuditActor | null): Prisma.InputJsonObject | undefined {
+  return actor ? { ...(payload || {}), actorUserId: actor.userId } : payload;
 }

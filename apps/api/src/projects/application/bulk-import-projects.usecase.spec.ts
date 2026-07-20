@@ -1,6 +1,7 @@
 import { BulkImportProjectsUseCase } from './bulk-import-projects.usecase';
 
 describe('BulkImportProjectsUseCase', () => {
+  const actor = { userId: 'user_1', sessionId: 'session_1' };
   const importedProject = {
     source: 'campfire',
     platform: { type: 'campfire', name: 'CAMPFIRE', baseUrl: 'https://camp-fire.jp' },
@@ -51,17 +52,17 @@ describe('BulkImportProjectsUseCase', () => {
       source: 'campfire',
       urls: ['https://camp-fire.jp/projects/1/view?utm=1', 'https://camp-fire.jp/projects/1/view/'],
       analyze: true
-    }, 'user_1');
+    }, actor);
 
     expect(campfireProvider.import).toHaveBeenCalledTimes(1);
     expect(repository.persistImportedProject).toHaveBeenCalledWith(
       importedProject,
       expect.objectContaining({
         bulk: true,
-        userId: 'user_1'
+        actor
       })
     );
-    expect(ai.analyzeLead).toHaveBeenCalledWith('lead_1');
+    expect(ai.analyzeLead).toHaveBeenCalledWith('lead_1', actor);
     expect(summary).toMatchObject({
       source: 'campfire',
       total: 1,
@@ -70,7 +71,7 @@ describe('BulkImportProjectsUseCase', () => {
       analyzed: 1,
       analysisFailed: 0
     });
-    expect(repository.recordBulkImportAudit).toHaveBeenCalledWith('user_1', summary);
+    expect(repository.recordBulkImportAudit).toHaveBeenCalledWith(actor, summary);
   });
 
   it('can import without AI analysis', async () => {

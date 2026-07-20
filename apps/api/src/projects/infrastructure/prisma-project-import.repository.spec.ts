@@ -123,7 +123,8 @@ describe('PrismaProjectImportRepository', () => {
     };
     const repository = new PrismaProjectImportRepository(prisma as any);
 
-    const result = await repository.persistImportedProject(imported, { bulk: true, userId: 'user-1' });
+    const actor = { userId: 'user-1', sessionId: 'session-1' };
+    const result = await repository.persistImportedProject(imported, { bulk: true, actor });
 
     expect(result.lead.id).toBe('lead-1');
     expect(tx.$executeRawUnsafe).toHaveBeenCalledTimes(4);
@@ -150,6 +151,7 @@ describe('PrismaProjectImportRepository', () => {
       data: expect.objectContaining({
         action: 'projects.bulk_import.item',
         userId: 'user-1',
+        sessionId: 'session-1',
         entityType: 'SalesLead',
         entityId: 'lead-1'
       })
@@ -164,7 +166,7 @@ describe('PrismaProjectImportRepository', () => {
     };
     const repository = new PrismaProjectImportRepository(prisma as any);
 
-    await repository.recordBulkImportAudit('user-1', {
+    await repository.recordBulkImportAudit({ userId: 'user-1', sessionId: 'session-1' }, {
       source: 'campfire',
       total: 3,
       imported: 2,
@@ -177,6 +179,7 @@ describe('PrismaProjectImportRepository', () => {
       data: {
         action: 'projects.bulk_import',
         userId: 'user-1',
+        sessionId: 'session-1',
         entityType: 'Project',
         after: {
           source: 'campfire',

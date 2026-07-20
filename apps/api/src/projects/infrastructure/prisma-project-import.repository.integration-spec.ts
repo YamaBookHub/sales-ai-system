@@ -87,11 +87,11 @@ describe('PrismaProjectImportRepository integration', () => {
   });
 
   afterAll(async () => {
-    await prisma.auditLog.deleteMany({
-      where: {
-        OR: testProjectUrls.map((url) => ({ after: { path: ['projectUrl'], equals: url } }))
-      }
+    const leadIds = await prisma.salesLead.findMany({
+      where: { project: { url: { in: testProjectUrls } } },
+      select: { id: true }
     });
+    await prisma.auditLog.deleteMany({ where: { entityId: { in: leadIds.map((lead) => lead.id) } } });
     await prisma.salesLead.deleteMany({ where: { project: { url: { in: testProjectUrls } } } });
     await prisma.crowdfundingProject.deleteMany({ where: { url: { in: testProjectUrls } } });
     await prisma.company.deleteMany({ where: { name: { in: testCompanyNames } } });
@@ -101,7 +101,7 @@ describe('PrismaProjectImportRepository integration', () => {
   });
 
   it('persists platform, company, project, lead, and audit log in one real transaction', async () => {
-    const result = await repository.persistImportedProject(imported, { bulk: true, userId: null });
+    const result = await repository.persistImportedProject(imported, { bulk: true });
 
     expect(result.platform.baseUrl).toBe(platformBaseUrl);
     expect(result.company.name).toBe(companyName);
@@ -130,9 +130,9 @@ describe('PrismaProjectImportRepository integration', () => {
     });
     expect(audit?.after).toEqual(expect.objectContaining({
       source: 'campfire',
-      platform: imported.platform.name,
-      projectUrl
+      platform: imported.platform.name
     }));
+    expect(JSON.stringify(audit?.after)).not.toContain(projectUrl);
   });
 
   it('serializes concurrent imports of the same normalized URL without duplicate company, project, or lead rows', async () => {
@@ -148,8 +148,8 @@ describe('PrismaProjectImportRepository integration', () => {
     });
 
     const [first, second] = await Promise.all([
-      repository.persistImportedProject(concurrentImport, { bulk: true, userId: null }),
-      concurrentRepository.persistImportedProject(duplicateImport, { bulk: true, userId: null })
+      repository.persistImportedProject(concurrentImport, { bulk: true }),
+      concurrentRepository.persistImportedProject(duplicateImport, { bulk: true })
     ]);
 
     expect(first.company.id).toBe(second.company.id);
@@ -163,7 +163,7 @@ describe('PrismaProjectImportRepository integration', () => {
       sharedCompanyProjectUrls.map((url, index) =>
         (index === 0 ? repository : concurrentRepository).persistImportedProject(
           buildImportedProject({ projectUrl: url, companyName: sharedCompanyName, platformBaseUrl }),
-          { bulk: true, userId: null }
+          { bulk: true }
         )
       )
     );
@@ -181,11 +181,11 @@ describe('PrismaProjectImportRepository integration', () => {
     const results = await Promise.allSettled([
       repository.persistImportedProject(
         buildImportedProject({ projectUrl: successfulPartialProjectUrl, companyName: partialCompanyName, platformBaseUrl }),
-        { bulk: true, userId: null }
+        { bulk: true }
       ),
       concurrentRepository.persistImportedProject(
         buildImportedProject({ projectUrl: failedPartialProjectUrl, companyName: partialCompanyName, platformBaseUrl }),
-        { bulk: true, userId: 'not-a-uuid' }
+        { bulk: true, actor: { userId: 'not-a-uuid', sessionId: 'not-a-session-id' } }
       )
     ]);
 

@@ -1,6 +1,7 @@
 import { AnalyzeLeadUseCase } from './analyze-lead.usecase';
 
 describe('AnalyzeLeadUseCase', () => {
+  const actor = { userId: 'user_1', sessionId: 'session_1' };
   it('passes material engagement into the analysis input and output', async () => {
     const lead = {
       id: 'lead_1',
@@ -21,8 +22,9 @@ describe('AnalyzeLeadUseCase', () => {
       aiGeneration: { create: jest.fn().mockResolvedValue({ id: 'generation_1' }) },
       leadAnalysisRevision: {
         findFirst: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockResolvedValue({ id: 'analysis_1' })
-      }
+        create: jest.fn().mockResolvedValue({ id: 'analysis_1', version: 1, status: 'draft' })
+      },
+      auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit_1' }) }
     };
     const prisma = {
       salesLead: {
@@ -43,7 +45,7 @@ describe('AnalyzeLeadUseCase', () => {
     };
     const useCase = new AnalyzeLeadUseCase(prisma as any);
 
-    const result = await useCase.execute('lead_1');
+    const result = await useCase.execute('lead_1', actor);
 
     expect(prisma.trackedLink.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { email: { leadId: 'lead_1' }, label: 'company_material' }
@@ -69,5 +71,8 @@ describe('AnalyzeLeadUseCase', () => {
       })
     }));
     expect(result.analysisRevisionId).toBe('analysis_1');
+    expect(tx.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      userId: 'user_1', sessionId: 'session_1', action: 'analysis.generated', entityId: 'analysis_1'
+    }) });
   });
 });

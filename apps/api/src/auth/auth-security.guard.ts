@@ -24,11 +24,13 @@ export class AuthSecurityGuard implements CanActivate {
     request.authenticatedPrincipal = session.principal;
     request.authSession = session;
 
-    if (!SAFE_METHODS.has((request.method || 'GET').toUpperCase())) {
+    const method = (request.method || 'GET').toUpperCase();
+    if (!SAFE_METHODS.has(method)) {
       this.assertSameOrigin(request, config.allowedOrigin);
       const csrfToken = readHeader(request.headers, 'x-csrf-token');
       if (!csrfToken || !safeEqual(csrfToken, session.csrfToken)) throw new CsrfValidationException();
     }
+
     return true;
   }
 

@@ -673,6 +673,7 @@ model OpportunityStageHistory {
 model AuditLog {
   id         String   @id @default(uuid()) @db.Uuid
   userId     String?  @db.Uuid
+  sessionId  String?  @db.Uuid
   action     String
   entityType String
   entityId   String?
@@ -687,4 +688,7 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([action])
   @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([sessionId, createdAt])
+  @@index([action, createdAt])
 }

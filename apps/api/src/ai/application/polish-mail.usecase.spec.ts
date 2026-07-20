@@ -59,7 +59,8 @@ describe('PolishMailUseCase', () => {
       },
       aiGeneration: {
         create: jest.fn().mockResolvedValue({ id: 'generation_1' })
-      }
+      },
+      auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit_1' }) }
     };
     const prisma = {
       outreachEmail: {
@@ -124,6 +125,21 @@ describe('PolishMailUseCase', () => {
         promptVersion: 'v3_gemini_sales_mail_polish'
       })
     }));
+  });
+
+  it('audits a polish with the authenticated session without mail text', async () => {
+    const { prisma, aiClient, tx } = createDeps();
+    const actor = { userId: 'user_1', sessionId: 'session_1' };
+
+    await new PolishMailUseCase(prisma as any, aiClient as any).execute(email.id, 'gpt-5.6-sol', actor);
+
+    expect(tx.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      userId: actor.userId,
+      sessionId: actor.sessionId,
+      action: 'mail.polished',
+      entityId: email.id
+    }) });
+    expect(JSON.stringify(tx.auditLog.create.mock.calls[0][0])).not.toContain(draft.body);
   });
 
   it('does not update DB when the selected AI provider fails', async () => {

@@ -53,7 +53,7 @@ export async function bootstrapAdmin(
           action: 'auth.bootstrap_admin.existing',
           entityType: 'User',
           entityId: existing.id,
-          after: { email: existing.email, role: existing.role }
+          after: { role: existing.role, isActive: existing.isActive }
         }
       });
       return { status: 'existing', user: existing };
@@ -68,7 +68,7 @@ export async function bootstrapAdmin(
         action: 'auth.bootstrap_admin.created',
         entityType: 'User',
         entityId: created.id,
-        after: { email: created.email, role: created.role }
+        after: { role: created.role, isActive: created.isActive }
       }
     });
     return { status: 'created', user: created };

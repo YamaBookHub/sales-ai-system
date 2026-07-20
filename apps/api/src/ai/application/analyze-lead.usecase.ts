@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { AuditActor } from '../../audit/audit-actor';
 import { materialEngagementForClickCount } from '../../tracking/domain/material-engagement-policy';
 import { buildLocalLeadAnalysis } from '../domain/local-lead-analysis';
 import { normalizeStructuredAnalysis, projectSourceFingerprint } from '../domain/lead-analysis';
@@ -8,7 +9,7 @@ import { normalizeStructuredAnalysis, projectSourceFingerprint } from '../domain
 export class AnalyzeLeadUseCase {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(leadId: string, userId: string | null = null) {
+  async execute(leadId: string, actor: AuditActor | null = null) {
     const lead = await this.prisma.salesLead.findUnique({
       where: { id: leadId },
       include: { company: true, project: { include: { platform: true } } }
@@ -55,7 +56,7 @@ export class AnalyzeLeadUseCase {
           leadId,
           projectId: currentLead.project.id,
           sourceGenerationId: aiGeneration.id,
-          changedById: userId,
+          changedById: actor?.userId ?? null,
           version: (latest?.version || 0) + 1,
           status: 'draft',
           origin: 'generated',
@@ -66,6 +67,18 @@ export class AnalyzeLeadUseCase {
           editedFields: []
         }
       });
+      if (actor) {
+        await tx.auditLog.create({
+          data: {
+            userId: actor.userId,
+            sessionId: actor.sessionId,
+            action: 'analysis.generated',
+            entityType: 'LeadAnalysisRevision',
+            entityId: analysisRevision.id,
+            after: { leadId, version: analysisRevision.version, status: analysisRevision.status, provider: 'local' }
+          }
+        });
+      }
       return { aiGenerationId: aiGeneration.id, analysisRevisionId: analysisRevision.id, output: analysis.output };
     });
   }

@@ -11,6 +11,8 @@ import { ProjectsModule } from './projects/projects.module';
 import { TrackingModule } from './tracking/tracking.module';
 import { PerformanceModule } from './performance/performance.module';
 import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -25,7 +27,9 @@ import { AuthModule } from './auth/auth.module';
     MailModule,
     AiModule,
     TrackingModule,
-    PerformanceModule
+    PerformanceModule,
+    UsersModule,
+    AuditModule
   ]
 })
 export class AppModule {}

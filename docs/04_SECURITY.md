@@ -84,6 +84,6 @@
 - 組織別RBACとデータ分離（LA-007）
 - job所有者と複数instance間の停止権限（LA-005）
 - worker、Redis、scheduler、DLQ、rate limit、外部providerの真の冪等性
-- 重要操作の完全なAuditLog、監視、運用上のsecret rotation、本番hardening
+- 監視、運用上のsecret rotation、本番hardening
 
 本番で実送信を有効化する場合は、少なくとも認証・RBAC、完全な操作監査、rate limit、provider障害時の運用手順を別途完了させる。

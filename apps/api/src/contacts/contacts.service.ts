@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateContactDto, UpdateContactDto } from './contacts.dto';
+import { AuditActor } from '../audit/audit-actor';
 
 type ContactTransaction = Prisma.TransactionClient;
 
@@ -19,7 +20,7 @@ export class ContactsService {
     });
   }
 
-  async create(companyId: string, dto: CreateContactDto) {
+  async create(companyId: string, dto: CreateContactDto, actor?: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
       await this.lockCompanyContacts(tx, companyId);
       await this.getActiveCompany(tx, companyId);
@@ -36,11 +37,17 @@ export class ContactsService {
           unsubscribedAt: null
       };
 
-      return tx.contactPerson.create({ data });
+      const contact = await tx.contactPerson.create({ data });
+      await recordContactAudit(tx, actor, 'contact.created', contact.id, null, {
+        companyId: contact.companyId,
+        isPrimary: contact.isPrimary,
+        isUnsubscribed: contact.isUnsubscribed
+      });
+      return contact;
     });
   }
 
-  async update(id: string, dto: UpdateContactDto) {
+  async update(id: string, dto: UpdateContactDto, actor?: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
       const snapshot = await this.getActiveContact(tx, id);
       await this.lockCompanyContacts(tx, snapshot.companyId);
@@ -68,23 +75,34 @@ export class ContactsService {
         if (nextIsUnsubscribed) data.isPrimary = false;
       }
 
-      return tx.contactPerson.update({ where: { id }, data });
+      const updated = await tx.contactPerson.update({ where: { id }, data });
+      await recordContactAudit(tx, actor, 'contact.updated', id, contactAuditSnapshot(contact), {
+        ...contactAuditSnapshot(updated),
+        changedFields: Object.keys(data).sort()
+      });
+      return updated;
     });
   }
 
-  async archive(id: string) {
+  async archive(id: string, actor?: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
       const snapshot = await this.getActiveContact(tx, id);
       await this.lockCompanyContacts(tx, snapshot.companyId);
       await this.getActiveContact(tx, id);
-      return tx.contactPerson.update({
+      const archived = await tx.contactPerson.update({
         where: { id },
         data: { deletedAt: new Date(), isPrimary: false }
       });
+      await recordContactAudit(tx, actor, 'contact.archived', id, contactAuditSnapshot(snapshot), {
+        ...contactAuditSnapshot(archived),
+        isArchived: true,
+        changedFields: ['deletedAt', 'isPrimary']
+      });
+      return archived;
     });
   }
 
-  async unsubscribe(id: string, userId?: string) {
+  async unsubscribe(id: string, actor?: AuditActor) {
     return this.prisma.$transaction(async (tx) => {
       const snapshot = await this.getActiveContact(tx, id);
       await this.lockCompanyContacts(tx, snapshot.companyId);
@@ -97,18 +115,10 @@ export class ContactsService {
           isPrimary: false
         }
       });
-      if (userId) {
-        await tx.auditLog.create({
-          data: {
-            userId,
-            action: 'contact.unsubscribed',
-            entityType: 'ContactPerson',
-            entityId: id,
-            before: { isUnsubscribed: false },
-            after: { isUnsubscribed: true, companyId: contact.companyId }
-          }
-        });
-      }
+      await recordContactAudit(tx, actor, 'contact.unsubscribed', id, contactAuditSnapshot(snapshot), {
+        ...contactAuditSnapshot(contact),
+        changedFields: ['isPrimary', 'isUnsubscribed', 'unsubscribedAt']
+      });
       return contact;
     });
   }
@@ -143,6 +153,41 @@ export class ContactsService {
       data: { isPrimary: false }
     });
   }
+}
+
+function contactAuditSnapshot(contact: {
+  companyId: string;
+  isPrimary: boolean;
+  isUnsubscribed: boolean;
+  deletedAt?: Date | null;
+}) {
+  return {
+    companyId: contact.companyId,
+    isPrimary: contact.isPrimary,
+    isUnsubscribed: contact.isUnsubscribed,
+    isArchived: Boolean(contact.deletedAt)
+  };
+}
+
+async function recordContactAudit(
+  tx: ContactTransaction,
+  actor: AuditActor | undefined,
+  action: string,
+  contactId: string,
+  before: Record<string, unknown> | null,
+  after: Record<string, unknown>
+) {
+  if (!actor) return;
+  await tx.auditLog.create({
+    data: {
+      ...actor,
+      action,
+      entityType: 'ContactPerson',
+      entityId: contactId,
+      before: before ? (before as Prisma.InputJsonObject) : Prisma.DbNull,
+      after: after as Prisma.InputJsonObject
+    }
+  });
 }
 
 function hasOwn(input: object, key: string): boolean {

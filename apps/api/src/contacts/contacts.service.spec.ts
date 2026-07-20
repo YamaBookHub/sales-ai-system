@@ -26,7 +26,8 @@ describe('ContactsService', () => {
         create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'contact-2', ...data })),
         update: jest.fn().mockImplementation(({ where, data }) => Promise.resolve({ ...activeContact, ...data, id: where.id })),
         updateMany: jest.fn().mockResolvedValue({ count: 1 })
-      }
+      },
+      auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) }
     };
     const prisma = {
       company: tx.company,
@@ -130,6 +131,27 @@ describe('ContactsService', () => {
       }
     });
     jest.useRealTimers();
+  });
+
+  it('writes only safe contact state and the authenticated session to the audit log', async () => {
+    const { service, tx } = setup();
+
+    await service.update(activeContact.id, { email: 'changed@example.com', inquiryUrl: 'https://example.com/contact' }, {
+      userId: 'user-1',
+      sessionId: 'session-1'
+    });
+
+    const audit = tx.auditLog.create.mock.calls[0][0].data;
+    expect(audit).toMatchObject({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      action: 'contact.updated',
+      entityType: 'ContactPerson',
+      entityId: activeContact.id
+    });
+    expect(audit.after).toEqual(expect.objectContaining({ changedFields: ['email', 'inquiryUrl'] }));
+    expect(JSON.stringify(audit)).not.toContain('changed@example.com');
+    expect(JSON.stringify(audit)).not.toContain('https://example.com/contact');
   });
 
   it('allows PATCH to restore delivery eligibility while keeping unsubscribe timestamps consistent', async () => {

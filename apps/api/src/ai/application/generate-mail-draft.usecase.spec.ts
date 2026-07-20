@@ -3,6 +3,7 @@ import { projectSourceFingerprint } from '../domain/lead-analysis';
 import { GenerateMailDraftUseCase } from './generate-mail-draft.usecase';
 
 describe('GenerateMailDraftUseCase', () => {
+  const actor = { userId: 'user_1', sessionId: 'session_1' };
   const analysisRevisionId = '00000000-0000-4000-8000-000000000001';
   const lead = {
     id: 'lead_1',
@@ -56,6 +57,7 @@ describe('GenerateMailDraftUseCase', () => {
       aiGeneration: {
         create: jest.fn().mockResolvedValue({ id: 'generation_1' })
       },
+      auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit_1' }) },
       contactPerson: {
         findFirst: jest.fn().mockResolvedValue({
           id: 'contact_1',
@@ -128,6 +130,20 @@ describe('GenerateMailDraftUseCase', () => {
         })
       })
     );
+  });
+
+  it('audits generation without copying generated mail content', async () => {
+    const { prisma, tx } = createPrisma();
+    const useCase = new GenerateMailDraftUseCase(prisma as any);
+
+    await useCase.execute(lead.id, { templateKey: 'normal', analysisRevisionId }, actor);
+
+    expect(tx.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      userId: 'user_1', sessionId: 'session_1', action: 'mail.generated', entityId: 'mail_1'
+    }) });
+    const audit = JSON.stringify(tx.auditLog.create.mock.calls[0][0]);
+    expect(audit).not.toContain('真空保存できる米びつを拝見');
+    expect(audit).not.toContain('primary@example.com');
   });
 
   it('does not create another draft when the lead already has mail', async () => {

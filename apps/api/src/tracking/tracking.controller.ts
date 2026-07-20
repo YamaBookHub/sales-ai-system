@@ -6,7 +6,7 @@ import { Public } from '../auth/public.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AuthenticatedPrincipal } from '../auth/auth.types';
 import { RequirePermissions } from '../auth/require-permissions.decorator';
-import { AuditAction } from '../audit/audit-action.decorator';
+import { auditActor } from '../audit/audit-actor';
 
 const GIF_1X1 = Buffer.from('R0lGODlhAQABAPAAAP///wAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==', 'base64');
 
@@ -25,9 +25,8 @@ export class TrackingController {
 
   @Post('t/links')
   @RequirePermissions('records.write')
-  @AuditAction('tracked_link.created', 'TrackedLink', [])
-  async createTrackedLink(@Body() dto: CreateTrackedLinkDto) {
-    return ok(await this.tracking.createTrackedLink(dto));
+  async createTrackedLink(@Body() dto: CreateTrackedLinkDto, @CurrentUser() principal: AuthenticatedPrincipal) {
+    return ok(await this.tracking.createTrackedLink(dto, auditActor(principal)));
   }
 
   @Get('t/mails/:emailId/engagement')
@@ -45,6 +44,6 @@ export class TrackingController {
   @Post('unsubscribe')
   @RequirePermissions('compliance.manage')
   async unsubscribe(@Body() dto: UnsubscribeDto, @CurrentUser() principal: AuthenticatedPrincipal) {
-    return ok(await this.tracking.unsubscribe(dto, principal.userId));
+    return ok(await this.tracking.unsubscribe(dto, auditActor(principal)));
   }
 }
