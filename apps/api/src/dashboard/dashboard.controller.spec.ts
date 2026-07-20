@@ -134,6 +134,8 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('id="bulkImportButton"');
     expect(html).toContain('id="leadRows"');
     expect(html).toContain('id="leadDetail"');
+    expect(html).toContain("api('/api/leads?limit=100')");
+    expect(html).not.toContain("api('/api/leads?limit=200')");
     expect(html).toContain('onkeydown="selectLeadFromKeyboard(event)"');
     expect(html).toContain('tabindex="0"');
   });

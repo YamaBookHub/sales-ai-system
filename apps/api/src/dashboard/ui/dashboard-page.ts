@@ -284,7 +284,7 @@ ${renderNavigationBadgesScript()}
       setStatus('apiStatus', 'API確認中', 'loading');
       try {
         const [leads, mails] = await Promise.all([
-          api('/api/leads?limit=200'),
+          api('/api/leads?limit=100'),
           api('/api/mails?limit=200')
         ]);
         state.leads = leads.items || [];

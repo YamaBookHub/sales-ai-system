@@ -1,7 +1,9 @@
 import { generateKeyPairSync, sign } from 'crypto';
 import type { KeyObject } from 'crypto';
+import { Test } from '@nestjs/testing';
 import { AuthConfig } from './auth.config';
 import { parseCookies, verifySignedJson } from './auth.crypto';
+import { AUTH_CONFIG } from './auth.tokens';
 import { GoogleOidcService } from './google-oidc.service';
 
 describe('GoogleOidcService', () => {
@@ -22,6 +24,17 @@ describe('GoogleOidcService', () => {
       allowedDomains: ['example.com']
     }
   };
+
+  it('uses the global fetch implementation when Nest does not provide an override', async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        { provide: AUTH_CONFIG, useValue: config },
+        GoogleOidcService
+      ]
+    }).compile();
+
+    expect(module.get(GoogleOidcService)).toBeInstanceOf(GoogleOidcService);
+  });
 
   it('uses PKCE and verifies the signed ID token with mocked Google endpoints', async () => {
     const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, createPublicKey, verify } from 'crypto';
 import type { JsonWebKey as CryptoJsonWebKey } from 'crypto';
 import { AuthConfig } from './auth.config';
@@ -39,6 +39,7 @@ export class GoogleOidcService {
   constructor(
     @Inject(AUTH_CONFIG)
     private readonly config: AuthConfig,
+    @Optional()
     private readonly fetchImpl: FetchLike = globalThis.fetch as FetchLike
   ) {}
 
