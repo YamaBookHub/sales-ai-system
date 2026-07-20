@@ -4,8 +4,11 @@ import { CreateLeadDto, ListLeadsQueryDto, UpdateLeadDto } from './leads.dto';
 import { LeadsService } from './leads.service';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AuthenticatedPrincipal } from '../auth/auth.types';
+import { RequirePermissions } from '../auth/require-permissions.decorator';
+import { AuditAction } from '../audit/audit-action.decorator';
 
 @Controller('leads')
+@RequirePermissions('workspace.read')
 export class LeadsController {
   constructor(private readonly leads: LeadsService) {}
 
@@ -20,6 +23,8 @@ export class LeadsController {
   }
 
   @Post()
+  @RequirePermissions('records.write')
+  @AuditAction('lead.created', 'SalesLead', [])
   async create(@Body() dto: CreateLeadDto) {
     return ok(await this.leads.create(dto));
   }
@@ -30,6 +35,7 @@ export class LeadsController {
   }
 
   @Patch(':id')
+  @RequirePermissions('records.write')
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateLeadDto,
@@ -39,6 +45,8 @@ export class LeadsController {
   }
 
   @Post(':id/score')
+  @RequirePermissions('records.write')
+  @AuditAction('lead.scored', 'SalesLead', ['id'])
   async score(@Param('id') id: string) {
     return ok(await this.leads.score(id));
   }

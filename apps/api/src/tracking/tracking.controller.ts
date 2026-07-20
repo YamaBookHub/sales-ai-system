@@ -5,10 +5,13 @@ import { CreateTrackedLinkDto, UnsubscribeDto } from './tracking.dto';
 import { Public } from '../auth/public.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AuthenticatedPrincipal } from '../auth/auth.types';
+import { RequirePermissions } from '../auth/require-permissions.decorator';
+import { AuditAction } from '../audit/audit-action.decorator';
 
 const GIF_1X1 = Buffer.from('R0lGODlhAQABAPAAAP///wAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==', 'base64');
 
 @Controller()
+@RequirePermissions('workspace.read')
 export class TrackingController {
   constructor(private readonly tracking: TrackingService) {}
 
@@ -21,6 +24,8 @@ export class TrackingController {
   }
 
   @Post('t/links')
+  @RequirePermissions('records.write')
+  @AuditAction('tracked_link.created', 'TrackedLink', [])
   async createTrackedLink(@Body() dto: CreateTrackedLinkDto) {
     return ok(await this.tracking.createTrackedLink(dto));
   }
@@ -38,6 +43,7 @@ export class TrackingController {
   }
 
   @Post('unsubscribe')
+  @RequirePermissions('compliance.manage')
   async unsubscribe(@Body() dto: UnsubscribeDto, @CurrentUser() principal: AuthenticatedPrincipal) {
     return ok(await this.tracking.unsubscribe(dto, principal.userId));
   }

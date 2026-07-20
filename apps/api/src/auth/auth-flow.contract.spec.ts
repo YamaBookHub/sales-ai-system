@@ -3,6 +3,7 @@ import { AuthSecurityGuard } from './auth-security.guard';
 import { AuthConfig } from './auth.config';
 import { AuthenticationRequiredException } from './auth.exceptions';
 import { AuthService } from './auth.service';
+import { permissionsForRole } from './permission-policy';
 
 describe('authenticated session flow contract', () => {
   const user = {
@@ -85,7 +86,12 @@ describe('authenticated session flow contract', () => {
     await expect(guard.canActivate(context(getRequest))).resolves.toBe(true);
     expect(controller.me(getRequest.authenticatedPrincipal, getRequest)).toEqual({
       data: {
-        user: { id: user.id, email: user.email, role: user.role },
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          permissions: permissionsForRole(user.role as any)
+        },
         csrfToken: issued.csrfToken,
         absoluteExpiresAt: issued.absoluteExpiresAt
       },

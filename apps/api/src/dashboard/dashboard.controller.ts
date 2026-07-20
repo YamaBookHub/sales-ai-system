@@ -4,8 +4,10 @@ import { renderLeadsPage } from './ui/leads-page';
 import { renderSalesPerformancePage } from './ui/sales-performance-page';
 import { renderTodayPage } from './ui/today-page';
 import { renderRepliesPage } from './ui/replies-page';
+import { RequirePermissions } from '../auth/require-permissions.decorator';
 
 @Controller()
+@RequirePermissions('workspace.read')
 export class DashboardController {
   @Get('leads-view')
   @Header('Content-Type', 'text/html; charset=utf-8')

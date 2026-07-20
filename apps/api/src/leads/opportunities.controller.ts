@@ -17,8 +17,11 @@ import {
   TransitionOpportunityDto,
   UpdateOpportunityDto
 } from './opportunities.dto';
+import { RequirePermissions } from '../auth/require-permissions.decorator';
+import { AuditAction } from '../audit/audit-action.decorator';
 
 @Controller()
+@RequirePermissions('workspace.read')
 export class OpportunitiesController {
   constructor(
     private readonly listOpportunities: ListOpportunitiesUseCase,
@@ -40,6 +43,7 @@ export class OpportunitiesController {
   }
 
   @Patch('leads/:leadId/opportunity')
+  @RequirePermissions('opportunity.write')
   async update(
     @Param('leadId', new ParseUUIDPipe()) leadId: string,
     @Body() dto: UpdateOpportunityDto,
@@ -49,6 +53,8 @@ export class OpportunitiesController {
   }
 
   @Post('leads/:leadId/opportunity/transitions')
+  @RequirePermissions('opportunity.write')
+  @AuditAction('opportunity.transitioned', 'Opportunity', [])
   async transition(
     @Param('leadId', new ParseUUIDPipe()) leadId: string,
     @Body() dto: TransitionOpportunityDto,
@@ -58,6 +64,8 @@ export class OpportunitiesController {
   }
 
   @Post('leads/:leadId/opportunity/reopen')
+  @RequirePermissions('opportunity.reopen')
+  @AuditAction('opportunity.reopened', 'Opportunity', [])
   async reopen(
     @Param('leadId', new ParseUUIDPipe()) leadId: string,
     @Body() dto: ReopenOpportunityDto,

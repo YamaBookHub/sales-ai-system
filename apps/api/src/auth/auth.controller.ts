@@ -6,6 +6,8 @@ import { CurrentUser } from './current-user.decorator';
 import { Public } from './public.decorator';
 import { AuthenticatedPrincipal, AuthenticatedRequest } from './auth.types';
 import { AuthorizationDeniedException } from './auth.exceptions';
+import { permissionsForRole } from './permission-policy';
+import { RequirePermissions } from './require-permissions.decorator';
 
 type ResponseLike = {
   setHeader: (name: string, value: string | string[]) => void;
@@ -16,6 +18,7 @@ type ResponseLike = {
 };
 
 @Controller()
+@RequirePermissions('workspace.read')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
@@ -97,7 +100,12 @@ export class AuthController {
   @Get('auth/me')
   me(@CurrentUser() principal: AuthenticatedPrincipal, @Req() request: AuthenticatedRequest) {
     return ok({
-      user: { id: principal.userId, email: principal.email, role: principal.role },
+      user: {
+        id: principal.userId,
+        email: principal.email,
+        role: principal.role,
+        permissions: permissionsForRole(principal.role)
+      },
       csrfToken: request.authSession!.csrfToken,
       absoluteExpiresAt: request.authSession!.absoluteExpiresAt
     });

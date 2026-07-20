@@ -1,8 +1,10 @@
 import { Controller, Get } from '@nestjs/common';
 import { ok } from '../common/api-response';
 import { NavigationSummaryService } from './navigation-summary.service';
+import { RequirePermissions } from '../auth/require-permissions.decorator';
 
 @Controller()
+@RequirePermissions('workspace.read')
 export class NavigationSummaryController {
   constructor(private readonly navigationSummary: NavigationSummaryService) {}
 
