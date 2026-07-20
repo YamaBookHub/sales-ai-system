@@ -12,8 +12,8 @@ export class UsersController {
   constructor(private readonly users: UsersService) {}
 
   @Get()
-  async list(@Query() query: ListUsersQueryDto) {
-    return ok(await this.users.list(query.page, query.limit, query.role, query.isActive));
+  async list(@Query() query: ListUsersQueryDto, @CurrentUser() actor: AuthenticatedPrincipal) {
+    return ok(await this.users.list(query.page, query.limit, query.role, query.isActive, actor));
   }
 
   @Post()
