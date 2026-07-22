@@ -73,7 +73,11 @@ describe('authenticated session flow contract', () => {
       revokeAllForUser: jest.fn()
     };
     const service = new AuthService(prisma as any, sessions as any, {} as any, config);
-    const guard = new AuthSecurityGuard({ getAllAndOverride: () => false } as any, service);
+    const guard = new AuthSecurityGuard(
+      { getAllAndOverride: () => false } as any,
+      service,
+      { setActor: jest.fn() } as any
+    );
     const controller = new AuthController(service);
     return { controller, guard, service, sessions };
   }

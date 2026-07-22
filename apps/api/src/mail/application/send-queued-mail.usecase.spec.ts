@@ -31,12 +31,16 @@ describe('SendQueuedMailUseCase', () => {
       })
     };
 
-    return { mails, sender };
+    const logger = { errorEvent: jest.fn() };
+    return { mails, sender, logger };
   };
 
+  const useCaseFor = (mails: unknown, sender: unknown, logger: unknown) =>
+    new SendQueuedMailUseCase(mails as any, sender as any, logger as any);
+
   it('sends only queued mail with complete checklist and marks it sent', async () => {
-    const { mails, sender } = createDeps();
-    const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
+    const { mails, sender, logger } = createDeps();
+    const useCase = useCaseFor(mails, sender, logger);
 
     await expect(useCase.execute(email.id, actor)).resolves.toEqual({ ...email, status: 'sent' });
     expect(mails.claimForSending).toHaveBeenCalledWith(email.id, 'mail:mail_1:retry:0', actor);
@@ -55,9 +59,9 @@ describe('SendQueuedMailUseCase', () => {
   });
 
   it('does not send before queue', async () => {
-    const { mails, sender } = createDeps();
+    const { mails, sender, logger } = createDeps();
     mails.get.mockResolvedValue({ ...email, status: 'approved' });
-    const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
+    const useCase = useCaseFor(mails, sender, logger);
 
     await expect(useCase.execute(email.id, actor)).rejects.toThrow(ConflictException);
     expect(mails.claimForSending).not.toHaveBeenCalled();
@@ -65,9 +69,9 @@ describe('SendQueuedMailUseCase', () => {
   });
 
   it('does not send with incomplete checklist', async () => {
-    const { mails, sender } = createDeps();
+    const { mails, sender, logger } = createDeps();
     mails.checklistComplete.mockResolvedValue(false);
-    const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
+    const useCase = useCaseFor(mails, sender, logger);
 
     await expect(useCase.execute(email.id, actor)).rejects.toThrow(ConflictException);
     expect(mails.claimForSending).not.toHaveBeenCalled();
@@ -75,9 +79,9 @@ describe('SendQueuedMailUseCase', () => {
   });
 
   it('marks failed when sender fails after sending lock is taken', async () => {
-    const { mails, sender } = createDeps();
+    const { mails, sender, logger } = createDeps();
     sender.send.mockRejectedValue(new ServiceUnavailableException('provider missing'));
-    const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
+    const useCase = useCaseFor(mails, sender, logger);
 
     await expect(useCase.execute(email.id, actor)).rejects.toThrow(ServiceUnavailableException);
     expect(mails.claimForSending).toHaveBeenCalledWith(email.id, 'mail:mail_1:retry:0', actor);
@@ -87,12 +91,20 @@ describe('SendQueuedMailUseCase', () => {
       'mail:mail_1:retry:0',
       actor
     );
+    expect(logger.errorEvent).toHaveBeenCalledWith('mail.send_failed', {
+      userId: actor.userId,
+      organizationId: actor.organizationId,
+      entityType: 'OutreachEmail',
+      entityId: email.id,
+      operation: 'send',
+      error: expect.any(ServiceUnavailableException)
+    });
   });
 
   it('does not call sender when sending claim fails', async () => {
-    const { mails, sender } = createDeps();
+    const { mails, sender, logger } = createDeps();
     mails.claimForSending.mockRejectedValue(new ConflictException('already sending'));
-    const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
+    const useCase = useCaseFor(mails, sender, logger);
 
     await expect(useCase.execute(email.id, actor)).rejects.toThrow(ConflictException);
     expect(sender.send).not.toHaveBeenCalled();
@@ -100,9 +112,9 @@ describe('SendQueuedMailUseCase', () => {
   });
 
   it('does not call sender when the contact stops delivery after the claim', async () => {
-    const { mails, sender } = createDeps();
+    const { mails, sender, logger } = createDeps();
     mails.assertDeliveryAllowed.mockRejectedValue(new ConflictException('unsubscribed'));
-    const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
+    const useCase = useCaseFor(mails, sender, logger);
 
     await expect(useCase.execute(email.id, actor)).rejects.toThrow(ConflictException);
     expect(sender.send).not.toHaveBeenCalled();
@@ -115,12 +127,12 @@ describe('SendQueuedMailUseCase', () => {
   });
 
   it('does not claim a queued non-email channel when the provider rejects it', async () => {
-    const { mails, sender } = createDeps();
+    const { mails, sender, logger } = createDeps();
     mails.get.mockResolvedValue({ ...email, lead: { sendMethod: 'site_message' } });
     sender.validate = jest.fn().mockImplementation(() => {
       throw new ServiceUnavailableException('site provider missing');
     });
-    const useCase = new SendQueuedMailUseCase(mails as any, sender as any);
+    const useCase = useCaseFor(mails, sender, logger);
 
     await expect(useCase.execute(email.id, actor)).rejects.toThrow(ServiceUnavailableException);
     expect(sender.validate).toHaveBeenCalledWith(expect.objectContaining({ sendMethod: 'site_message' }));

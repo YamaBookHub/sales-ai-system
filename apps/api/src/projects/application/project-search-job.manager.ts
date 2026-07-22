@@ -14,7 +14,13 @@ import {
   PROJECT_SEARCH_JOB_TTL_MS,
   StoredProjectSearchJob
 } from '../domain/project-search-job';
-import { ProjectSearchDiagnostics, ProjectSearchResult, ProjectSearchOptions, ProjectSourceProvider } from '../domain/project-source-provider';
+import {
+  ProjectSearchDiagnostics,
+  ProjectSearchOptions,
+  ProjectSearchResult,
+  ProjectSourceProvider,
+  ProjectSourceSearchError
+} from '../domain/project-source-provider';
 import {
   decideProjectSearchCompletion,
   ProjectSearchCompletionReason,
@@ -22,6 +28,7 @@ import {
 } from '../domain/project-search-completion';
 import { SearchCampfireProjectsDto } from '../projects.dto';
 import { PrismaProjectImportRepository } from '../infrastructure/prisma-project-import.repository';
+import { StructuredLogger } from '../../common/logging/structured-logger.service';
 
 type SearchWithProvider = (
   provider: ProjectSourceProvider,
@@ -41,7 +48,8 @@ export class ProjectSearchJobManager {
 
   constructor(
     private readonly projectImportRepository: PrismaProjectImportRepository,
-    private readonly searchJobRepository: ProjectSearchJobRepository
+    private readonly searchJobRepository: ProjectSearchJobRepository,
+    private readonly logger: StructuredLogger
   ) {}
 
   async start(
@@ -169,12 +177,25 @@ export class ProjectSearchJobManager {
       await this.finish(job, completionReason === 'failed' ? 'failed' : 'completed', completionReason);
     } catch (error) {
       if (controller.signal.aborted) return;
+      if (error instanceof ProjectSourceSearchError) {
+        this.logger.errorEvent('scraper.search_failed', {
+          organizationId: job.organizationId,
+          userId: job.ownerUserId,
+          entityType: 'ProjectSearchJob',
+          entityId: job.id,
+          operation: 'search',
+          source: provider.source,
+          error: error.sourceError
+        });
+      }
       job.message = projectSearchCompletionMessage({
         reason: 'failed',
         desiredLimit: job.desiredLimit,
         itemCount: job.itemCount,
         importableCount: job.importableCount,
-        errorMessage: error instanceof Error ? error.message : undefined
+        errorMessage: error instanceof ProjectSourceSearchError
+          ? '取得元への接続に失敗しました。'
+          : '検索処理に失敗しました。'
       });
       await this.finish(job, 'failed', 'failed', job.message);
     } finally {

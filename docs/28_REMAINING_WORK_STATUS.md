@@ -55,7 +55,7 @@ Baseline:
 | 30 | LA-004 | 公開前 | complete | Sol T4 | LA-003 | 2026-07-20 / 15 permission・fail-closed metadata・admin管理API・transaction内actor/session監査・保存時と監査APIの二重mask・OpenAPI 95 operations・122 suites 478 tests・build成功 | 単一組織内のRBAC・監査 |
 | 31 | LA-007 | 公開前 | complete | Sol T4 -> Terra | LA-004 | 2026-07-22 / Organization・Membership・全業務read/write scope・組織別session/RBAC・越境拒否を実装。実PostgreSQL integrationを含む11 suites 41 tests、全unit 126 suites 506 tests、型・Prisma・OpenAPI・build成功 | 組織ごとのデータ分離 |
 | 32 | LA-005 | 公開前 | complete | Sol T4 -> Terra | LA-003, LS-006 | 2026-07-22 / PostgreSQL共有store・owner/organization隔離・TTL・lease・複数instance cancel・同時開始排他・restart後の期限切れ状態確定を実装。実DB integration成功 | job所有者・永続化 |
-| 33 | LO-001 | 公開前 | pending | Terra T3 | LA-003 | - | 構造化ログ |
+| 33 | LO-001 | 公開前 | complete | Terra T3 + read-only audit | LA-003 | 2026-07-22 / JSON構造化ログ・UUID request ID・actor context・5xx/AI/scraper/mail失敗契約、128 suites 522 tests・型・build成功 | 構造化ログ |
 | 34 | LO-002 | 公開前 | pending | Terra T3 | LR-003, LA-004, LA-007 | - | CI・本番artifact |
 | 35 | LA-006 | 公開前 | pending | Sol T4 -> Terra | LA-003, LO-002 | - | バックアップ・復元確認 |
 | 36 | LO-003 | P1 | pending | Terra T3 | LM-005, LO-001 | - | 監視・費用表示 |
@@ -125,3 +125,5 @@ Baseline:
 | 2026-07-20 | LA-005 | Sol T4 design + main | start | 検索jobをプロセスメモリからPostgreSQL共有storeへ移し、owner/organization隔離、TTL、複数instanceからのcancel、lease切れ後のrestart状態確定を実装開始 |
 | 2026-07-22 | LA-007 | main | complete | Docker上のPostgreSQLへ全14 migrationを適用済みの状態で、組織越境拒否を含むintegration 11 suites 41 testsが成功。全unit 126 suites 506 tests、型検査、Prisma validate/generate、OpenAPI parse、build、diff checkも成功 |
 | 2026-07-22 | LA-005 | Terra implementation + Sol audit + main | complete | ProjectSearchJobをPostgreSQL共有storeへ移行。owner/organization境界、TTL、lease heartbeat、stale write拒否、複数instance cancel、同一owner同時開始の排他、restart後の期限切れfailed確定を実装し、専用実DBintegrationを含む全11 suites 41 testsが成功 |
+| 2026-07-22 | LO-001 | Terra implementation + read-only audit + main | start | request ID、actor context、5xx・AI・scraper・mail失敗の構造化ログ契約と個人情報非出力の実装を開始 |
+| 2026-07-22 | LO-001 | Terra implementation + read-only audit + main | complete | 全responseのUUID request ID、JSON event、認証actor連携を実装。本文・平文email・IP・query・token・error message/stackを除外し、Gmail失敗理由も安全なstatus/codeへ正規化。scraper失敗とDB/業務失敗を分離し、128 suites 522 tests、型検査、build、diff check成功。ブラウザとport 3000は未使用 |

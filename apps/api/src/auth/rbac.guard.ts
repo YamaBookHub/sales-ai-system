@@ -31,7 +31,7 @@ export class RbacGuard implements CanActivate {
             entityType: 'HttpRequest',
             after: {
               method: request.method || 'GET',
-              path: request.path || request.originalUrl || '/',
+              path: safeAuditRoute(request.route?.path),
               requiredPermissions: required || []
             }
           }
@@ -42,4 +42,10 @@ export class RbacGuard implements CanActivate {
     }
     throw new AuthorizationDeniedException();
   }
+}
+
+function safeAuditRoute(value: unknown) {
+  if (typeof value !== 'string' || !value.startsWith('/')) return '/unmatched';
+  if (value.length > 300 || value.includes('?') || /[\s@%]/.test(value)) return '/unmatched';
+  return value;
 }

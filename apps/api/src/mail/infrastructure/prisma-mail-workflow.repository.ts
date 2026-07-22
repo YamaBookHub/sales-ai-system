@@ -154,7 +154,7 @@ export class PrismaMailWorkflowRepository {
   }
 
   markFailedAfterSend(id: string, error: unknown, idempotencyKey: string, actor: AuditActor) {
-    const failedReason = error instanceof Error ? error.message : '送信に失敗しました';
+    const failedReason = safeMailFailureReason(error);
     return this.transition(id, 'failed', 'failed', { failedReason }, { idempotencyKey, failedReason }, actor);
   }
 
@@ -230,6 +230,38 @@ export class PrismaMailWorkflowRepository {
   }
 
 }
+
+export function safeMailFailureReason(error: unknown) {
+  const status = httpErrorStatus(error);
+  if (status) return `送信に失敗しました（status: ${status}）。`;
+  const code = safeErrorCode(error);
+  if (code) return `送信に失敗しました（code: ${code}）。`;
+  return '送信に失敗しました。';
+}
+
+function httpErrorStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const value = error as { getStatus?: () => unknown; status?: unknown };
+  const status = typeof value.getStatus === 'function' ? value.getStatus() : value.status;
+  return typeof status === 'number' && Number.isInteger(status) && status >= 400 && status <= 599 ? status : undefined;
+}
+
+function safeErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const code = (error as { code?: unknown }).code;
+  if (typeof code !== 'string') return undefined;
+  const normalized = code.trim().toUpperCase();
+  return SAFE_MAIL_ERROR_CODES.has(normalized) ? normalized : undefined;
+}
+
+const SAFE_MAIL_ERROR_CODES = new Set([
+  'ABORT_ERR',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EAI_AGAIN',
+  'ENOTFOUND',
+  'ETIMEDOUT'
+]);
 
 export function mailAuditActionForTransition(
   status: EmailStatus,

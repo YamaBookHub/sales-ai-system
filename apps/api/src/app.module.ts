@@ -13,9 +13,11 @@ import { PerformanceModule } from './performance/performance.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { AuditModule } from './audit/audit.module';
+import { ObservabilityModule } from './common/logging/observability.module';
 
 @Module({
   imports: [
+    ObservabilityModule,
     PrismaModule,
     AuthModule,
     DashboardModule,

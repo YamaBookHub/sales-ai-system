@@ -58,7 +58,7 @@ export class GmailMailSender implements MailSender {
     });
 
     if (!response.ok) {
-      throw new ServiceUnavailableException(`Gmail送信に失敗しました: ${await responseText(response)}`);
+      throw new ServiceUnavailableException(`Gmail送信に失敗しました（status: ${safeHttpStatus(response.status)}）。`);
     }
 
     const data = (await response.json()) as GmailSendResponse;
@@ -84,7 +84,7 @@ export class GmailMailSender implements MailSender {
     const data = (await response.json()) as GmailTokenResponse;
 
     if (!response.ok || !data.access_token) {
-      throw new ServiceUnavailableException(`Gmail OAuth認証に失敗しました: ${data.error_description || data.error || response.statusText}`);
+      throw new ServiceUnavailableException(`Gmail OAuth認証に失敗しました（status: ${safeHttpStatus(response.status)}）。`);
     }
 
     return data.access_token;
@@ -143,14 +143,10 @@ function encodeHeader(value: string) {
   return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
 }
 
-async function responseText(response: Response) {
-  try {
-    return await response.text();
-  } catch {
-    return response.statusText;
-  }
-}
-
 function isTransientStatus(status: number) {
   return [408, 429, 500, 502, 503, 504].includes(status);
+}
+
+function safeHttpStatus(status: unknown) {
+  return typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? status : 503;
 }

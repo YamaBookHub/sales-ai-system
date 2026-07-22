@@ -43,7 +43,12 @@ describe('ImportProjectUseCase', () => {
 
   it('imports active project through the selected provider and persists normalized result', async () => {
     const { repository, campfireProvider, makuakeProvider } = createDeps();
-    const useCase = new ImportProjectUseCase(repository as any, campfireProvider as any, makuakeProvider as any);
+    const useCase = new ImportProjectUseCase(
+      repository as any,
+      campfireProvider as any,
+      makuakeProvider as any,
+      { errorEvent: jest.fn() } as any
+    );
 
     const result = await useCase.import(
       { source: 'campfire', url: 'https://camp-fire.jp/projects/1/view?utm=1' },
@@ -68,16 +73,58 @@ describe('ImportProjectUseCase', () => {
 
   it('does not persist inactive projects', async () => {
     const { repository, campfireProvider, makuakeProvider } = createDeps();
+    const logger = { errorEvent: jest.fn() };
     campfireProvider.import.mockResolvedValue({
       ...importedProject,
       project: { ...importedProject.project, status: 'ended' }
     });
-    const useCase = new ImportProjectUseCase(repository as any, campfireProvider as any, makuakeProvider as any);
+    const useCase = new ImportProjectUseCase(
+      repository as any,
+      campfireProvider as any,
+      makuakeProvider as any,
+      logger as any
+    );
 
     await expect(useCase.import(
       { source: 'campfire', url: 'https://camp-fire.jp/projects/1/view' },
       actor
     )).rejects.toThrow(BadRequestException);
     expect(repository.persistImportedProject).not.toHaveBeenCalled();
+    expect(logger.errorEvent).not.toHaveBeenCalled();
+  });
+
+  it('records provider import failures as scraper failures', async () => {
+    const { repository, campfireProvider, makuakeProvider } = createDeps();
+    const logger = { errorEvent: jest.fn() };
+    campfireProvider.import.mockRejectedValue(new Error('provider failed test@example.com'));
+    const useCase = new ImportProjectUseCase(repository as any, campfireProvider as any, makuakeProvider as any, logger as any);
+
+    await expect(useCase.import(
+      { source: 'campfire', url: 'https://camp-fire.jp/projects/1/view' },
+      actor
+    )).rejects.toThrow('provider failed');
+
+    expect(logger.errorEvent).toHaveBeenCalledWith('scraper.import_failed', {
+      organizationId: actor.organizationId,
+      userId: actor.userId,
+      entityType: 'CrowdfundingProject',
+      operation: 'import',
+      source: 'campfire',
+      error: expect.any(Error)
+    });
+  });
+
+  it('does not misclassify persistence failures as scraper failures', async () => {
+    const { repository, campfireProvider, makuakeProvider } = createDeps();
+    const logger = { errorEvent: jest.fn() };
+    repository.persistImportedProject.mockRejectedValue(new Error('database unavailable'));
+    const useCase = new ImportProjectUseCase(repository as any, campfireProvider as any, makuakeProvider as any, logger as any);
+
+    await expect(useCase.import(
+      { source: 'campfire', url: 'https://camp-fire.jp/projects/1/view' },
+      actor
+    )).rejects.toThrow('database unavailable');
+
+    expect(logger.errorEvent).not.toHaveBeenCalled();
   });
 });

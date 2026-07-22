@@ -6,6 +6,7 @@ import {
   ProjectSearchJobTerminalUpdate,
   StoredProjectSearchJob
 } from '../domain/project-search-job';
+import { ProjectSourceSearchError } from '../domain/project-source-provider';
 import { ProjectSearchJobManager } from './project-search-job.manager';
 
 describe('ProjectSearchJobManager', () => {
@@ -20,12 +21,17 @@ describe('ProjectSearchJobManager', () => {
   };
 
   function createManager(repository = new InMemorySearchJobRepository(), existingUrls: string[] = []) {
+    const logger = { errorEvent: jest.fn() };
+    const projectImportRepository = { existingProjectUrls: jest.fn().mockResolvedValue(new Set(existingUrls)) };
     return {
       manager: new ProjectSearchJobManager(
-        { existingProjectUrls: jest.fn().mockResolvedValue(new Set(existingUrls)) } as any,
-        repository
+        projectImportRepository as any,
+        repository,
+        logger as any
       ),
-      repository
+      repository,
+      logger,
+      projectImportRepository
     };
   }
 
@@ -73,13 +79,40 @@ describe('ProjectSearchJobManager', () => {
   });
 
   it('persists a provider failure without losing the reason', async () => {
-    const { manager } = createManager();
-    const started = await startJob(manager, provider, { limit: 10 }, jest.fn().mockRejectedValue(new Error('provider timeout')));
+    const { manager, logger } = createManager();
+    const started = await startJob(
+      manager,
+      provider,
+      { limit: 10 },
+      jest.fn().mockRejectedValue(new ProjectSourceSearchError(new Error('provider timeout secret@example.com')))
+    );
 
     const job = await waitForTerminal(manager, started.id);
 
     expect(job).toMatchObject({ status: 'failed', completionReason: 'failed' });
-    expect(job.message).toContain('provider timeout');
+    expect(job.message).toContain('取得元への接続に失敗');
+    expect(job.message).not.toContain('secret@example.com');
+    expect(logger.errorEvent).toHaveBeenCalledWith('scraper.search_failed', {
+      organizationId,
+      userId: ownerUserId,
+      entityType: 'ProjectSearchJob',
+      entityId: started.id,
+      operation: 'search',
+      source: 'campfire',
+      error: expect.any(Error)
+    });
+  });
+
+  it('does not misclassify repository failures as scraper failures', async () => {
+    const { manager, logger, projectImportRepository } = createManager();
+    projectImportRepository.existingProjectUrls.mockRejectedValue(new Error('database unavailable'));
+    const started = await startJob(manager, provider, { limit: 10 }, jest.fn());
+
+    const job = await waitForTerminal(manager, started.id);
+
+    expect(job).toMatchObject({ status: 'failed', completionReason: 'failed' });
+    expect(job.message).toContain('検索処理に失敗');
+    expect(logger.errorEvent).not.toHaveBeenCalled();
   });
 
   it('aborts the local provider and prevents late writes after cancellation', async () => {

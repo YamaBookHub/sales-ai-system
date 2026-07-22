@@ -1,6 +1,8 @@
 import { AiClientService } from './ai-client.service';
 
 describe('AiClientService', () => {
+  const logger = () => ({ errorEvent: jest.fn() });
+
   it('routes Gemini and OpenAI model requests to the matching provider', async () => {
     const gemini = {
       createSalesMailDraft: jest.fn().mockResolvedValue({ model: 'gemini-3.1-flash-lite' }),
@@ -14,7 +16,7 @@ describe('AiClientService', () => {
     const openAiBudget = {
       execute: jest.fn(async (_input, run) => run())
     };
-    const client = new AiClientService(gemini as any, openAi as any, openAiBudget as any);
+    const client = new AiClientService(gemini as any, openAi as any, openAiBudget as any, logger() as any);
     const input = { templateKey: 'normal', companyName: 'テスト株式会社' };
 
     await client.createSalesMailDraft(input, 'gemini-3.1-flash-lite', 'org_1');
@@ -33,11 +35,34 @@ describe('AiClientService', () => {
       checkSemanticConsistency: jest.fn().mockResolvedValue({ model: 'gemini-3.1-flash-lite' })
     };
     const openAiBudget = { execute: jest.fn() };
-    const client = new AiClientService(gemini as any, {} as any, openAiBudget as any);
+    const client = new AiClientService(gemini as any, {} as any, openAiBudget as any, logger() as any);
 
     await client.checkSemanticConsistency({ companyName: '会社', body: '本文' }, 'gemini-3.1-flash-lite', 'org_1');
 
     expect(gemini.checkSemanticConsistency).toHaveBeenCalled();
     expect(openAiBudget.execute).not.toHaveBeenCalled();
+  });
+
+  it('records an AI failure without passing prompt or mail content as log fields', async () => {
+    const failure = new Error('provider failed for secret@example.com and 本文');
+    const gemini = { createSalesMailDraft: jest.fn().mockRejectedValue(failure) };
+    const structuredLogger = logger();
+    const client = new AiClientService(gemini as any, {} as any, {} as any, structuredLogger as any);
+
+    await expect(client.createSalesMailDraft(
+      { templateKey: 'normal', companyName: '秘密株式会社' },
+      'gemini-3.1-flash-lite',
+      'org_1'
+    )).rejects.toThrow(failure);
+
+    expect(structuredLogger.errorEvent).toHaveBeenCalledWith('ai.operation_failed', {
+      organizationId: 'org_1',
+      entityType: 'AiGeneration',
+      operation: 'sales_mail_polish',
+      provider: 'gemini',
+      error: failure
+    });
+    expect(structuredLogger.errorEvent.mock.calls[0][1]).not.toHaveProperty('input');
+    expect(structuredLogger.errorEvent.mock.calls[0][1]).not.toHaveProperty('body');
   });
 });

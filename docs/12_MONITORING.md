@@ -3,6 +3,8 @@
 ## 1. 目的
 営業AIシステムの送信失敗、AI失敗、Gmail同期停止、DB異常を早期発見する。
 
+2026-07-22時点で、LO-001としてJSON構造化ログとrequest IDの基盤を実装済みである。指標の集計・保存、アラート通知、管理画面表示はLO-003で実装する。
+
 ## 2. 監視対象
 | 対象 | 指標 | 閾値 |
 |---|---|---|
@@ -23,12 +25,33 @@ JSON構造化ログとする。
   "level":"info",
   "requestId":"uuid",
   "userId":"uuid|null",
+  "organizationId":"uuid|null",
   "event":"mail.sent",
   "entityType":"OutreachEmail",
   "entityId":"uuid",
   "metadata":{}
 }
 ```
+
+### request ID
+
+- requestの `X-Request-Id` がUUIDの場合は引き継ぐ。
+- UUIDでない値は信頼せず、サーバーでUUIDを生成する。
+- 全responseに `X-Request-Id` を返す。
+- `AsyncLocalStorage` でrequest中の `requestId`、認証後の `userId`、`organizationId` を引き継ぐ。
+
+### 実装済みevent
+
+- `http.request_completed`: 5xx未満のHTTP処理完了
+- `http.request_failed`: 5xxのHTTP処理完了
+- `ai.operation_failed`: OpenAI / Gemini / AI予算guardの失敗
+- `scraper.search_failed`: 同期検索または検索jobのprovider検索失敗
+- `scraper.import_failed`: providerからの案件取得失敗。公開状態判定やDB保存失敗は含めない
+- `mail.send_failed`: 実送信providerの失敗
+
+### metadataの許可項目
+
+ログへ出せるmetadataは `operation`、`source`、`provider`、`method`、route template、`statusCode`、`durationMs`、安全化したerror type/code/statusだけとする。自由形式のオブジェクトやerror message/stackは出力しない。
 
 ## 4. AuditLog対象
 - ユーザー作成/権限変更
@@ -68,7 +91,9 @@ ALERT_EMAIL_TO=
 - DLQ件数
 
 ## 8. 個人情報保護
-ログに本文全文、メールアドレス平文、IP平文を出さない。メールアドレスは必要時のみDBに保存し、ログではhashまたは末尾マスクとする。
+ログに本文全文、メールアドレス平文、IP平文、認証token、Cookie、Authorization header、request body、query文字列、error message/stackを出さない。HTTPログは実URLではなくroute templateだけを記録する。
+
+Gmailの失敗response本文は例外、ログ、DBの `failedReason`、`EmailEvent` に保存しない。送信失敗理由は安全なHTTP statusまたはerror codeだけへ正規化する。
 
 ## 9. Codex実装指示
-まずはNestJS Loggerラッパーを作成し、`AuditLogService` と `MetricsService` を分離する。監視SaaS未導入でも動くよう、DB保存とコンソールログを初期実装とする。
+runtimeの構造化ログは `common/logging` に集約する。業務操作の証跡であるDB `AuditLog` と、障害検知用のruntime logを混同しない。LO-003ではこのevent契約を入力としてメトリクスと費用表示を追加し、本文・メール・IPを集計軸にしない。

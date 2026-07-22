@@ -13,6 +13,7 @@ export type AuthenticatedRequest = {
   method?: string;
   originalUrl?: string;
   path?: string;
+  route?: { path?: unknown };
   protocol?: string;
   hostname?: string;
   headers: Record<string, string | string[] | undefined>;

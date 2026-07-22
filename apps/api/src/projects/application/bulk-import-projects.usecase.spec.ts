@@ -46,7 +46,13 @@ describe('BulkImportProjectsUseCase', () => {
 
   it('imports unique URLs, analyzes imported leads, and records audit summary', async () => {
     const { ai, repository, campfireProvider, makuakeProvider } = createDeps();
-    const useCase = new BulkImportProjectsUseCase(ai as any, repository as any, campfireProvider as any, makuakeProvider as any);
+    const useCase = new BulkImportProjectsUseCase(
+      ai as any,
+      repository as any,
+      campfireProvider as any,
+      makuakeProvider as any,
+      { errorEvent: jest.fn() } as any
+    );
 
     const summary = await useCase.execute({
       source: 'campfire',
@@ -77,7 +83,13 @@ describe('BulkImportProjectsUseCase', () => {
 
   it('can import without AI analysis', async () => {
     const { ai, repository, campfireProvider, makuakeProvider } = createDeps();
-    const useCase = new BulkImportProjectsUseCase(ai as any, repository as any, campfireProvider as any, makuakeProvider as any);
+    const useCase = new BulkImportProjectsUseCase(
+      ai as any,
+      repository as any,
+      campfireProvider as any,
+      makuakeProvider as any,
+      { errorEvent: jest.fn() } as any
+    );
 
     const summary = await useCase.execute({
       source: 'campfire',
@@ -90,5 +102,55 @@ describe('BulkImportProjectsUseCase', () => {
       imported: 1,
       analyzed: 0
     });
+  });
+
+  it('records only provider failures as scraper failures during bulk import', async () => {
+    const { ai, repository, campfireProvider, makuakeProvider } = createDeps();
+    const logger = { errorEvent: jest.fn() };
+    campfireProvider.import.mockRejectedValue(new Error('provider failed'));
+    const useCase = new BulkImportProjectsUseCase(
+      ai as any,
+      repository as any,
+      campfireProvider as any,
+      makuakeProvider as any,
+      logger as any
+    );
+
+    const summary = await useCase.execute({
+      source: 'campfire',
+      urls: ['https://camp-fire.jp/projects/1/view'],
+      analyze: false
+    }, actor);
+
+    expect(summary).toMatchObject({ imported: 0, failed: 1 });
+    expect(logger.errorEvent).toHaveBeenCalledWith('scraper.import_failed', expect.objectContaining({
+      organizationId: actor.organizationId,
+      userId: actor.userId,
+      operation: 'bulk_import',
+      source: 'campfire',
+      error: expect.any(Error)
+    }));
+  });
+
+  it('does not misclassify persistence failures as scraper failures during bulk import', async () => {
+    const { ai, repository, campfireProvider, makuakeProvider } = createDeps();
+    const logger = { errorEvent: jest.fn() };
+    repository.persistImportedProject.mockRejectedValue(new Error('database unavailable'));
+    const useCase = new BulkImportProjectsUseCase(
+      ai as any,
+      repository as any,
+      campfireProvider as any,
+      makuakeProvider as any,
+      logger as any
+    );
+
+    const summary = await useCase.execute({
+      source: 'campfire',
+      urls: ['https://camp-fire.jp/projects/1/view'],
+      analyze: false
+    }, actor);
+
+    expect(summary).toMatchObject({ imported: 0, failed: 1 });
+    expect(logger.errorEvent).not.toHaveBeenCalled();
   });
 });

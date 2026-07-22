@@ -2,9 +2,11 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import 'reflect-metadata';
 import { AppModule } from './app.module';
+import { StructuredLogger } from './common/logging/structured-logger.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(StructuredLogger));
   app.setGlobalPrefix('api', {
     exclude: ['/', '/login', '/leads-view', '/mail-workspace', '/today', '/sales-performance', '/replies', '/api/replies', '/health', '/t/open/:emailId.png', '/t/click/:token']
   });

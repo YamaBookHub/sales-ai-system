@@ -5,13 +5,15 @@ import { CampfireProjectSourceProvider } from '../infrastructure/campfire-projec
 import { MakuakeProjectSourceProvider } from '../infrastructure/makuake-project-source.provider';
 import { PrismaProjectImportRepository } from '../infrastructure/prisma-project-import.repository';
 import { ImportCampfireProjectDto, ImportProjectDto, ProjectSource } from '../projects.dto';
+import { StructuredLogger } from '../../common/logging/structured-logger.service';
 
 @Injectable()
 export class ImportProjectUseCase {
   constructor(
     private readonly projectImportRepository: PrismaProjectImportRepository,
     private readonly campfireProvider: CampfireProjectSourceProvider,
-    private readonly makuakeProvider: MakuakeProjectSourceProvider
+    private readonly makuakeProvider: MakuakeProjectSourceProvider,
+    private readonly logger: StructuredLogger
   ) {}
 
   import(dto: ImportProjectDto, actor: AuditActor) {
@@ -24,7 +26,21 @@ export class ImportProjectUseCase {
 
   private async importWithProvider(provider: ProjectSourceProvider, url: string, actor: AuditActor, options: ImportOptions = {}) {
     const normalizedUrl = provider.normalizeUrl(url);
-    const imported = await provider.import(normalizedUrl);
+    let imported: Awaited<ReturnType<ProjectSourceProvider['import']>>;
+    try {
+      imported = await provider.import(normalizedUrl);
+    } catch (error) {
+      this.logger.errorEvent('scraper.import_failed', {
+        organizationId: actor.organizationId,
+        userId: actor.userId,
+        entityType: 'CrowdfundingProject',
+        operation: 'import',
+        source: provider.source,
+        error
+      });
+      throw error;
+    }
+
     if (imported.project.status !== 'active') {
       throw new BadRequestException('現在公開中・募集中のプロジェクトだけ取り込めます。終了済み・公開前のURLは対象外です。');
     }

@@ -1,5 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { mailAuditActionForTransition, PrismaMailWorkflowRepository } from './prisma-mail-workflow.repository';
+import { mailAuditActionForTransition, PrismaMailWorkflowRepository, safeMailFailureReason } from './prisma-mail-workflow.repository';
 
 describe('PrismaMailWorkflowRepository', () => {
   const organizationId = 'org_1';
@@ -143,7 +143,7 @@ describe('PrismaMailWorkflowRepository', () => {
       'key_1',
       actor
     );
-    await repository.markFailedAfterSend('mail_1', new Error('provider unavailable'), 'key_2', actor);
+    await repository.markFailedAfterSend('mail_1', new Error('本文 secret-body test@example.com 192.168.1.1'), 'key_2', actor);
 
     expect(tx.outreachEmail.update).toHaveBeenNthCalledWith(1, expect.objectContaining({
       where: { organizationId_id: { organizationId, id: 'mail_1' } },
@@ -161,7 +161,7 @@ describe('PrismaMailWorkflowRepository', () => {
       where: { organizationId_id: { organizationId, id: 'mail_1' } },
       data: expect.objectContaining({
         status: 'failed',
-        failedReason: 'provider unavailable',
+        failedReason: '送信に失敗しました。',
         events: { create: expect.objectContaining({ type: 'failed' }) }
       })
     }));
@@ -171,6 +171,15 @@ describe('PrismaMailWorkflowRepository', () => {
     expect(tx.auditLog.create).toHaveBeenNthCalledWith(2, {
       data: expect.objectContaining({ organizationId, userId: actor.userId, sessionId: actor.sessionId, action: 'mail.send_failed', entityId: 'mail_1' })
     });
+  });
+
+  it('builds a safe persisted failure reason without provider response data', () => {
+    const error = Object.assign(new Error('本文 secret-body test@example.com 192.168.1.1'), { code: 'ECONNRESET' });
+
+    expect(safeMailFailureReason(error)).toBe('送信に失敗しました（code: ECONNRESET）。');
+    expect(safeMailFailureReason({ getStatus: () => 503, message: 'secret@example.com' })).toBe('送信に失敗しました（status: 503）。');
+    expect(safeMailFailureReason(Object.assign(new Error('provider failed'), { code: 'SECRET-TOKEN-123' }))).toBe('送信に失敗しました。');
+    expect(safeMailFailureReason(error)).not.toContain('secret');
   });
 
   it('rejects a legacy email when its matching address is unsubscribed', async () => {

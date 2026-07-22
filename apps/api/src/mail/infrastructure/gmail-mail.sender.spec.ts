@@ -93,6 +93,26 @@ describe('GmailMailSender', () => {
     })).rejects.toThrow(ServiceUnavailableException);
   });
 
+  it('does not expose the Gmail response body in send failures', async () => {
+    const sensitiveBody = '本文 secret-body test@example.com 192.168.1.1';
+    const httpPost = jest
+      .fn()
+      .mockResolvedValueOnce(createResponse(true, { access_token: 'access' }))
+      .mockResolvedValueOnce(createResponse(false, sensitiveBody, 'bad gateway', 502));
+    const sender = new GmailMailSender(config, httpPost);
+
+    let caught: unknown;
+    try {
+      await sender.send({ idempotencyKey: 'key', toEmail: 'to@example.com', subject: '件名', body: '本文' });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ServiceUnavailableException);
+    expect((caught as Error).message).toBe('Gmail送信に失敗しました（status: 502）。');
+    expect((caught as Error).message).not.toContain(sensitiveBody);
+  });
+
   it('retries transient OAuth failures but does not retry the send request', async () => {
     const httpPost = jest
       .fn()

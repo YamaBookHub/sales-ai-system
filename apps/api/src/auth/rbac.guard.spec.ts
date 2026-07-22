@@ -56,6 +56,46 @@ describe('RbacGuard', () => {
     }))).rejects.toBeInstanceOf(AuthorizationDeniedException);
   });
 
+  it('removes query values from denied-route audit records', async () => {
+    const prisma = { auditLog: { create: jest.fn().mockResolvedValue({}) } };
+    const guard = new RbacGuard(reflector(['mail.send']) as any, prisma as any);
+
+    await expect(guard.canActivate(context({
+      method: 'POST',
+      route: { path: '/api/mails/:id/send' },
+      originalUrl: '/api/mails/mail-1/send?email=secret@example.com&token=secret-token',
+      authenticatedPrincipal: {
+        userId: 'user-1',
+        organizationId: 'org-1',
+        role: 'operator',
+        sessionId: 'session-1'
+      }
+    }))).rejects.toBeInstanceOf(AuthorizationDeniedException);
+
+    const audit = prisma.auditLog.create.mock.calls[0][0];
+    expect(audit.data.after.path).toBe('/api/mails/:id/send');
+    expect(JSON.stringify(audit)).not.toContain('secret@example.com');
+    expect(JSON.stringify(audit)).not.toContain('secret-token');
+  });
+
+  it('does not persist a dynamic URL when no route template is available', async () => {
+    const prisma = { auditLog: { create: jest.fn().mockResolvedValue({}) } };
+    const guard = new RbacGuard(reflector(['mail.send']) as any, prisma as any);
+
+    await expect(guard.canActivate(context({
+      method: 'GET',
+      path: '/t/click/secret-token-123',
+      originalUrl: '/t/click/secret-token-123',
+      authenticatedPrincipal: {
+        userId: 'user-1', organizationId: 'org-1', role: 'operator', sessionId: 'session-1'
+      }
+    }))).rejects.toBeInstanceOf(AuthorizationDeniedException);
+
+    const audit = prisma.auditLog.create.mock.calls[0][0];
+    expect(audit.data.after.path).toBe('/unmatched');
+    expect(JSON.stringify(audit)).not.toContain('secret-token-123');
+  });
+
   it('allows managers to review and queue mail but not send it', async () => {
     const prisma = { auditLog: { create: jest.fn() } };
     const request = { authenticatedPrincipal: { userId: 'user-1', role: 'manager', sessionId: 'session-1' } };

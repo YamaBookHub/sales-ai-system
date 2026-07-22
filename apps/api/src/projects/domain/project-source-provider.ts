@@ -39,6 +39,13 @@ export type ProjectSearchOptions = {
   onItems?: ProjectSearchItemListener;
 };
 
+export class ProjectSourceSearchError extends Error {
+  constructor(readonly sourceError: unknown) {
+    super('Project source search failed');
+    this.name = 'ProjectSourceSearchError';
+  }
+}
+
 export type NormalizedImportedProject = {
   source: ProjectSource;
   platform: {

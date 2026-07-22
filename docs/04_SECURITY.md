@@ -73,6 +73,8 @@
 - import、分析、生成、編集、review、承認、queue、send記録、unsubscribe、商談操作、user/role変更のactor伝播または監査はLA-004で実装済み。AuditLogは業務履歴と別に正本として保持する。
 - `EmailEvent` はメールworkflowと追跡イベントの履歴に使う。これだけで全操作の監査を満たすとは扱わない。
 - IPはschema上 `ipHash` で保存できる。平文IPの保存、保管期間、User-Agent、メール本文とAI入力の扱いは運用・法務確認が必要である。
+- runtime logはJSON構造化し、本文、平文メール、平文IP、token、Cookie、header、body、query、error message/stackを許可しない。requestはUUIDの `requestId`、認証後の `userId` / `organizationId`、entity、event、許可済みmetadataだけを記録する。
+- Gmailのresponse本文や外部providerの生エラー文は `failedReason` と `EmailEvent` に保存せず、安全なstatus/codeへ正規化する。
 - AIは実績、数値、制度、日付、社名、成果保証を創作しない。未知の情報は未知として扱う。
 
 ## 5. 未実装・将来要件

@@ -1,4 +1,5 @@
 import { SearchProjectsUseCase } from './search-projects.usecase';
+import { ProjectSourceSearchError } from '../domain/project-source-provider';
 
 describe('SearchProjectsUseCase', () => {
   const organizationId = 'organization_1';
@@ -30,13 +31,14 @@ describe('SearchProjectsUseCase', () => {
       source: 'makuake',
       search: jest.fn().mockResolvedValue({ items: [{ url: 'https://www.makuake.com/project/1' }] })
     };
+    const logger = { errorEvent: jest.fn() };
 
-    return { jobManager, campfireProvider, makuakeProvider };
+    return { jobManager, campfireProvider, makuakeProvider, logger };
   };
 
   it('searches with selected provider and default excludeUrls', async () => {
-    const { jobManager, campfireProvider, makuakeProvider } = createDeps();
-    const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any);
+    const { jobManager, campfireProvider, makuakeProvider, logger } = createDeps();
+    const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any, logger as any);
 
     const result = await useCase.search({ source: 'makuake', keyword: '食品' }, organizationId);
 
@@ -48,8 +50,8 @@ describe('SearchProjectsUseCase', () => {
   });
 
   it('sorts and limits ending soon projects', async () => {
-    const { jobManager, campfireProvider, makuakeProvider } = createDeps();
-    const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any);
+    const { jobManager, campfireProvider, makuakeProvider, logger } = createDeps();
+    const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any, logger as any);
 
     const result = await useCase.searchCampfire({ status: 'endingSoon', endingSoonDays: 14, limit: 10 }, organizationId);
 
@@ -66,8 +68,8 @@ describe('SearchProjectsUseCase', () => {
   });
 
   it('starts search job and forwards its abort signal to the provider', async () => {
-    const { jobManager, campfireProvider, makuakeProvider } = createDeps();
-    const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any);
+    const { jobManager, campfireProvider, makuakeProvider, logger } = createDeps();
+    const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any, logger as any);
 
     const job = useCase.startJob({ source: 'campfire', limit: 50 }, organizationId, ownerUserId);
 
@@ -86,5 +88,34 @@ describe('SearchProjectsUseCase', () => {
       { limit: 50, excludeUrls: [] },
       { signal: controller.signal }
     );
+  });
+
+  it('records a synchronous scraper failure without logging input data', async () => {
+    const { jobManager, campfireProvider, makuakeProvider, logger } = createDeps();
+    campfireProvider.search.mockRejectedValue(new Error('secret@example.com 192.168.1.1'));
+    const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any, logger as any);
+
+    await expect(useCase.search({ source: 'campfire', keyword: 'secret keyword' }, organizationId)).rejects.toThrow();
+
+    expect(logger.errorEvent).toHaveBeenCalledWith('scraper.search_failed', {
+      organizationId,
+      entityType: 'CrowdfundingProject',
+      operation: 'search',
+      source: 'campfire',
+      error: expect.any(Error)
+    });
+    expect(logger.errorEvent.mock.calls[0][1]).not.toHaveProperty('keyword');
+  });
+
+  it('leaves asynchronous job failure logging to the job manager', async () => {
+    const { jobManager, campfireProvider, makuakeProvider, logger } = createDeps();
+    campfireProvider.search.mockRejectedValue(new Error('provider failed'));
+    const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any, logger as any);
+
+    useCase.startJob({ source: 'campfire', limit: 50 }, organizationId, ownerUserId);
+    const callback = jobManager.start.mock.calls[0][4];
+    await expect(callback(campfireProvider, { limit: 50 })).rejects.toBeInstanceOf(ProjectSourceSearchError);
+
+    expect(logger.errorEvent).not.toHaveBeenCalled();
   });
 });

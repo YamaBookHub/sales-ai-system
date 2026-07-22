@@ -5,12 +5,17 @@ import { CsrfValidationException } from './auth.exceptions';
 import { parseCookies, safeEqual } from './auth.crypto';
 import { AuthenticatedRequest } from './auth.types';
 import { IS_PUBLIC_ROUTE } from './public.decorator';
+import { RequestContextService } from '../common/logging/request-context.service';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 @Injectable()
 export class AuthSecurityGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector, private readonly auth: AuthService) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly auth: AuthService,
+    private readonly requestContext: RequestContextService
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_ROUTE, [context.getHandler(), context.getClass()]);
@@ -23,6 +28,7 @@ export class AuthSecurityGuard implements CanActivate {
     const session = await this.auth.authenticate(sessionToken);
     request.authenticatedPrincipal = session.principal;
     request.authSession = session;
+    this.requestContext.setActor(session.principal);
 
     const method = (request.method || 'GET').toUpperCase();
     if (!SAFE_METHODS.has(method)) {

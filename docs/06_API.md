@@ -7,6 +7,7 @@
 - NestJS REST API。global prefix は `api`。
 - ただし `GET /`、`GET /leads-view`、`GET /mail-workspace`、`GET /today`、`GET /sales-performance`、`GET /replies`、`GET /health`、`GET /t/open/{emailId}.png`、`GET /t/click/{token}` は `/api` 外。
 - JSONレスポンスは原則 `{ data, meta, error }`。成功時は `error: null`、`meta` は原則 `null`。
+- 全responseは `X-Request-Id` を返す。requestの同headerがUUIDなら引き継ぎ、それ以外はサーバーでUUIDを生成する。request IDは障害照合用であり、認証や冪等性判定には使わない。
 - HTML画面と開封計測画像、クリックリダイレクトはこのwrapperの対象外。
 - page/limit はcontrollerが数値化する。既定値は `page=1`、`limit=20`。Reply Inboxのlimit上限は100。
 - `GET /health`、`GET /login`、Google認証開始/callback、local限定login、開封画像、クリックredirect以外はsession認証が必須。

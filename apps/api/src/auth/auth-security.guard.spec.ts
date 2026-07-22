@@ -2,6 +2,7 @@ import { AuthenticationRequiredException, CsrfValidationException } from './auth
 import { AuthSecurityGuard } from './auth-security.guard';
 
 describe('AuthSecurityGuard', () => {
+  const requestContext = () => ({ setActor: jest.fn() });
   const session = {
     principal: { userId: 'user-1', email: 'user@example.com', role: 'operator', sessionId: 'session-1' },
     csrfToken: 'csrf-token',
@@ -19,7 +20,7 @@ describe('AuthSecurityGuard', () => {
   it('allows explicitly public routes without reading a session', async () => {
     const reflector = { getAllAndOverride: jest.fn().mockReturnValue(true) };
     const auth = { authenticate: jest.fn(), getConfig: jest.fn() };
-    const guard = new AuthSecurityGuard(reflector as any, auth as any);
+    const guard = new AuthSecurityGuard(reflector as any, auth as any, requestContext() as any);
 
     await expect(guard.canActivate(context({}))).resolves.toBe(true);
     expect(auth.authenticate).not.toHaveBeenCalled();
@@ -35,10 +36,12 @@ describe('AuthSecurityGuard', () => {
       method: 'PATCH',
       headers: { cookie: 'sales_ai_session=opaque', origin: 'http://127.0.0.1:3000', 'x-csrf-token': 'csrf-token' }
     };
-    const guard = new AuthSecurityGuard(reflector as any, auth as any);
+    const logContext = requestContext();
+    const guard = new AuthSecurityGuard(reflector as any, auth as any, logContext as any);
 
     await expect(guard.canActivate(context(request))).resolves.toBe(true);
     expect(request).toMatchObject({ authenticatedPrincipal: session.principal, authSession: session });
+    expect(logContext.setActor).toHaveBeenCalledWith(session.principal);
   });
 
   it('rejects a mutation without the CSRF token', async () => {
@@ -47,7 +50,7 @@ describe('AuthSecurityGuard', () => {
       getConfig: jest.fn().mockReturnValue({ cookieName: 'sales_ai_session', allowedOrigin: 'http://127.0.0.1:3000' }),
       authenticate: jest.fn().mockResolvedValue(session)
     };
-    const guard = new AuthSecurityGuard(reflector as any, auth as any);
+    const guard = new AuthSecurityGuard(reflector as any, auth as any, requestContext() as any);
 
     await expect(guard.canActivate(context({
       method: 'POST',
@@ -61,7 +64,7 @@ describe('AuthSecurityGuard', () => {
       getConfig: jest.fn().mockReturnValue({ cookieName: 'sales_ai_session' }),
       authenticate: jest.fn().mockRejectedValue(new AuthenticationRequiredException())
     };
-    const guard = new AuthSecurityGuard(reflector as any, auth as any);
+    const guard = new AuthSecurityGuard(reflector as any, auth as any, requestContext() as any);
 
     await expect(guard.canActivate(context({
       method: 'GET',
