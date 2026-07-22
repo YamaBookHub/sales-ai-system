@@ -53,8 +53,8 @@ Baseline:
 | 28 | LA-002 | 公開前 | complete | Sol T4 | LR-002 | 2026-07-19 / session・Google OAuth・local/test・保護範囲・CSRF・header廃止・rollback契約 | 認証設計 |
 | 29 | LA-003 | 公開前 | complete | Terra T3 + Sol audit | LA-002 | 2026-07-19 / Cookie session・Google OIDC・local/test session・CSRF・actor固定、OpenAPI 90 operations、107 suites 422 tests・Prisma・build成功 | 認証実装 |
 | 30 | LA-004 | 公開前 | complete | Sol T4 | LA-003 | 2026-07-20 / 15 permission・fail-closed metadata・admin管理API・transaction内actor/session監査・保存時と監査APIの二重mask・OpenAPI 95 operations・122 suites 478 tests・build成功 | 単一組織内のRBAC・監査 |
-| 31 | LA-007 | 公開前 | in_progress | Sol T4 -> Terra | LA-004 | 2026-07-20 / Organization・Membership・全業務read/write scope・組織別session/RBAC・越境拒否を実装。125 suites 497 tests、型・Prisma・OpenAPI・build成功。実PostgreSQL移行検証待ち | 組織ごとのデータ分離 |
-| 32 | LA-005 | 公開前 | pending | Sol T4 -> Terra | LA-003, LS-006 | - | job所有者・永続化 |
+| 31 | LA-007 | 公開前 | complete | Sol T4 -> Terra | LA-004 | 2026-07-22 / Organization・Membership・全業務read/write scope・組織別session/RBAC・越境拒否を実装。実PostgreSQL integrationを含む11 suites 41 tests、全unit 126 suites 506 tests、型・Prisma・OpenAPI・build成功 | 組織ごとのデータ分離 |
+| 32 | LA-005 | 公開前 | complete | Sol T4 -> Terra | LA-003, LS-006 | 2026-07-22 / PostgreSQL共有store・owner/organization隔離・TTL・lease・複数instance cancel・同時開始排他・restart後の期限切れ状態確定を実装。実DB integration成功 | job所有者・永続化 |
 | 33 | LO-001 | 公開前 | pending | Terra T3 | LA-003 | - | 構造化ログ |
 | 34 | LO-002 | 公開前 | pending | Terra T3 | LR-003, LA-004, LA-007 | - | CI・本番artifact |
 | 35 | LA-006 | 公開前 | pending | Sol T4 -> Terra | LA-003, LO-002 | - | バックアップ・復元確認 |
@@ -122,3 +122,6 @@ Baseline:
 | 2026-07-20 | LA-004 | Sol T4 design + Terra implementation + Sol audit + main | complete | 15 permissionのrole matrix、全保護operationのfail-closed metadata、メール承認/queue/実送信の権限、admin user/audit API、permissions配列、同一transactionのsession付きAuditLog、保存時とAPI応答時の禁止情報mask、最後のadmin/self-lockout防止を反映。OpenAPI 95 operations、122 suites 478 tests、Prisma validate・build成功。実DBintegrationはDocker socket権限制限、ブラウザ・port 3000はユーザー指示により未実行 |
 | 2026-07-20 | LA-007 | Sol T4 design + Terra inventory + main | start | Organization、Membership、session active organization、業務データscope、既存データ移行、DB越境拒否、検索job・export・集計の組織境界を設計開始 |
 | 2026-07-20 | LA-007 | Terra implementation + Sol audit + main | progress | Organization・Membership、sessionの所属組織、全業務モデルのorganizationIdと複合FK/unique、検索job所有境界、管理・監査・AI・案件・連絡先・営業・メール・成績・tracking・dashboard集計の組織scopeを実装。組織停止時は当該membershipのsessionだけを失効。125 suites 497 tests、型検査、Prisma validate、OpenAPI parse、build、diff check成功。実PostgreSQLへのmigration・integrationはDocker socket/TCPを利用できず未検証のためin_progressを維持 |
+| 2026-07-20 | LA-005 | Sol T4 design + main | start | 検索jobをプロセスメモリからPostgreSQL共有storeへ移し、owner/organization隔離、TTL、複数instanceからのcancel、lease切れ後のrestart状態確定を実装開始 |
+| 2026-07-22 | LA-007 | main | complete | Docker上のPostgreSQLへ全14 migrationを適用済みの状態で、組織越境拒否を含むintegration 11 suites 41 testsが成功。全unit 126 suites 506 tests、型検査、Prisma validate/generate、OpenAPI parse、build、diff checkも成功 |
+| 2026-07-22 | LA-005 | Terra implementation + Sol audit + main | complete | ProjectSearchJobをPostgreSQL共有storeへ移行。owner/organization境界、TTL、lease heartbeat、stale write拒否、複数instance cancel、同一owner同時開始の排他、restart後の期限切れfailed確定を実装し、専用実DBintegrationを含む全11 suites 41 testsが成功 |

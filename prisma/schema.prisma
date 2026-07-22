@@ -29,6 +29,13 @@ enum ProjectStatus {
   unknown
 }
 
+enum ProjectSearchJobStatus {
+  running
+  completed
+  cancelled
+  failed
+}
+
 enum LeadStatus {
   discovered
   qualified
@@ -207,6 +214,7 @@ model Organization {
   opportunities           Opportunity[]
   opportunityStageHistory OpportunityStageHistory[]
   auditLogs               AuditLog[]
+  projectSearchJobs       ProjectSearchJob[]
 
   @@index([isActive])
 }
@@ -230,6 +238,7 @@ model OrganizationMembership {
   ownedOpportunities      Opportunity[]             @relation("OpportunityOwnerMembership")
   opportunityStageChanges OpportunityStageHistory[] @relation("OpportunityStageChangerMembership")
   leadAnalysisChanges     LeadAnalysisRevision[]    @relation("LeadAnalysisChangerMembership")
+  projectSearchJobs       ProjectSearchJob[]        @relation("ProjectSearchJobOwner")
 
   @@unique([organizationId, userId])
   @@index([userId, isActive])
@@ -370,6 +379,37 @@ model CrowdfundingProject {
   @@index([organizationId, endDate])
   @@index([organizationId, daysLeft])
   @@index([organizationId, location])
+}
+
+model ProjectSearchJob {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  organizationId     String                 @db.Uuid
+  ownerUserId        String                 @db.Uuid
+  workerId           String
+  status             ProjectSearchJobStatus @default(running)
+  source             PlatformType
+  request            Json
+  desiredLimit       Int
+  searchedLimit      Int                    @default(0)
+  items              Json
+  itemCount          Int                    @default(0)
+  importableCount    Int                    @default(0)
+  diagnostics        Json?
+  completionReason   String?
+  message            String
+  cancelRequestedAt  DateTime?
+  leaseExpiresAt     DateTime
+  expiresAt          DateTime
+  startedAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  owner        OrganizationMembership  @relation("ProjectSearchJobOwner", fields: [organizationId, ownerUserId], references: [organizationId, userId], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, ownerUserId, updatedAt])
+  @@index([status, workerId, cancelRequestedAt, leaseExpiresAt])
+  @@index([expiresAt])
 }
 
 model SalesLead {

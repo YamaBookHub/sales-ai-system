@@ -693,6 +693,11 @@ paths:
       responses:
         '403':
           $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          description: Search job not found, expired, or owned by another user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         '200':
           description: Search job response
           content:
@@ -708,6 +713,11 @@ paths:
       responses:
         '403':
           $ref: '#/components/responses/AuthorizationDenied'
+        '404':
+          description: Search job not found, expired, or owned by another user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         '201':
           description: Search job response
           content:

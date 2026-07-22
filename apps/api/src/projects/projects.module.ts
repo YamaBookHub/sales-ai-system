@@ -4,10 +4,12 @@ import { CampfireScraperService } from '../scraper/campfire-scraper.service';
 import { BulkImportProjectsUseCase } from './application/bulk-import-projects.usecase';
 import { ImportProjectUseCase } from './application/import-project.usecase';
 import { ProjectSearchJobManager } from './application/project-search-job.manager';
+import { ProjectSearchJobRepository } from './domain/project-search-job';
 import { SearchProjectsUseCase } from './application/search-projects.usecase';
 import { CampfireProjectSourceProvider } from './infrastructure/campfire-project-source.provider';
 import { MakuakeProjectSourceProvider } from './infrastructure/makuake-project-source.provider';
 import { PrismaProjectImportRepository } from './infrastructure/prisma-project-import.repository';
+import { PrismaProjectSearchJobRepository } from './infrastructure/prisma-project-search-job.repository';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 
@@ -22,6 +24,8 @@ import { ProjectsService } from './projects.service';
     ProjectSearchJobManager,
     CampfireScraperService,
     PrismaProjectImportRepository,
+    PrismaProjectSearchJobRepository,
+    { provide: ProjectSearchJobRepository, useExisting: PrismaProjectSearchJobRepository },
     CampfireProjectSourceProvider,
     MakuakeProjectSourceProvider
   ]

@@ -133,9 +133,7 @@ npm run test:integration
 ## 5. 未実装の運用基盤
 
 - Redisを使う共有queue/worker/scheduler/DLQ
-- 複数instance間のjob所有者、TTL、cancel、再起動後復旧
 - production用Dockerfile、CI verify script、監視、alert webhook
-- role別RBAC、完全な操作監査、組織ごとのデータ分離
 - Gmail providerの外部API retryと真の冪等送信
 
 利用者認証credentialとGmail送信用OAuth credentialは共用しない。

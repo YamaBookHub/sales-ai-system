@@ -79,6 +79,8 @@ local loginは `APP_ENV=local`、`AUTH_MODE=local`、loopback origin、`AUTH_DEV
 
 `SearchCampfireProjectsDto` は `keyword`、`category`、`amountMin`、`amountMax`、`supporterMin`、`supporterMax`、`profileProjectMin`、`profileProjectMax`、`limit`、`status`、`endingSoonDays`、`excludeUrls` を任意で受け取る。`SearchProjectsDto` はこれらに任意の `source` を加える。
 
+検索ジョブはPostgreSQLへ30分間保存する。同じ組織かつ同じ利用者のジョブだけを取得・停止でき、存在しない・期限切れ・別所有者のIDはいずれも404を返す。同じ利用者が新しい検索を開始すると、実行中の旧ジョブは停止される。別APIインスタンスからの停止も共有状態へ反映され、停止後の遅延結果は保存しない。
+
 ## Lead API
 
 | Method | Path | Query / Header | Body |

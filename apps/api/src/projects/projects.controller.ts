@@ -80,17 +80,17 @@ export class ProjectsController {
   @Post('search-jobs')
   @RequirePermissions('prospecting.execute')
   async startSearchJob(@Body() dto: SearchProjectsDto, @CurrentUser() principal: AuthenticatedPrincipal) {
-    return ok(this.searchUseCase.startJob(dto, principal.organizationId, principal.userId));
+    return ok(await this.searchUseCase.startJob(dto, principal.organizationId, principal.userId));
   }
 
   @Get('search-jobs/:id')
   async getSearchJob(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
-    return ok(this.searchUseCase.getJob(id, principal.organizationId, principal.userId));
+    return ok(await this.searchUseCase.getJob(id, principal.organizationId, principal.userId));
   }
 
   @Post('search-jobs/:id/cancel')
   @RequirePermissions('prospecting.execute')
   async cancelSearchJob(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
-    return ok(this.searchUseCase.cancelJob(id, principal.organizationId, principal.userId));
+    return ok(await this.searchUseCase.cancelJob(id, principal.organizationId, principal.userId));
   }
 }

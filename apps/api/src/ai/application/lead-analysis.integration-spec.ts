@@ -47,9 +47,13 @@ describe('structured lead analysis integration', () => {
         // 子から消して、組織と所属を最後に削除する。
         await prisma.auditLog.deleteMany({ where: { organizationId } });
         await prisma.emailEvent.deleteMany({ where: { organizationId } });
-        await prisma.outreachEmail.deleteMany({ where: { organizationId } });
+        await prisma.outreachEmail.updateMany({
+          where: { organizationId },
+          data: { analysisRevisionId: null }
+        });
         await prisma.leadAnalysisRevision.deleteMany({ where: { organizationId } });
         await prisma.aiGeneration.deleteMany({ where: { organizationId } });
+        await prisma.outreachEmail.deleteMany({ where: { organizationId } });
         await prisma.contactPerson.deleteMany({ where: { organizationId } });
         await prisma.salesLead.deleteMany({ where: { organizationId } });
         await prisma.crowdfundingProject.deleteMany({ where: { organizationId } });

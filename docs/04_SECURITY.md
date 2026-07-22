@@ -2,7 +2,7 @@
 
 ## 1. 現在の位置づけ
 
-この文書は現行コードの安全境界を記載する。認証と単一組織内のrole別RBAC・重要操作監査は実装済みである。組織分離はLA-007で行うため、これだけで複数顧客向け外部公開可能とは扱わない。
+この文書は現行コードの安全境界を記載する。認証、組織別データ分離、組織内のrole別RBAC、重要操作監査は実装済みである。ただし、バックアップ復元確認や本番運用基盤が未完了のため、これだけで複数顧客向け外部公開可能とは扱わない。
 
 ## 2. 実装済みの安全境界
 
@@ -63,11 +63,7 @@
 - `/api/auth/me` のrole別permissions
 - 最後のadmin保護、self-lockout防止、role/active変更時のsession失効
 
-### 未実装
-
-- 組織ごとのデータ分離
-
-したがって、role enumと認証の存在だけで「RBAC・複数組織対応済み」と書かない。
+組織境界は業務データの `organizationId`、複合外部キー、sessionの所属組織、repositoryのscopeで守る。role enumと認証の存在だけで「RBAC・複数組織対応済み」とは扱わない。
 
 現行 `POST /api/unsubscribe` は認証・CSRF必須であり、社内の手動配信停止にだけ使用する。受信者向け公開配信停止は、対象と期限を署名したtokenを必要とする別routeを設計するまで公開しない。
 
@@ -81,8 +77,6 @@
 
 ## 5. 未実装・将来要件
 
-- 組織別RBACとデータ分離（LA-007）
-- job所有者と複数instance間の停止権限（LA-005）
 - worker、Redis、scheduler、DLQ、rate limit、外部providerの真の冪等性
 - 監視、運用上のsecret rotation、本番hardening
 
