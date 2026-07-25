@@ -1,7 +1,13 @@
+import { AuthorizationDeniedException } from './auth.exceptions';
 import { AuthController, safeReturnTo } from './auth.controller';
 
 describe('AuthController login', () => {
-  const config = { cookieName: 'sales_ai_session', localLoginEnabled: true };
+  const config = {
+    cookieName: 'sales_ai_session',
+    localLoginEnabled: true,
+    allowedOrigin: 'http://127.0.0.1:3000',
+    cookieSecure: false
+  };
 
   function response() {
     const value = {
@@ -86,5 +92,46 @@ describe('AuthController login', () => {
     await controller.login('/', { headers: {} } as any, res, 'not_authorized');
 
     expect(res.send).toHaveBeenCalledWith(expect.stringContaining('利用権限を管理者へ確認してください'));
+  });
+
+  it('accepts the localhost alias for a loopback-only local login', async () => {
+    const expiresAt = new Date(Date.now() + 60_000);
+    const auth = {
+      getConfig: jest.fn().mockReturnValue(config),
+      getRequestMetadata: jest.fn().mockReturnValue({}),
+      localLogin: jest.fn().mockResolvedValue({ token: 'opaque-token', absoluteExpiresAt: expiresAt })
+    };
+    const controller = new AuthController(auth as any);
+    const res = response();
+
+    await expect(controller.localLogin({
+      headers: { origin: 'http://localhost:3000' },
+      socket: { remoteAddress: '127.0.0.1' }
+    } as any, res)).resolves.toEqual({
+      data: { authenticated: true },
+      meta: null,
+      error: null
+    });
+
+    expect(auth.localLogin).toHaveBeenCalledWith({});
+    expect(res.setHeader).toHaveBeenCalledWith('Set-Cookie', expect.stringContaining('sales_ai_session='));
+  });
+
+  it('rejects local login from an external origin or a different port', async () => {
+    const auth = {
+      getConfig: jest.fn().mockReturnValue(config),
+      getRequestMetadata: jest.fn().mockReturnValue({}),
+      localLogin: jest.fn()
+    };
+    const controller = new AuthController(auth as any);
+
+    for (const origin of ['https://evil.example', 'http://localhost:3001']) {
+      await expect(controller.localLogin({
+        headers: { origin },
+        socket: { remoteAddress: '127.0.0.1' }
+      } as any, response())).rejects.toBeInstanceOf(AuthorizationDeniedException);
+    }
+
+    expect(auth.localLogin).not.toHaveBeenCalled();
   });
 });

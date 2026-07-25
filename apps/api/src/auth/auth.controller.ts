@@ -145,11 +145,34 @@ function secondsUntil(expiresAt: Date): number {
 function assertLocalLoginRequest(request: AuthenticatedRequest, allowedOrigin: string): void {
   const origin = firstHeader(request.headers.origin);
   const remoteAddress = request.socket?.remoteAddress || '';
-  if (origin !== allowedOrigin || !isLoopbackAddress(remoteAddress)) throw new AuthorizationDeniedException();
+  if (!isAllowedLocalOrigin(origin, allowedOrigin) || !isLoopbackAddress(remoteAddress)) {
+    throw new AuthorizationDeniedException();
+  }
 }
 
 function firstHeader(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function isAllowedLocalOrigin(origin: string | undefined, allowedOrigin: string): boolean {
+  if (!origin) return false;
+  if (origin === allowedOrigin) return true;
+  try {
+    const actual = new URL(origin);
+    const allowed = new URL(allowedOrigin);
+    return actual.origin === origin
+      && actual.protocol === allowed.protocol
+      && actual.port === allowed.port
+      && isLoopbackHostname(actual.hostname)
+      && isLoopbackHostname(allowed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackHostname(value: string): boolean {
+  const normalized = value.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1';
 }
 
 function isLoopbackAddress(value: string): boolean {
