@@ -15,6 +15,7 @@ RUN npm ci
 FROM dependencies AS builder
 
 COPY nest-cli.json tsconfig.json ./
+COPY scripts/build.js ./scripts/build.js
 COPY apps ./apps
 COPY prisma ./prisma
 
@@ -72,6 +73,12 @@ USER pwuser
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD ["node", "-e", "const http=require('node:http');const port=process.env.PORT||3000;const request=http.get({host:'127.0.0.1',port,path:'/health',timeout:4000},(response)=>{response.resume();process.exit(response.statusCode===200?0:1)});request.on('error',()=>process.exit(1));request.on('timeout',()=>{request.destroy();process.exit(1)})"]
+  CMD ["node", "-e", "const http=require('node:http');const port=process.env.PORT||3000;const request=http.get({host:'127.0.0.1',port,path:'/ready',timeout:4000},(response)=>{response.resume();process.exit(response.statusCode===200?0:1)});request.on('error',()=>process.exit(1));request.on('timeout',()=>{request.destroy();process.exit(1)})"]
 
 CMD ["node", "dist/apps/api/main.js"]
+
+FROM runtime AS worker
+
+HEALTHCHECK NONE
+
+CMD ["node", "dist/apps/api/mail-worker.js"]

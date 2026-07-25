@@ -11,8 +11,11 @@ describe('public route contract', () => {
       AuthController.prototype.googleCallback,
       AuthController.prototype.localLogin,
       HealthController.prototype.health,
+      HealthController.prototype.ready,
       TrackingController.prototype.trackOpen,
-      TrackingController.prototype.trackClick
+      TrackingController.prototype.trackClick,
+      TrackingController.prototype.publicUnsubscribePage,
+      TrackingController.prototype.publicUnsubscribe
     ];
     const protectedHandlers = [
       AuthController.prototype.me,

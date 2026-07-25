@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { MailSender, MailSendRequest, MailSendResult } from '../domain/mail-sender';
+import { appendMailComplianceFooter, buildUnsubscribeUrl } from '../domain/mail-compliance';
 import { GmailMailSenderConfig, readGmailMailSenderConfig } from './gmail-mail-sender.config';
 
 type GmailTokenResponse = {
@@ -28,25 +29,42 @@ export class GmailMailSender implements MailSender {
     private readonly sleep: Sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
   ) {}
 
-  validate(request: MailSendRequest) {
+  validate(
+    request: MailSendRequest
+  ): asserts request is MailSendRequest & { toEmail: string; unsubscribeToken: string } {
+    if (request.organizationId !== this.config.organizationId) {
+      throw new BadRequestException('この組織には設定済みの送信元を使用できません。');
+    }
     if (!isEmailSendMethod(request.sendMethod)) {
       throw new BadRequestException('現在の実送信providerはメールのみ対応しています。サイト内メッセージや問い合わせフォームは専用providerを設定してください。');
+    }
+    if (!request.toEmail) {
+      throw new BadRequestException('送信先メールアドレスが未設定です。');
+    }
+    if (!request.unsubscribeToken) {
+      throw new BadRequestException('配信停止トークンが未設定です。');
     }
   }
 
   async send(request: MailSendRequest): Promise<MailSendResult> {
     this.validate(request);
-    if (!request.toEmail) {
-      throw new BadRequestException('送信先メールアドレスが未設定です。');
-    }
 
     const accessToken = await this.fetchAccessToken();
+    const unsubscribeUrl = buildUnsubscribeUrl(this.config.appBaseUrl, request.unsubscribeToken);
+    const compliantBody = appendMailComplianceFooter({
+      body: request.body,
+      senderName: this.config.legalSenderName,
+      postalAddress: this.config.legalPostalAddress,
+      contactEmail: this.config.legalContactEmail,
+      unsubscribeUrl
+    });
     const raw = buildRawGmailMessage({
       fromEmail: this.config.fromEmail,
       toEmail: request.toEmail,
       subject: request.subject,
-      body: request.body,
-      idempotencyKey: request.idempotencyKey
+      body: compliantBody,
+      idempotencyKey: request.idempotencyKey,
+      unsubscribeUrl
     });
     const response = await this.httpPost('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
       method: 'POST',
@@ -115,6 +133,7 @@ export function buildRawGmailMessage(input: {
   subject: string;
   body: string;
   idempotencyKey: string;
+  unsubscribeUrl?: string;
 }) {
   const message = [
     `From: ${input.fromEmail}`,
@@ -124,6 +143,12 @@ export function buildRawGmailMessage(input: {
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: 8bit',
     `X-Idempotency-Key: ${input.idempotencyKey}`,
+    ...(input.unsubscribeUrl
+      ? [
+          `List-Unsubscribe: <${input.unsubscribeUrl}>`,
+          'List-Unsubscribe-Post: List-Unsubscribe=One-Click'
+        ]
+      : []),
     '',
     input.body
   ].join('\r\n');

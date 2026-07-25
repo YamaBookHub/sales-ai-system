@@ -79,7 +79,7 @@
 
 ## 5. 未実装・将来要件
 
-- worker、Redis、scheduler、DLQ、rate limit、外部providerの真の冪等性
+- Redisを使う外部scheduler/DLQ、外部providerの真の冪等性（API rate limitとPostgreSQL worker/failed stateは実装済み）
 - 監視、運用上のsecret rotation、本番hardening
 
-本番で実送信を有効化する場合は、少なくとも認証・RBAC、完全な操作監査、rate limit、provider障害時の運用手順を別途完了させる。
+本番で実送信を有効化する場合は、実装済みの認証・RBAC・操作監査・rate limitに加え、provider障害時の確認担当と結果不明メールの復旧手順を環境ごとに確定する。

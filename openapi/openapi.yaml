@@ -113,6 +113,26 @@ paths:
           content:
             text/html:
               schema: { type: string }
+  /privacy:
+    get:
+      summary: Public privacy policy HTML
+      security: []
+      responses:
+        '200':
+          description: Privacy policy
+          content:
+            text/html:
+              schema: { type: string }
+  /terms:
+    get:
+      summary: Public terms of service HTML
+      security: []
+      responses:
+        '200':
+          description: Terms of service
+          content:
+            text/html:
+              schema: { type: string }
   /api/auth/google/start:
     get:
       summary: Start Google OAuth/OIDC authorization
@@ -299,6 +319,21 @@ paths:
       responses:
         '200':
           description: Health response
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+  /ready:
+    get:
+      summary: Database and schema readiness check
+      security: []
+      responses:
+        '200':
+          description: Database is reachable and the required migration is applied
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '503':
+          description: Database is unavailable or the required migration is missing
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
@@ -1714,7 +1749,7 @@ paths:
               schema: { $ref: '#/components/schemas/ApiResponse' }
   /t/open/{emailId}.png:
     get:
-      summary: Track an email open
+      summary: Track a deduplicated human email open using an opaque token
       security: []
       parameters:
         - $ref: '#/components/parameters/EmailId'
@@ -1759,7 +1794,7 @@ paths:
               schema: { $ref: '#/components/schemas/ApiResponse' }
   /t/click/{token}:
     get:
-      summary: Record a tracked click and redirect
+      summary: Record a deduplicated non-bot click and redirect
       security: []
       parameters:
         - $ref: '#/components/parameters/Token'
@@ -1769,6 +1804,33 @@ paths:
           headers:
             Location:
               schema: { type: string, format: uri }
+  /unsubscribe/{token}:
+    get:
+      summary: Show the recipient unsubscribe confirmation page
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Token'
+      responses:
+        '200':
+          description: Unsubscribe confirmation HTML
+          content:
+            text/html:
+              schema: { type: string }
+        '404':
+          description: Invalid unsubscribe token
+    post:
+      summary: Unsubscribe the recipient using an opaque one-click token
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Token'
+      responses:
+        '200':
+          description: Recipient was unsubscribed idempotently
+          content:
+            text/html:
+              schema: { type: string }
+        '404':
+          description: Invalid unsubscribe token
   /api/unsubscribe:
     post:
       summary: Mark a contact or email as unsubscribed

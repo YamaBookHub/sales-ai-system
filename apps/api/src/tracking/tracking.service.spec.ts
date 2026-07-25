@@ -29,10 +29,12 @@ describe('TrackingService', () => {
     },
     linkClick: {
       create: jest.fn(),
+      findFirst: jest.fn().mockResolvedValue(null),
       count: jest.fn().mockResolvedValue(3)
     },
     emailEvent: {
-      create: jest.fn()
+      create: jest.fn(),
+      findFirst: jest.fn().mockResolvedValue(null)
     },
     salesLead: {
       findUnique: jest.fn().mockResolvedValue({ score: 40 }),
@@ -96,12 +98,25 @@ describe('TrackingService', () => {
     expect(JSON.stringify(audit)).not.toContain('private.pdf');
   });
 
-  it('records material click and raises lead appointment angle', async () => {
+  it('records a deduplicated human material click without automatically changing the lead', async () => {
     const prisma = createPrisma();
     const service = new TrackingService(prisma as any);
 
-    await expect(service.resolveClick('token_1')).resolves.toBe('https://example.com/company.pdf');
-    expect(prisma.linkClick.create).toHaveBeenCalledWith({ data: { organizationId: 'org_1', linkId: 'link_1' } });
+    await expect(service.resolveClick('token_1', {
+      ip: '203.0.113.10',
+      userAgent: 'Mozilla/5.0',
+      referer: 'https://mail.example.test/message/secret'
+    })).resolves.toBe('https://example.com/company.pdf');
+    expect(prisma.linkClick.create).toHaveBeenCalledWith({
+      data: {
+        organizationId: 'org_1',
+        linkId: 'link_1',
+        fingerprintHash: expect.any(String),
+        isBot: false,
+        userAgent: 'browser',
+        referer: 'https://mail.example.test'
+      }
+    });
     expect(prisma.emailEvent.create).toHaveBeenCalledWith({
       data: {
         organizationId: 'org_1',
@@ -114,15 +129,56 @@ describe('TrackingService', () => {
         }
       }
     });
-    expect(prisma.salesLead.update).toHaveBeenCalledWith({
-      where: { organizationId_id: { organizationId: 'org_1', id: 'lead_1' } },
-      data: expect.objectContaining({
-        score: 85,
-        priority: 'high',
-        status: 'meeting_candidate',
-        nextActionAt: expect.any(Date)
-      })
+    expect(prisma.salesLead.update).not.toHaveBeenCalled();
+  });
+
+  it('ignores link scanners and duplicate clicks', async () => {
+    const prisma = createPrisma();
+    const service = new TrackingService(prisma as any);
+
+    await expect(service.resolveClick('token_1', {
+      ip: '203.0.113.20',
+      userAgent: 'Proofpoint URL Scanner'
+    })).resolves.toBe('https://example.com/company.pdf');
+    expect(prisma.linkClick.create).not.toHaveBeenCalled();
+
+    prisma.linkClick.findFirst.mockResolvedValueOnce({ id: 'existing_click' });
+    await expect(service.resolveClick('token_1', {
+      ip: '203.0.113.21',
+      userAgent: 'Mozilla/5.0'
+    })).resolves.toBe('https://example.com/company.pdf');
+    expect(prisma.linkClick.create).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates human opens and ignores automated opens', async () => {
+    const prisma = createPrisma();
+    const service = new TrackingService(prisma as any);
+
+    await service.trackOpen('open-token', {
+      ip: '203.0.113.30',
+      userAgent: 'Mozilla/5.0'
     });
+    expect(prisma.emailEvent.create).toHaveBeenCalledWith({
+      data: {
+        organizationId: 'org_1',
+        emailId: 'mail_1',
+        type: 'opened',
+        ipHash: expect.any(String),
+        userAgent: 'browser'
+      }
+    });
+
+    prisma.emailEvent.create.mockClear();
+    prisma.emailEvent.findFirst.mockResolvedValueOnce({ id: 'existing_open' });
+    await service.trackOpen('open-token', {
+      ip: '203.0.113.30',
+      userAgent: 'Mozilla/5.0'
+    });
+    await service.trackOpen('open-token', {
+      ip: '203.0.113.31',
+      userAgent: 'GoogleImageProxy'
+    });
+    expect(prisma.emailEvent.create).not.toHaveBeenCalled();
   });
 
   it('reuses an existing tracked link for the same mail and URL', async () => {
@@ -234,6 +290,40 @@ describe('TrackingService', () => {
     )).resolves.toMatchObject({
       isUnsubscribed: false,
       message: '一致する有効な連絡先が見つかりません。'
+    });
+  });
+
+  it('allows a recipient token to unsubscribe without an authenticated operator', async () => {
+    const prisma = createPrisma();
+    prisma.outreachEmail.findUnique.mockResolvedValueOnce({
+      id: 'mail_1',
+      organizationId: 'org_1',
+      contactId: 'contact_1',
+      toEmail: 'contact@example.com'
+    });
+    const service = new TrackingService(prisma as any);
+
+    await expect(service.unsubscribeByToken('unsubscribe-token')).resolves.toEqual({
+      isUnsubscribed: true
+    });
+    expect(prisma.contactPerson.updateMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: 'org_1',
+        id: 'contact_1',
+        deletedAt: null
+      },
+      data: {
+        isUnsubscribed: true,
+        unsubscribedAt: expect.any(Date),
+        isPrimary: false
+      }
+    });
+    expect(prisma.emailEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        organizationId: 'org_1',
+        emailId: 'mail_1',
+        type: 'unsubscribed'
+      })
     });
   });
 });

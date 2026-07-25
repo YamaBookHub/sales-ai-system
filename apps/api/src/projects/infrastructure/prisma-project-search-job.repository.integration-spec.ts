@@ -50,6 +50,7 @@ describe('PrismaProjectSearchJobRepository integration', () => {
   afterAll(async () => {
     if (!prismaA) return;
     await prismaA.projectSearchJob.deleteMany({ where: { organizationId: { in: [organizationAId, organizationBId] } } });
+    await prismaA.auditLog.deleteMany({ where: { organizationId: { in: [organizationAId, organizationBId] } } });
     await prismaA.organizationMembership.deleteMany({
       where: { organizationId: { in: [organizationAId, organizationBId] } }
     });

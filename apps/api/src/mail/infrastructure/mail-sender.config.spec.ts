@@ -26,6 +26,16 @@ describe('mail-sender.config', () => {
     });
   });
 
+  it('fails startup instead of silently disabling an explicitly enabled sender', () => {
+    const originalEnv = process.env;
+    process.env = {
+      MAIL_SEND_ENABLED: 'true',
+      MAIL_SENDER_PROVIDER: 'gmail'
+    };
+    expect(() => mailSenderProvider()).toThrow('requires complete Gmail and legal sender settings');
+    process.env = originalEnv;
+  });
+
   it('binds disabled provider to DisabledMailSender by default', () => {
     const provider = mailSenderProvider();
 
@@ -40,6 +50,7 @@ describe('mail-sender.config', () => {
 
     expect(() => sender.validate({
       idempotencyKey: 'mail:mail_1:retry:0',
+      organizationId: 'org_1',
       toEmail: 'to@example.com',
       subject: '件名',
       body: '本文'
@@ -54,7 +65,12 @@ describe('mail-sender.config', () => {
       GMAIL_CLIENT_ID: 'client',
       GMAIL_CLIENT_SECRET: 'secret',
       GMAIL_REFRESH_TOKEN: 'refresh',
-      GMAIL_FROM_EMAIL: 'sales@example.com'
+      GMAIL_FROM_EMAIL: 'sales@example.com',
+      MAIL_SENDER_ORGANIZATION_ID: '00000000-0000-4000-8000-000000000007',
+      APP_BASE_URL: 'https://sales.example.com',
+      MAIL_LEGAL_SENDER_NAME: '販売会社',
+      MAIL_LEGAL_POSTAL_ADDRESS: '東京都千代田区1-1',
+      MAIL_LEGAL_CONTACT_EMAIL: 'privacy@example.com'
     };
 
     expect(mailSenderProvider()).toEqual({

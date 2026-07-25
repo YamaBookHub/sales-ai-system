@@ -70,7 +70,7 @@ Baseline:
 | LB-003 GREEN FUNDING | deferred | 現行2provider安定後 |
 | LB-004 HP/SNS/連絡先自動探索 | deferred | 認証・監査後 |
 | LB-005 site message/contact form送信 | deferred | 外部送信は後回し |
-| LB-006 Queue/Worker/DLQ | deferred | 本番送信を再優先化した時 |
+| LB-006 Queue/Worker/DLQ | complete | PostgreSQL queue、独立worker、failed state、stale sending結果不明隔離を実装 |
 | LB-008 Calendar/通知/ポモドーロ | deferred | Google OAuth・user identity後 |
 
 ## Execution log

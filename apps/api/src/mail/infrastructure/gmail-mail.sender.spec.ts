@@ -6,7 +6,12 @@ describe('GmailMailSender', () => {
     clientId: 'client',
     clientSecret: 'secret',
     refreshToken: 'refresh',
-    fromEmail: 'sales@example.com'
+    fromEmail: 'sales@example.com',
+    appBaseUrl: 'https://sales.example.com',
+    legalSenderName: '販売会社',
+    legalPostalAddress: '東京都千代田区1-1',
+    legalContactEmail: 'privacy@example.com',
+    organizationId: '00000000-0000-4000-8000-000000000007'
   };
 
   const createResponse = (ok: boolean, body: unknown, statusText = 'error', status?: number) => ({
@@ -26,9 +31,11 @@ describe('GmailMailSender', () => {
 
     await expect(sender.send({
       idempotencyKey: 'mail:mail_1:retry:0',
+      organizationId: config.organizationId,
       toEmail: 'to@example.com',
       subject: '件名',
-      body: '本文'
+      body: '本文',
+      unsubscribeToken: '00000000-0000-4000-8000-000000000001'
     })).resolves.toMatchObject({
       provider: 'gmail',
       messageId: 'message_1',
@@ -51,7 +58,10 @@ describe('GmailMailSender', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer access' })
       })
     );
-    expect(JSON.parse(httpPost.mock.calls[1][1].body).raw).toEqual(expect.any(String));
+    const decoded = Buffer.from(JSON.parse(httpPost.mock.calls[1][1].body).raw, 'base64url').toString('utf8');
+    expect(decoded).toContain('List-Unsubscribe: <https://sales.example.com/unsubscribe/00000000-0000-4000-8000-000000000001>');
+    expect(decoded).toContain('List-Unsubscribe-Post: List-Unsubscribe=One-Click');
+    expect(decoded).toContain('送信者: 販売会社');
   });
 
   it('rejects missing recipient before OAuth request', async () => {
@@ -60,9 +70,11 @@ describe('GmailMailSender', () => {
 
     await expect(sender.send({
       idempotencyKey: 'key',
+      organizationId: config.organizationId,
       toEmail: null,
       subject: '件名',
-      body: '本文'
+      body: '本文',
+      unsubscribeToken: '00000000-0000-4000-8000-000000000001'
     })).rejects.toThrow(BadRequestException);
     expect(httpPost).not.toHaveBeenCalled();
   });
@@ -73,10 +85,12 @@ describe('GmailMailSender', () => {
 
     await expect(sender.send({
       idempotencyKey: 'key',
+      organizationId: config.organizationId,
       sendMethod: 'site_message',
       toEmail: 'to@example.com',
       subject: '件名',
-      body: '本文'
+      body: '本文',
+      unsubscribeToken: '00000000-0000-4000-8000-000000000001'
     })).rejects.toThrow(BadRequestException);
     expect(httpPost).not.toHaveBeenCalled();
   });
@@ -87,9 +101,11 @@ describe('GmailMailSender', () => {
 
     await expect(sender.send({
       idempotencyKey: 'key',
+      organizationId: config.organizationId,
       toEmail: 'to@example.com',
       subject: '件名',
-      body: '本文'
+      body: '本文',
+      unsubscribeToken: '00000000-0000-4000-8000-000000000001'
     })).rejects.toThrow(ServiceUnavailableException);
   });
 
@@ -103,7 +119,14 @@ describe('GmailMailSender', () => {
 
     let caught: unknown;
     try {
-      await sender.send({ idempotencyKey: 'key', toEmail: 'to@example.com', subject: '件名', body: '本文' });
+      await sender.send({
+        idempotencyKey: 'key',
+        organizationId: config.organizationId,
+        toEmail: 'to@example.com',
+        subject: '件名',
+        body: '本文',
+        unsubscribeToken: '00000000-0000-4000-8000-000000000001'
+      });
     } catch (error) {
       caught = error;
     }
@@ -124,9 +147,11 @@ describe('GmailMailSender', () => {
 
     await expect(sender.send({
       idempotencyKey: 'key',
+      organizationId: config.organizationId,
       toEmail: 'to@example.com',
       subject: '件名',
-      body: '本文'
+      body: '本文',
+      unsubscribeToken: '00000000-0000-4000-8000-000000000001'
     })).resolves.toMatchObject({ messageId: 'message_1' });
 
     expect(httpPost).toHaveBeenCalledTimes(3);

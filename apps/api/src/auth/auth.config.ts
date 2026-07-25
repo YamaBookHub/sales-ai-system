@@ -38,6 +38,14 @@ export function readAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig
   if (productionLike && appBaseUrl.protocol !== 'https:') {
     throw new Error('APP_BASE_URL must use HTTPS in staging and production.');
   }
+  if (productionLike && (env.TRACKING_HASH_SECRET || '').trim().length < 32) {
+    throw new Error('TRACKING_HASH_SECRET must be at least 32 characters in staging and production.');
+  }
+  if (productionLike) {
+    for (const name of ['LEGAL_OPERATOR_NAME', 'LEGAL_POSTAL_ADDRESS', 'LEGAL_CONTACT_EMAIL'] as const) {
+      if (!(env[name] || '').trim()) throw new Error(`${name} is required in staging and production.`);
+    }
+  }
   if ((appEnvironment === 'local' || appEnvironment === 'test') && !isLoopbackHost(appBaseUrl.hostname)) {
     throw new Error('APP_BASE_URL must use a loopback host in local and test environments.');
   }

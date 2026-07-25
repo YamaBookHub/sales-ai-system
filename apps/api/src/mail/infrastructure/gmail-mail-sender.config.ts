@@ -3,6 +3,11 @@ export type GmailMailSenderConfig = {
   clientSecret: string;
   refreshToken: string;
   fromEmail: string;
+  appBaseUrl: string;
+  legalSenderName: string;
+  legalPostalAddress: string;
+  legalContactEmail: string;
+  organizationId: string;
 };
 
 export type GmailMailSenderConfigResult =
@@ -14,7 +19,12 @@ export function readGmailMailSenderConfig(env: NodeJS.ProcessEnv = process.env):
     clientId: readEnv(env, 'GMAIL_CLIENT_ID'),
     clientSecret: readEnv(env, 'GMAIL_CLIENT_SECRET'),
     refreshToken: readEnv(env, 'GMAIL_REFRESH_TOKEN'),
-    fromEmail: readEnv(env, 'GMAIL_FROM_EMAIL')
+    fromEmail: readEnv(env, 'GMAIL_FROM_EMAIL'),
+    appBaseUrl: readEnv(env, 'APP_BASE_URL'),
+    legalSenderName: readEnv(env, 'MAIL_LEGAL_SENDER_NAME') || readEnv(env, 'LEGAL_OPERATOR_NAME'),
+    legalPostalAddress: readEnv(env, 'MAIL_LEGAL_POSTAL_ADDRESS') || readEnv(env, 'LEGAL_POSTAL_ADDRESS'),
+    legalContactEmail: readEnv(env, 'MAIL_LEGAL_CONTACT_EMAIL') || readEnv(env, 'LEGAL_CONTACT_EMAIL'),
+    organizationId: readEnv(env, 'MAIL_SENDER_ORGANIZATION_ID')
   };
   const missing = (Object.entries(config) as Array<[keyof GmailMailSenderConfig, string]>)
     .filter(([, value]) => !value)

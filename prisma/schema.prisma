@@ -482,6 +482,8 @@ model LeadScore {
 
 model OutreachEmail {
   id                 String      @id @default(uuid()) @db.Uuid
+  openTrackingToken  String      @unique @default(uuid()) @db.Uuid
+  unsubscribeToken   String      @unique @default(uuid()) @db.Uuid
   organizationId     String      @db.Uuid
   leadId             String?     @db.Uuid
   companyId          String      @db.Uuid
@@ -641,6 +643,8 @@ model LinkClick {
   ipHash         String?
   userAgent      String?
   referer        String?
+  fingerprintHash String?
+  isBot          Boolean  @default(false)
   clickedAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
@@ -648,6 +652,7 @@ model LinkClick {
 
   @@unique([organizationId, id])
   @@index([organizationId, linkId])
+  @@index([organizationId, linkId, fingerprintHash, clickedAt])
   @@index([organizationId, clickedAt])
 }
 

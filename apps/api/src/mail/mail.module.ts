@@ -17,6 +17,7 @@ import { RecordMailReplyUseCase } from './application/record-mail-reply.usecase'
 import { MailController } from './mail.controller';
 import { MailService } from './mail.service';
 import { ReplyInboxController } from './reply-inbox.controller';
+import { MailDispatchWorker } from './application/mail-dispatch.worker';
 
 @Module({
   imports: [AiModule],
@@ -36,8 +37,9 @@ import { ReplyInboxController } from './reply-inbox.controller';
     MarkMailSentUseCase,
     RetryMailUseCase,
     SendQueuedMailUseCase,
+    MailDispatchWorker,
     mailSenderProvider()
   ],
-  exports: [MailService]
+  exports: [MailService, MailDispatchWorker]
 })
 export class MailModule {}

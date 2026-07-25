@@ -478,15 +478,15 @@ Relation: `User?`。Index: `[entityType, entityId]`, `action`, `createdAt`, `[us
 
 ### 4.2 未実装または未完了
 
-- `UserSession`、`User.googleSubject`、opaque Cookie session、current user、Google OAuth/OIDC、認証guard、単一組織内のrole別RBACは実装済み。組織scopeは未実装。
-- Redis、共有queue、worker、scheduler、DLQ、送信予約の自動実行に対応するmodel/module/scriptはない。
+- `UserSession`、`User.googleSubject`、opaque Cookie session、current user、Google OAuth/OIDC、認証guard、role別RBAC、組織scopeは実装済み。
+- Redisや外部queue serviceは使わず、`OutreachEmail.status` と `scheduledAt` をdurable queue、`failed` をdead-letter stateとして `npm run start:worker` が処理する。
 - `OutreachEmail` のprovider送信はGmail OAuthの最小実装のみ。provider側の真の冪等性、外部APIの一般的retry方針、送信監査の詳細化は未完了。
 - すべての重要操作をcurrent user/sessionに紐づけたAuditLogへ記録する仕組みはLA-004で実装済み。監査本文にはメール本文、AI入力、token、secretを保存しない。
 
 ### 4.3 将来要件
 
 - Organization、Membership、組織単位のRBACと全read/write/export/jobのscope（LA-007）。
-- worker/Redis/DLQを含む共有queueと、本番送信を再開する場合のrate limit・retry・冪等性。
+- 複数region向け外部queue/Redis、provider側の真の冪等性。API rate limit、DB worker、結果不明時の自動再送停止は実装済み。
 - 面談、提案、契約、請求、SNS分析、収集job履歴などの専用model。現時点ではschemaに追加しない。
 
 ## 5. Soft deleteと個人情報
@@ -512,4 +512,4 @@ Relation: `User?`。Index: `[entityType, entityId]`, `action`, `createdAt`, `[us
 - `20260720000000_authentication_sessions`
 - `20260720090000_rbac_audit_session`
 
-検証は `npm run prisma:validate` を使用する。開発DBへの反映は既存の `npm run prisma:migrate`、client生成は `npm run prisma:generate` を使用する。本番のmigration deploy専用scriptはまだpackage scriptsにないため、未実装のscript名を前提にしない。
+検証は `npm run prisma:validate` を使用する。開発DBへの反映は `npm run prisma:migrate`、client生成は `npm run prisma:generate`、本番適用は `npm run prisma:migrate:deploy` を使用する。

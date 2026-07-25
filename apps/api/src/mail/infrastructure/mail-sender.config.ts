@@ -27,11 +27,14 @@ export function mailSenderProvider(): Provider {
   if (config.provider === 'gmail') {
     const gmailConfig = readGmailMailSenderConfig();
     if (!gmailConfig.ok) {
-      return { provide: MAIL_SENDER, useClass: DisabledMailSender };
+      throw new Error(`MAIL_SEND_ENABLED=true requires complete Gmail and legal sender settings: ${gmailConfig.missing.join(', ')}`);
     }
     return { provide: MAIL_SENDER, useClass: GmailMailSender };
   }
 
+  if (config.enabled) {
+    throw new Error('MAIL_SEND_ENABLED=true requires MAIL_SENDER_PROVIDER=gmail.');
+  }
   return { provide: MAIL_SENDER, useClass: DisabledMailSender };
 }
 

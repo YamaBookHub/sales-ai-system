@@ -32,8 +32,11 @@
 - provider失敗時は `failed` にする
 - provider未設定時は `DisabledMailSender` が失敗させるため、誤送信しない
 - `MAIL_SEND_ENABLED=true` で明示しない限り、provider指定があっても実送信しない
+- 実送信時は `MAIL_SENDER_ORGANIZATION_ID` と一致する組織だけが設定済みGmailを使用できる
 - 送信providerには `sendMethod` とサイトURLを渡し、Gmail providerは `email` / `メール` 以外を拒否する
 - Gmail providerを追加する場合は `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN` / `GMAIL_FROM_EMAIL` が必須
+- 本文には実在の送信者情報と受信者固有の配信停止URLを強制付与し、Gmailへ `List-Unsubscribe` / one-click headerを渡す
+- `npm run start:worker` はDBのqueued mailを処理する。途中停止したsendingは結果不明のfailedへ移し、自動再送しない
 - 会社資料リンクは `tracking` moduleで `company_material` として追跡し、leadのアポ角度に反映する
 - 定型文は `key` で上書き保存する。同じ `key` の取り込みは新規追加ではなく修正保存として扱う
 

@@ -1,0 +1,67 @@
+name: Release production images
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_PREFIX: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve immutable image tag
+        id: image
+        shell: bash
+        run: echo "tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      - name: Build and publish migration image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: migration
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-migration:${{ steps.image.outputs.tag }}
+          provenance: mode=max
+          sbom: true
+      - name: Build and publish API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}:${{ steps.image.outputs.tag }}
+          provenance: mode=max
+          sbom: true
+      - name: Build and publish mail worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: worker
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-worker:${{ steps.image.outputs.tag }}
+          provenance: mode=max
+          sbom: true
+      - name: Build and publish database operations image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: database-ops
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-database-ops:${{ steps.image.outputs.tag }}
+          provenance: mode=max
+          sbom: true

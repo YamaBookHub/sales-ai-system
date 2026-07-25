@@ -8,7 +8,7 @@
 - production artifactはmulti-stage `Dockerfile` の `migration` targetと `runtime` targetに分離する。
 - `runtime` はPlaywright Chromiumを含み、Prisma CLIや開発依存を含めず、非root userでAPIだけを起動する。
 - `migration` はPrisma CLIとmigration SQLだけを持ち、APIを起動しない。
-- worker、scheduler、Redis、DLQ、`npm run lint`、`npm run start:worker`、`npm run start:scheduler` は未実装である。デプロイ手順に実装済みのscriptとして記載しない。
+- メール送信はDBの `OutreachEmail` をdurable queue / failed stateとして使う `npm run start:worker` を実装済みである。Redis、独立scheduler、外部DLQ serviceは使用しない。
 - 認証、RBAC・監査、組織分離は `37_AUTHENTICATION_CONTRACT.md`、`38_RBAC_AUDIT_CONTRACT.md`、`39_ORGANIZATION_ISOLATION_CONTRACT.md` に従って実装済みである。
 
 ## 2. 環境変数
@@ -76,6 +76,17 @@
 | `GMAIL_CLIENT_SECRET` | providerが `gmail` の場合に必須 | Gmail OAuth client secret |
 | `GMAIL_REFRESH_TOKEN` | providerが `gmail` の場合に必須 | 送信用Gmail OAuth refresh token |
 | `GMAIL_FROM_EMAIL` | providerが `gmail` の場合に必須 | 送信元メールアドレス |
+| `MAIL_SENDER_ORGANIZATION_ID` | providerが `gmail` の場合に必須 | この送信元を使用できる唯一の組織ID |
+| `MAIL_LEGAL_SENDER_NAME` / `MAIL_LEGAL_POSTAL_ADDRESS` / `MAIL_LEGAL_CONTACT_EMAIL` | 実送信時に必須 | 本文末尾と配信停止表示に使う実在の送信者情報。`LEGAL_*`へfallback可能 |
+
+### 公開・法務・計測
+
+| 変数 | 必須条件 | 説明 |
+|---|---|---|
+| `TRACKING_HASH_SECRET` | staging/productionで必須 | IP・User-Agent由来の重複判定値を不可逆化する32文字以上のsecret |
+| `TRUST_PROXY` | 信頼できるreverse proxyの直後で運用する場合 | `true` の時だけ先頭proxyの転送元IPを利用 |
+| `LEGAL_OPERATOR_NAME` / `LEGAL_POSTAL_ADDRESS` / `LEGAL_CONTACT_EMAIL` | staging/productionで必須 | `/privacy`、`/terms`へ表示する実在の運営者情報 |
+| `LEGAL_EFFECTIVE_DATE` | 推奨 | 公開規約の施行日 |
 
 初期値は `MAIL_SEND_ENABLED=false`、`MAIL_SENDER_PROVIDER=disabled` とする。実送信は `queued`、承認済み、checklist完了のメールだけが対象で、AI生成直後の自動送信は行わない。`site_message` と `contact_form` の外部送信providerはない。
 
@@ -146,6 +157,7 @@ npm run prisma:migrate:status
 ```bash
 npm run docker:build:migration
 npm run docker:build
+npm run docker:build:worker
 npm run docker:build:database-ops
 ```
 
@@ -164,11 +176,20 @@ docker run -d \
   sales-ai-system:local
 ```
 
+実送信を有効化する場合は、同じrevisionのruntime imageからworkerを別processとして1つ以上起動する。
+
+```bash
+docker run -d \
+  --name sales-ai-system-mail-worker \
+  --env-file /secure/path/production.env \
+  sales-ai-system-worker:local
+```
+
 `runtime` imageは起動時にmigrationを自動適用しない。migration失敗時はAPIを新revisionへ切り替えず、DB backupとmigration SQLを確認する。migration成功後にAPI起動が失敗した場合は、schema互換性を確認したうえで直前のAPI imageへ戻す。
 
 `database-ops` targetはPostgreSQL 16 clientとdependency-freeのbackup/restore scriptだけを持つ。API process、Prisma Client、AI/Gmail credentialは含めない。日次backup、保持削除、隔離staging復元にだけ使う。
 
-Dockerの `HEALTHCHECK` と `/health` はAPI processのliveness確認であり、DB readinessやmigration完了を保証しない。traffic切替前のreadinessは `migration` image成功、`npm run prisma:migrate:status` 成功、API health成功の3点で判定する。
+`/health` はprocessのliveness、`/ready` とDockerの `HEALTHCHECK` はDB接続と最新migrationのreadinessを確認する。traffic切替前はmigration image成功、`npm run prisma:migrate:status` 成功、`/ready` 成功の3点で判定する。
 
 Playwright Chromiumの安定動作には十分な共有メモリが必要なため、上の例では `--ipc=host` を使う。外部URLを取得するproduction環境では、実行基盤に合わせてPlaywright公式の推奨seccomp profileも適用し、Chromium sandboxを無効化しない。
 
@@ -200,19 +221,20 @@ npm run test:integration
 `.github/workflows/verify.yml` はPull Requestとmain pushで次を行う。
 
 1. browserをdownloadせず `npm ci`
-2. OpenAPI、artifact契約、Prisma schema、unit test、Nest buildを `npm run verify` で確認
+2. OpenAPI、artifact契約、Prisma schema、unit test、Nest buildを `npm run verify` で確認し、dependency auditを実行
 3. `migration` targetをbuildし、そのimageからCI専用の空PostgreSQLへ全migrationを適用
 4. 未適用migrationと `schema.prisma` からのdriftがないことを確認
-5. `runtime` targetをbuild
-6. `database-ops` targetをbuild
+5. 実DB integration testを実行
+6. `runtime` と `worker` targetをbuild
+7. `database-ops` targetをbuild
 
 `.github/workflows/backup-restore-drill.yml` は毎月と手動実行で、合成データを暗号化backupし別の空DBへ復元する。全table件数、主要relation、migration status、schema driftを検証する。CIにproduction DB、実backup、実暗号鍵を渡さない。
 
-CIはsecretを必要とせず、image registryへのpushやstaging/production deployを行わない。
+verify CIはsecretを必要とせず、image registryへのpushやstaging/production deployを行わない。release公開または手動実行時は `release-images.yml` が同一SHAの3 imageをGHCRへimmutable SHA tagで保存する。
 
 ## 6. 未実装の運用基盤
 
-- Redisを使う共有queue/worker/scheduler/DLQ
+- Redisを使う外部queue/scheduler/DLQ service（現行はPostgreSQLのqueue、worker、failed stateを使用）
 - 監視、alert webhook
 - Gmail providerの外部API retryと真の冪等送信
 

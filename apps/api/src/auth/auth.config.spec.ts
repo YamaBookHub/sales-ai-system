@@ -34,4 +34,20 @@ describe('readAuthConfig', () => {
       CSRF_SECRET: 'short'
     })).toThrow();
   });
+
+  it('requires a separate tracking hash secret in production', () => {
+    expect(() => readAuthConfig({
+      APP_ENV: 'production',
+      AUTH_MODE: 'google',
+      APP_BASE_URL: 'https://sales.example.com',
+      SESSION_SECRETS: 'a'.repeat(32),
+      CSRF_SECRET: 'b'.repeat(32),
+      LEGAL_OPERATOR_NAME: '販売会社',
+      LEGAL_POSTAL_ADDRESS: '東京都千代田区1-1',
+      LEGAL_CONTACT_EMAIL: 'privacy@example.com',
+      GOOGLE_AUTH_CLIENT_ID: 'client',
+      GOOGLE_AUTH_CLIENT_SECRET: 'secret',
+      GOOGLE_AUTH_REDIRECT_URI: 'https://sales.example.com/api/auth/google/callback'
+    })).toThrow('TRACKING_HASH_SECRET');
+  });
 });

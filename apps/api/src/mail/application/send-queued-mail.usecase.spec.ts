@@ -9,7 +9,8 @@ describe('SendQueuedMailUseCase', () => {
     retryCount: 0,
     toEmail: 'to@example.com',
     subject: '件名',
-    body: '本文'
+    body: '本文',
+    unsubscribeToken: '00000000-0000-4000-8000-000000000001'
   };
 
   const createDeps = () => {
@@ -46,9 +47,11 @@ describe('SendQueuedMailUseCase', () => {
     expect(mails.claimForSending).toHaveBeenCalledWith(email.id, 'mail:mail_1:retry:0', actor);
     expect(sender.send).toHaveBeenCalledWith({
       idempotencyKey: 'mail:mail_1:retry:0',
+      organizationId: 'org_1',
       toEmail: 'to@example.com',
       subject: '件名',
-      body: '本文'
+      body: '本文',
+      unsubscribeToken: '00000000-0000-4000-8000-000000000001'
     });
     expect(mails.markSentAfterSend).toHaveBeenCalledWith(
       email.id,

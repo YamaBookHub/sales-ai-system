@@ -130,12 +130,14 @@ function validateProductionArtifacts() {
     [/^FROM .+ AS migration$/m, 'migration stage'],
     [/^FROM postgres:16-bookworm AS database-ops$/m, 'PostgreSQL 16 database operations stage'],
     [/^FROM mcr\.microsoft\.com\/playwright:v([0-9.]+)-noble AS runtime$/m, 'Playwright runtime stage'],
+    [/^FROM runtime AS worker$/m, 'mail worker stage'],
     [/apt-get install -y --no-install-recommends ca-certificates openssl/, 'Prisma OpenSSL runtime'],
     [/^RUN npm prune --omit=dev$/m, 'production dependency pruning'],
     [/^USER pwuser$/m, 'non-root runtime user'],
     [/^USER postgres$/m, 'non-root database operations user'],
     [/^HEALTHCHECK /m, 'runtime healthcheck'],
-    [/^CMD \["node", "dist\/apps\/api\/main\.js"\]$/m, 'runtime command']
+    [/^CMD \["node", "dist\/apps\/api\/main\.js"\]$/m, 'runtime command'],
+    [/^CMD \["node", "dist\/apps\/api\/mail-worker\.js"\]$/m, 'mail worker command']
   ];
   for (const [pattern, label] of requiredDockerPatterns) {
     if (!pattern.test(dockerfile)) throw new Error(`Dockerfile is missing ${label}.`);
@@ -177,6 +179,7 @@ function validateProductionArtifacts() {
     [/prisma migrate diff/, 'schema drift check'],
     [/docker build --target migration/, 'migration artifact build'],
     [/docker build --target runtime/, 'runtime artifact build'],
+    [/docker build --target worker/, 'worker artifact build'],
     [/docker build --target database-ops/, 'database operations artifact build']
   ];
   for (const [pattern, label] of requiredWorkflowPatterns) {

@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Query, Redirect, Req, Res } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ok } from '../common/api-response';
 import { AuthService } from './auth.service';
 import { clearedOauthCookie, clearedSessionCookie, oauthCookieName, parseCookies, sessionCookie } from './auth.crypto';
@@ -49,6 +50,7 @@ export class AuthController {
 
   @Public()
   @Get('auth/google/start')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Redirect()
   googleStart(@Query('returnTo') returnTo: string | undefined, @Res({ passthrough: true }) response: ResponseLike) {
     const started = this.auth.beginGoogleLogin(safeReturnTo(returnTo));
@@ -58,6 +60,7 @@ export class AuthController {
 
   @Public()
   @Get('auth/google/callback')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Redirect()
   async googleCallback(
     @Query('code') code: string | undefined,
@@ -87,6 +90,7 @@ export class AuthController {
 
   @Public()
   @Post('auth/local-login')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async localLogin(@Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: ResponseLike) {
     assertLocalLoginRequest(request, this.auth.getConfig().allowedOrigin);
     const issued = await this.auth.localLogin(this.auth.getRequestMetadata(request.headers));

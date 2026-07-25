@@ -1,13 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, createHmac, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditActor } from '../audit/audit-actor';
 import {
   COMPANY_MATERIAL_LINK_LABEL,
-  materialEngagementForClickCount,
-  nextActionAtForMaterialEngagement
+  materialEngagementForClickCount
 } from './domain/material-engagement-policy';
 import { CreateTrackedLinkDto, UnsubscribeDto } from './tracking.dto';
+
+export type TrackingRequestMetadata = {
+  ip?: string;
+  userAgent?: string;
+  referer?: string;
+};
+
+const OPEN_DEDUPLICATION_MS = 24 * 60 * 60 * 1000;
+const CLICK_DEDUPLICATION_MS = 30 * 60 * 1000;
 
 @Injectable()
 export class TrackingService {
@@ -57,7 +65,7 @@ export class TrackingService {
     const links = await this.prisma.trackedLink.findMany({
       where: { organizationId, emailId },
       include: {
-        clicks: { orderBy: { clickedAt: 'desc' } }
+        clicks: { where: { isBot: false }, orderBy: { clickedAt: 'desc' } }
       }
     });
     const materialLinks = links.filter((link) => link.label === COMPANY_MATERIAL_LINK_LABEL);
@@ -82,13 +90,45 @@ export class TrackingService {
     };
   }
 
-  async trackOpen(emailId: string) {
-    const email = await this.prisma.outreachEmail.findUnique({ where: { id: emailId }, select: { organizationId: true } });
+  async trackOpen(token: string, metadata: TrackingRequestMetadata = {}) {
+    if (looksAutomated(metadata.userAgent)) return;
+    const email = await this.prisma.outreachEmail.findFirst({
+      where: {
+        OR: [
+          { openTrackingToken: token },
+          // Existing links created before opaque tracking tokens were added remain valid.
+          { id: token }
+        ]
+      },
+      select: { id: true, organizationId: true }
+    });
     if (!email) return;
-    await this.prisma.emailEvent.create({ data: { organizationId: email.organizationId, emailId, type: 'opened' } });
+
+    const fingerprintHash = trackingFingerprint(metadata);
+    const duplicate = await this.prisma.emailEvent.findFirst({
+      where: {
+        organizationId: email.organizationId,
+        emailId: email.id,
+        type: 'opened',
+        ipHash: fingerprintHash,
+        createdAt: { gte: new Date(Date.now() - OPEN_DEDUPLICATION_MS) }
+      },
+      select: { id: true }
+    });
+    if (duplicate) return;
+
+    await this.prisma.emailEvent.create({
+      data: {
+        organizationId: email.organizationId,
+        emailId: email.id,
+        type: 'opened',
+        ipHash: fingerprintHash,
+        userAgent: 'browser'
+      }
+    });
   }
 
-  async resolveClick(token: string) {
+  async resolveClick(token: string, metadata: TrackingRequestMetadata = {}) {
     const link = await this.prisma.trackedLink.findUnique({
       where: { token },
       include: { email: { select: { id: true, leadId: true } } }
@@ -98,8 +138,33 @@ export class TrackingService {
       throw new NotFoundException('Tracking link not found');
     }
 
-    await this.prisma.linkClick.create({ data: { organizationId: link.organizationId, linkId: link.id } });
-    const clickCount = await this.prisma.linkClick.count({ where: { organizationId: link.organizationId, linkId: link.id } });
+    if (looksAutomated(metadata.userAgent)) return link.originalUrl;
+    const fingerprintHash = trackingFingerprint(metadata);
+    const duplicate = await this.prisma.linkClick.findFirst({
+      where: {
+        organizationId: link.organizationId,
+        linkId: link.id,
+        fingerprintHash,
+        isBot: false,
+        clickedAt: { gte: new Date(Date.now() - CLICK_DEDUPLICATION_MS) }
+      },
+      select: { id: true }
+    });
+    if (duplicate) return link.originalUrl;
+
+    await this.prisma.linkClick.create({
+      data: {
+        organizationId: link.organizationId,
+        linkId: link.id,
+        fingerprintHash,
+        isBot: false,
+        userAgent: 'browser',
+        referer: safeRefererOrigin(metadata.referer)
+      }
+    });
+    const clickCount = await this.prisma.linkClick.count({
+      where: { organizationId: link.organizationId, linkId: link.id, isBot: false }
+    });
     await this.prisma.emailEvent.create({
       data: {
         organizationId: link.organizationId,
@@ -112,30 +177,74 @@ export class TrackingService {
         }
       }
     });
-    if (link.label === COMPANY_MATERIAL_LINK_LABEL && link.email.leadId) {
-      await this.applyMaterialEngagement(link.organizationId, link.email.leadId, clickCount);
-    }
     return link.originalUrl;
   }
 
-  private async applyMaterialEngagement(organizationId: string, leadId: string, clickCount: number) {
-    const engagement = materialEngagementForClickCount(clickCount);
-    if (engagement.label === 'none') return;
-
-    const lead = await this.prisma.salesLead.findUnique({
-      where: { organizationId_id: { organizationId, id: leadId } },
-      select: { score: true }
+  async assertUnsubscribeToken(token: string) {
+    const email = await this.prisma.outreachEmail.findUnique({
+      where: { unsubscribeToken: token },
+      select: { id: true }
     });
-    if (!lead) return;
+    if (!email) throw new NotFoundException('配信停止リンクが無効です。');
+  }
 
-    await this.prisma.salesLead.update({
-      where: { organizationId_id: { organizationId, id: leadId } },
-      data: {
-        score: Math.max(lead.score || 0, engagement.scoreFloor),
-        priority: engagement.priority,
-        status: engagement.leadStatus,
-        nextActionAt: nextActionAtForMaterialEngagement(new Date(), engagement.nextActionInDays || 1)
+  async unsubscribeByToken(token: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const email = await tx.outreachEmail.findUnique({
+        where: { unsubscribeToken: token },
+        select: {
+          id: true,
+          organizationId: true,
+          contactId: true,
+          toEmail: true
+        }
+      });
+      if (!email) throw new NotFoundException('配信停止リンクが無効です。');
+
+      const now = new Date();
+      const result = email.contactId
+        ? await tx.contactPerson.updateMany({
+            where: {
+              organizationId: email.organizationId,
+              id: email.contactId,
+              deletedAt: null
+            },
+            data: { isUnsubscribed: true, unsubscribedAt: now, isPrimary: false }
+          })
+        : email.toEmail
+          ? await tx.contactPerson.updateMany({
+              where: {
+                organizationId: email.organizationId,
+                email: { equals: email.toEmail, mode: 'insensitive' },
+                deletedAt: null
+              },
+              data: { isUnsubscribed: true, unsubscribedAt: now, isPrimary: false }
+            })
+          : { count: 0 };
+
+      const alreadyRecorded = await tx.emailEvent.findFirst({
+        where: {
+          organizationId: email.organizationId,
+          emailId: email.id,
+          type: 'unsubscribed'
+        },
+        select: { id: true }
+      });
+      if (!alreadyRecorded) {
+        await tx.emailEvent.create({
+          data: {
+            organizationId: email.organizationId,
+            emailId: email.id,
+            type: 'unsubscribed',
+            payload: {
+              source: 'recipient_link',
+              updatedCount: result.count
+            }
+          }
+        });
       }
+
+      return { isUnsubscribed: true };
     });
   }
 
@@ -207,4 +316,31 @@ function createTrackingToken() {
 
 function hashForAudit(value: string) {
   return createHash('sha256').update(value.trim().toLowerCase()).digest('hex');
+}
+
+function trackingFingerprint(metadata: TrackingRequestMetadata) {
+  const secret = process.env.TRACKING_HASH_SECRET || process.env.CSRF_SECRET || 'local-tracking-hash-secret';
+  const source = `${metadata.ip || 'unknown'}\n${normalizeUserAgent(metadata.userAgent)}`;
+  return createHmac('sha256', secret).update(source).digest('hex');
+}
+
+function normalizeUserAgent(value?: string) {
+  return String(value || '').trim().toLowerCase().slice(0, 256);
+}
+
+function looksAutomated(userAgent?: string) {
+  const normalized = normalizeUserAgent(userAgent);
+  if (!normalized) return true;
+  return /(bot|crawler|spider|scanner|proofpoint|mimecast|barracuda|safelinks|safe links|googleimageproxy|curl|wget|headless|preview)/i.test(
+    normalized
+  );
+}
+
+function safeRefererOrigin(value?: string) {
+  if (!value) return null;
+  try {
+    return new URL(value).origin.slice(0, 512);
+  } catch {
+    return null;
+  }
 }
