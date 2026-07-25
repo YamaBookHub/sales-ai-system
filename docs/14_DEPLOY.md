@@ -85,6 +85,27 @@
 |---|---|---|
 | `TEST_DATABASE_URL` | 実DB integration testを実行する場合のみ必須 | integration testが使用するPostgreSQL URL。通常のbuild/testには不要 |
 
+### バックアップ・復元
+
+| 変数 | 必須条件 | 説明 |
+|---|---|---|
+| `BACKUP_OUTPUT_DIR` | backup/prune時に必須 | リポジトリ外の `0700` directory。productionはoff-host object storageへ同期するmount |
+| `BACKUP_ENCRYPTION_KEY_FILE` | backup/restore/prune時に必須 | 32 byteの鍵を保存した `0600` file |
+| `BACKUP_KEY_ID` | backup時に必須 | 鍵世代を識別する非秘密ID |
+| `BACKUP_STORAGE_LABEL` | production backup・全prune時に必須 | 保存先prefixを示す非秘密label。local値はproduction backupで拒否し、pruneでは異なるlabelを拒否 |
+| `BACKUP_RETENTION_DAYS` | 任意 | 日次backup保持日数。省略時35 |
+| `BACKUP_MINIMUM_COUNT` | 任意 | 期限超過でも残す最低世代数。省略時7 |
+| `BACKUP_PRUNE_CONFIRM` | 実削除時だけ | dry-runが返す1回限りの `DELETE_<plan-hash>`。対象が変わると無効になる |
+| `BACKUP_FILE` / `BACKUP_MANIFEST_FILE` | restore時に必須 | 対になる暗号化dump・manifest |
+| `RESTORE_TARGET_DATABASE_URL` | restore時に必須 | productionと別clusterにある空のstaging/test/restore DB |
+| `RESTORE_TARGET_ENV` | restore時に必須 | `staging` / `test` / `restore` |
+| `RESTORE_CONFIRM` | restore時に必須 | `RESTORE_TO_<database-name>` の完全一致 |
+| `DB_OPS_MODE` | 任意 | `native` またはlocal用 `docker-compose`。既定はnative |
+| `DB_OPS_DOCKER_SERVICE` / `DB_OPS_DOCKER_HOST` | Compose利用時のみ | PostgreSQL clientを実行するserviceとcontainer内host |
+| `RELEASE_REVISION` | 推奨 | 暗号化manifestへ格納するGit revision |
+
+RPOは24時間、RTOは4時間、日次backupは35日、migration直前backupは別prefixで90日保持する。詳細と実行例は `docs/40_BACKUP_RESTORE_RUNBOOK.md` を正とする。
+
 ## 3. 実行手順
 
 ### ローカル確認
@@ -125,6 +146,7 @@ npm run prisma:migrate:status
 ```bash
 npm run docker:build:migration
 npm run docker:build
+npm run docker:build:database-ops
 ```
 
 release時は必ずmigrationを先に一度実行する。`/secure/path/production.env` はリポジトリ外で管理し、少なくとも `DATABASE_URL` を含める。
@@ -143,6 +165,8 @@ docker run -d \
 ```
 
 `runtime` imageは起動時にmigrationを自動適用しない。migration失敗時はAPIを新revisionへ切り替えず、DB backupとmigration SQLを確認する。migration成功後にAPI起動が失敗した場合は、schema互換性を確認したうえで直前のAPI imageへ戻す。
+
+`database-ops` targetはPostgreSQL 16 clientとdependency-freeのbackup/restore scriptだけを持つ。API process、Prisma Client、AI/Gmail credentialは含めない。日次backup、保持削除、隔離staging復元にだけ使う。
 
 Dockerの `HEALTHCHECK` と `/health` はAPI processのliveness確認であり、DB readinessやmigration完了を保証しない。traffic切替前のreadinessは `migration` image成功、`npm run prisma:migrate:status` 成功、API health成功の3点で判定する。
 
@@ -165,7 +189,7 @@ npm run test:integration
 - 空のPostgreSQLへ `npm run prisma:migrate:deploy` を実行し、続く `npm run prisma:migrate:status` が未適用なしで成功する。
 - `migration` と `runtime` のDocker buildが成功する。
 - migration差分を確認し、本番データに対する破壊的変更を行わない。
-- LA-006が完了するまでは本番相当データを扱う外部公開を行わない。
+- 最新の日次backup成功と、過去1か月以内の隔離staging復元演習成功を確認する。
 - `MAIL_SEND_ENABLED` は明示的に必要な環境だけ `true` にする。
 - Gmailの実送信を有効化する前に、承認、checklist、送信対象、配信停止、blockの運用確認を行う。
 - Gemini/OpenAI API key、Gmail secret、refresh tokenをリポジトリへ保存しない。
@@ -180,13 +204,16 @@ npm run test:integration
 3. `migration` targetをbuildし、そのimageからCI専用の空PostgreSQLへ全migrationを適用
 4. 未適用migrationと `schema.prisma` からのdriftがないことを確認
 5. `runtime` targetをbuild
+6. `database-ops` targetをbuild
+
+`.github/workflows/backup-restore-drill.yml` は毎月と手動実行で、合成データを暗号化backupし別の空DBへ復元する。全table件数、主要relation、migration status、schema driftを検証する。CIにproduction DB、実backup、実暗号鍵を渡さない。
 
 CIはsecretを必要とせず、image registryへのpushやstaging/production deployを行わない。
 
 ## 6. 未実装の運用基盤
 
 - Redisを使う共有queue/worker/scheduler/DLQ
-- backup・restore演習、監視、alert webhook
+- 監視、alert webhook
 - Gmail providerの外部API retryと真の冪等送信
 
 利用者認証credentialとGmail送信用OAuth credentialは共用しない。

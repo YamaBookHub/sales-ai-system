@@ -11,6 +11,7 @@
 | E2E | API全体 | Supertest |
 | Contract | OpenAPI | openapi schema check |
 | Migration | Prisma migrate | prisma validate/migrate |
+| Recovery | 暗号化backup/restore/保持 | PostgreSQL + database-ops image |
 
 ## 3. 必須Unit Test
 - LeadScore計算
@@ -67,5 +68,13 @@
 - 本文に実メールアドレスを含めない
 - 外部AI APIに依存するUnit Testを書かない
 
-## 9. Codex実装指示
+## 9. Backup・restore演習
+- CIでは毎月、合成データを暗号化backupし、別の空DBへrestoreする
+- application table件数、migration、主要relation、schema driftを照合する
+- production credential、外部AI、Gmail、実顧客データをCIへ渡さない
+- 最新の実backupは、別clusterの隔離stagingへ毎月復元して確認する
+- restore先が空DBでない場合やproductionを指す場合は、処理開始前に拒否する
+- 詳細な手順と合格条件は `docs/40_BACKUP_RESTORE_RUNBOOK.md` を正本とする
+
+## 10. Codex実装指示
 AIとGmailは必ずinterface化し、テストではmock providerを注入する。DBはTestcontainersまたは専用PostgreSQLを使う。SQLite代替は禁止。

@@ -57,7 +57,7 @@ Baseline:
 | 32 | LA-005 | 公開前 | complete | Sol T4 -> Terra | LA-003, LS-006 | 2026-07-22 / PostgreSQL共有store・owner/organization隔離・TTL・lease・複数instance cancel・同時開始排他・restart後の期限切れ状態確定を実装。実DB integration成功 | job所有者・永続化 |
 | 33 | LO-001 | 公開前 | complete | Terra T3 + read-only audit | LA-003 | 2026-07-22 / JSON構造化ログ・UUID request ID・actor context・5xx/AI/scraper/mail失敗契約、128 suites 522 tests・型・build成功 | 構造化ログ |
 | 34 | LO-002 | 公開前 | complete | Terra T3 + read-only audits | LR-003, LA-004, LA-007 | 2026-07-23 / secretなしCI・migration/runtime multi-stage・空DB16 migrations・drift 0・Docker smoke・128 suites 522 tests・実DB11 suites 41 tests成功 | CI・本番artifact |
-| 35 | LA-006 | 公開前 | pending | Sol T4 -> Terra | LA-003, LO-002 | - | バックアップ・復元確認 |
+| 35 | LA-006 | 公開前 | complete | Sol T4 -> Terra + Sol audit | LA-003, LO-002 | 2026-07-25 / AES-256-GCM暗号化、同一exported snapshot、平文fileなしstream復元、restore専用DB marker、UUID、認証済み保持削除planを実装。database-ops imageから隔離DBへ全26 table・16 migrations・349 columns・88 constraints・138 indexes・107 enumsを復元し、relation 0違反・schema drift 0。129 suites 531 tests、verify・Docker build成功 | バックアップ・復元確認 |
 | 36 | LO-003 | P1 | pending | Terra T3 | LM-005, LO-001 | - | 監視・費用表示 |
 | 37 | LP-001 | 販売後 | deferred | Sol T4 | LA-007, SM-001 | - | 課金・契約 |
 
@@ -129,3 +129,5 @@ Baseline:
 | 2026-07-22 | LO-001 | Terra implementation + read-only audit + main | complete | 全responseのUUID request ID、JSON event、認証actor連携を実装。本文・平文email・IP・query・token・error message/stackを除外し、Gmail失敗理由も安全なstatus/codeへ正規化。scraper失敗とDB/業務失敗を分離し、128 suites 522 tests、型検査、build、diff check成功。ブラウザとport 3000は未使用 |
 | 2026-07-23 | LO-002 | Terra implementation + read-only audit agents + main | start | secretなしCI、production multi-stage Docker artifact、migration適用・drift確認の固定を開始 |
 | 2026-07-23 | LO-002 | Terra implementation + read-only audit agents + main | complete | migration/runtime targetを分離し、非root API、Playwright Chromium、healthcheck、migration provider lock、artifact契約を実装。migration imageから空DBへ全16 migrationを適用し、未適用・schema drift 0、runtime metadata・Prisma/Chromium・secret不在smokeを確認。128 suites 522 tests、実DB11 suites 41 tests、verify・両Docker build成功。CIはimage push・本番deployなし、ブラウザとport 3000は未使用 |
+| 2026-07-25 | LA-006 | Sol design + Terra implementation + main | start | 暗号化backup、保持削除、誤復元防止、隔離DBへの実restore、月次演習の固定を開始 |
+| 2026-07-25 | LA-006 | Sol audit + main | complete | auditで検出した時点ずれ・平文一時dump・復元先自己申告・並行名衝突・schema偽陽性・mtime削除・外部schema混入・SSL設定欠落・破損世代保持を補強。同一snapshot、public限定backup、stream復元、DB marker、空public schemaの非CASCADE再作成、UUID、schema定義一致、認証済み削除planを実装し、専用DBとdatabase-ops imageの両方で復元成功。129 suites 531 tests、OpenAPI・Prisma・build・Docker build成功。ブラウザとport 3000は未使用 |

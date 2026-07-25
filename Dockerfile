@@ -34,6 +34,26 @@ USER node
 
 CMD ["npx", "--no-install", "prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"]
 
+# PostgreSQL 16 client and the dependency-free backup tools stay outside the API
+# runtime. Mount the key and backup destination at execution time.
+FROM postgres:16-bookworm AS database-ops
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates nodejs \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /ops
+COPY --chown=postgres:postgres \
+  scripts/database/backup-lib.js \
+  scripts/database/backup.js \
+  scripts/database/restore.js \
+  scripts/database/prune.js \
+  ./scripts/database/
+
+USER postgres
+ENTRYPOINT ["node"]
+CMD ["scripts/database/backup.js"]
+
 # The Playwright image provides Chromium and its system libraries for both
 # CAMPFIRE and Makuake acquisition. Keep its version aligned with package-lock.
 FROM mcr.microsoft.com/playwright:v1.61.1-noble AS runtime

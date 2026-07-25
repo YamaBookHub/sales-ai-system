@@ -17,7 +17,11 @@
     "prisma:migrate:status": "prisma migrate status --schema prisma/schema.prisma",
     "docker:build": "docker build --target runtime --tag sales-ai-system:local .",
     "docker:build:migration": "docker build --target migration --tag sales-ai-system-migration:local .",
+    "docker:build:database-ops": "docker build --target database-ops --tag sales-ai-system-database-ops:local .",
     "auth:bootstrap-admin": "ts-node scripts/bootstrap-admin.ts",
+    "db:backup": "node scripts/database/backup.js",
+    "db:backup:prune": "node scripts/database/prune.js",
+    "db:restore": "node scripts/database/restore.js",
     "db:repair-lead-fields": "docker compose exec -T postgres psql -U postgres -d sales_ai_system < prisma/migrations/20260709002000_lead_sales_management/migration.sql",
     "prisma:seed": "ts-node scripts/seed.ts"
   },

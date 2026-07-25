@@ -3,7 +3,7 @@ module.exports = {
   rootDir: '.',
   testRegex: '^(?!.*\\.integration-spec\\.ts$).*\\.spec\\.ts$',
   transform: {
-    '^.+\\.(t|j)s$': 'ts-jest'
+    '^.+\\.ts$': 'ts-jest'
   },
   testEnvironment: 'node'
 };

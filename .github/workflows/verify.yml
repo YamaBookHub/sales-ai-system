@@ -64,3 +64,5 @@ jobs:
             --exit-code
       - name: Build production API artifact
         run: docker build --target runtime --tag sales-ai-system:ci .
+      - name: Build database operations artifact
+        run: docker build --target database-ops --tag sales-ai-system-database-ops:ci .

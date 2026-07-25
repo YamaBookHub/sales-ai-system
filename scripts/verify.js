@@ -113,6 +113,11 @@ function validateProductionArtifacts() {
   const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');
   const dockerIgnore = fs.readFileSync(path.join(root, '.dockerignore'), 'utf8');
   const workflow = fs.readFileSync(path.join(root, '.github/workflows/verify.yml'), 'utf8');
+  const backupWorkflow = fs.readFileSync(
+    path.join(root, '.github/workflows/backup-restore-drill.yml'),
+    'utf8'
+  );
+  const packageDocument = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   const migrationLock = fs.readFileSync(
     path.join(root, 'prisma/migrations/migration_lock.toml'),
     'utf8'
@@ -123,10 +128,12 @@ function validateProductionArtifacts() {
   const requiredDockerPatterns = [
     [/^FROM .+ AS builder$/m, 'builder stage'],
     [/^FROM .+ AS migration$/m, 'migration stage'],
+    [/^FROM postgres:16-bookworm AS database-ops$/m, 'PostgreSQL 16 database operations stage'],
     [/^FROM mcr\.microsoft\.com\/playwright:v([0-9.]+)-noble AS runtime$/m, 'Playwright runtime stage'],
     [/apt-get install -y --no-install-recommends ca-certificates openssl/, 'Prisma OpenSSL runtime'],
     [/^RUN npm prune --omit=dev$/m, 'production dependency pruning'],
     [/^USER pwuser$/m, 'non-root runtime user'],
+    [/^USER postgres$/m, 'non-root database operations user'],
     [/^HEALTHCHECK /m, 'runtime healthcheck'],
     [/^CMD \["node", "dist\/apps\/api\/main\.js"\]$/m, 'runtime command']
   ];
@@ -154,6 +161,11 @@ function validateProductionArtifacts() {
       throw new Error(`.dockerignore is missing ${entry}.`);
     }
   }
+  for (const entry of ['backups', '*.dump.enc', '*.manifest.enc']) {
+    if (!dockerIgnore.split(/\r?\n/).includes(entry)) {
+      throw new Error(`.dockerignore is missing backup exclusion ${entry}.`);
+    }
+  }
 
   const requiredWorkflowPatterns = [
     [/permissions:\s*\n\s+contents: read/, 'read-only repository permission'],
@@ -164,7 +176,8 @@ function validateProductionArtifacts() {
     [/npm run prisma:migrate:status/, 'migration status check'],
     [/prisma migrate diff/, 'schema drift check'],
     [/docker build --target migration/, 'migration artifact build'],
-    [/docker build --target runtime/, 'runtime artifact build']
+    [/docker build --target runtime/, 'runtime artifact build'],
+    [/docker build --target database-ops/, 'database operations artifact build']
   ];
   for (const [pattern, label] of requiredWorkflowPatterns) {
     if (!pattern.test(workflow)) throw new Error(`CI workflow is missing ${label}.`);
@@ -175,9 +188,88 @@ function validateProductionArtifacts() {
   if (!/^provider = "postgresql"$/m.test(migrationLock)) {
     throw new Error('Prisma migration provider lock must be PostgreSQL.');
   }
+  for (const script of ['db:backup', 'db:backup:prune', 'db:restore']) {
+    if (!packageDocument.scripts?.[script]) {
+      throw new Error(`package.json is missing ${script}.`);
+    }
+  }
+  for (const file of [
+    'scripts/database/backup-lib.js',
+    'scripts/database/backup.js',
+    'scripts/database/restore.js',
+    'scripts/database/prune.js'
+  ]) {
+    if (!fs.existsSync(path.join(root, file))) {
+      throw new Error(`Database operations artifact is missing ${file}.`);
+    }
+  }
+  const backupScript = fs.readFileSync(
+    path.join(root, 'scripts/database/backup.js'),
+    'utf8'
+  );
+  const backupLibrary = fs.readFileSync(
+    path.join(root, 'scripts/database/backup-lib.js'),
+    'utf8'
+  );
+  const restoreScript = fs.readFileSync(
+    path.join(root, 'scripts/database/restore.js'),
+    'utf8'
+  );
+  const pruneScript = fs.readFileSync(
+    path.join(root, 'scripts/database/prune.js'),
+    'utf8'
+  );
+  if (
+    !/openExportedSnapshot/.test(backupScript) ||
+    !/--snapshot=/.test(backupScript) ||
+    !/--schema=public/.test(backupScript)
+  ) {
+    throw new Error('Backup must validate and dump from the same exported PostgreSQL snapshot.');
+  }
+  if (!/restoreEncryptedDump/.test(restoreScript) || /Temporary|mkdtemp/.test(restoreScript)) {
+    throw new Error('Restore must stream authenticated plaintext without a temporary dump file.');
+  }
+  if (!/assertRestoreTargetMarker/.test(restoreScript)) {
+    throw new Error('Restore must require the database restore-only marker.');
+  }
+  if (
+    !/prepareEmptyRestoreTargetSchema/.test(restoreScript) ||
+    !/DROP SCHEMA IF EXISTS public;/.test(backupLibrary) ||
+    /DROP SCHEMA[^;]*CASCADE/i.test(backupLibrary)
+  ) {
+    throw new Error(
+      'Restore must safely recreate only an empty public schema without using CASCADE.'
+    );
+  }
+  if (
+    !/buildPruneConfirmationToken/.test(pruneScript) ||
+    !/authenticateEncryptedFile/.test(pruneScript) ||
+    !/sha256File/.test(pruneScript)
+  ) {
+    throw new Error(
+      'Prune must authenticate every retained dump and bind confirmation to the deletion plan.'
+    );
+  }
+  const requiredBackupWorkflowPatterns = [
+    [/schedule:\s*\n\s+- cron:/, 'monthly restore schedule'],
+    [/MAIL_SEND_ENABLED: 'false'/, 'disabled mail delivery during restore'],
+    [/--target database-ops/, 'database operations image build'],
+    [/sales-ai-system:restore-only/, 'restore-only database marker'],
+    [/RESTORE_TARGET_ENV=test/, 'isolated restore environment'],
+    [/prisma migrate status/, 'restored migration validation'],
+    [/prisma migrate diff/, 'restored schema drift validation']
+  ];
+  for (const [pattern, label] of requiredBackupWorkflowPatterns) {
+    if (!pattern.test(backupWorkflow)) {
+      throw new Error(`Backup restore drill workflow is missing ${label}.`);
+    }
+  }
+  if (/--env\s+(?:DATABASE_URL|RESTORE_TARGET_DATABASE_URL)=/i.test(backupWorkflow)) {
+    throw new Error('Database secrets must not be placed in docker command arguments.');
+  }
 
   console.log(
-    `Production artifacts: Playwright ${playwrightVersion}, migration/runtime targets, migration drift, CI checks OK`
+    `Production artifacts: Playwright ${playwrightVersion}, migration/runtime/database-ops targets, migration drift, CI and restore drill checks OK`
   );
 }
 
