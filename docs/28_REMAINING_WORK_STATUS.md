@@ -59,7 +59,8 @@ Baseline:
 | 34 | LO-002 | 公開前 | complete | Terra T3 + read-only audits | LR-003, LA-004, LA-007 | 2026-07-23 / secretなしCI・migration/runtime multi-stage・空DB16 migrations・drift 0・Docker smoke・128 suites 522 tests・実DB11 suites 41 tests成功 | CI・本番artifact |
 | 35 | LA-006 | 公開前 | complete | Sol T4 -> Terra + Sol audit | LA-003, LO-002 | 2026-07-25 / AES-256-GCM暗号化、同一exported snapshot、平文fileなしstream復元、restore専用DB marker、UUID、認証済み保持削除planを実装。database-ops imageから隔離DBへ全26 table・16 migrations・349 columns・88 constraints・138 indexes・107 enumsを復元し、relation 0違反・schema drift 0。129 suites 531 tests、verify・Docker build成功 | バックアップ・復元確認 |
 | 36 | LO-003 | P1 | complete | Terra T3 + Sol/Luna audit + main | LM-005, LO-001 | 2026-07-25 / 組織・JST期間単位のAI費用、検索時間、取込失敗、返信、mail状態、停滞警告を集計するAPIと権限制御付き運用画面を実装。検索完了・中止・失敗・期限切れの安全な監査記録と重複排除を補強。OpenAPI 97 operations、136 suites 556 tests・Prisma・build成功 | 監視・費用表示 |
-| 37 | LP-001 | 販売後 | deferred | Sol T4 | LA-007, SM-001 | - | 課金・契約 |
+| 37 | LO-004 | P1 | complete | main | LO-001 | 2026-07-25 / 反復する依存注入・controller・route探索ログを抑止し、起動ライフサイクル・警告・異常・requestログを維持。141 suites 573 tests・build・実起動・ready 200・production audit 0件 | Nest起動ログのノイズ削減 |
+| 38 | LP-001 | 販売後 | deferred | Sol T4 | LA-007, SM-001 | - | 課金・契約 |
 
 ## Deferred backlog
 
@@ -133,3 +134,5 @@ Baseline:
 | 2026-07-25 | LA-006 | Sol audit + main | complete | auditで検出した時点ずれ・平文一時dump・復元先自己申告・並行名衝突・schema偽陽性・mtime削除・外部schema混入・SSL設定欠落・破損世代保持を補強。同一snapshot、public限定backup、stream復元、DB marker、空public schemaの非CASCADE再作成、UUID、schema定義一致、認証済み削除planを実装し、専用DBとdatabase-ops imageの両方で復元成功。129 suites 531 tests、OpenAPI・Prisma・build・Docker build成功。ブラウザとport 3000は未使用 |
 | 2026-07-25 | LO-003 | Terra design audit + main | start | AI費用、失敗、検索時間、取り込み失敗、返信、mail状態を組織・期間単位で集計する運用画面とAPIの実装を開始 |
 | 2026-07-25 | LO-003 | Terra implementation + Sol/Luna audit + main | complete | `/operations`と`GET /api/reports/operations`を追加し、AI費用・検索・取込・返信・mailの期間集計と停滞警告を実装。組織境界、権限、個人情報非表示、JST境界、検索jobの完了・中止・失敗・期限切れ監査、再試行時の重複排除を固定。OpenAPI 86 paths・97 operations、136 suites 556 tests、Prisma・build・diff check成功。ブラウザとport 3000はユーザー指示により未使用 |
+| 2026-07-25 | LO-004 | main | start | `InstanceLoader`・`RoutesResolver`・`RouterExplorer` の反復ログを抑止し、警告・異常・起動完了ログは維持する修正を開始 |
+| 2026-07-25 | LO-004 | main | complete | 起動時のframework infoを`NestFactory`・`NestApplication`の2件まで削減。警告・異常・requestログと情報非出力契約を維持し、141 suites 573 tests、build、実起動、`/ready` 200、production dependency audit 0件を確認 |

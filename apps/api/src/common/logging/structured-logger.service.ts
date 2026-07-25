@@ -18,6 +18,12 @@ export type StructuredLogFields = {
 
 type LogLevel = 'info' | 'warn' | 'error';
 
+const NOISY_FRAMEWORK_CONTEXTS = new Set([
+  'InstanceLoader',
+  'RoutesResolver',
+  'RouterExplorer'
+]);
+
 @Injectable()
 export class StructuredLogger implements LoggerService {
   constructor(private readonly requestContext: RequestContextService) {}
@@ -35,6 +41,7 @@ export class StructuredLogger implements LoggerService {
   }
 
   log(_message: unknown, context?: string): void {
+    if (context && NOISY_FRAMEWORK_CONTEXTS.has(context)) return;
     this.infoEvent('framework.log', { operation: safeToken(context) });
   }
 

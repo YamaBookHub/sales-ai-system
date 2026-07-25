@@ -57,4 +57,27 @@ describe('StructuredLogger', () => {
     });
     write.mockRestore();
   });
+
+  it('drops repetitive route discovery logs while keeping lifecycle logs', () => {
+    const logger = new StructuredLogger(new RequestContextService());
+    const write = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    logger.log('Dependencies initialized', 'InstanceLoader');
+    logger.log('Controller route resolved', 'RoutesResolver');
+    logger.log('Route mapped', 'RouterExplorer');
+
+    expect(write).not.toHaveBeenCalled();
+
+    logger.log('Application successfully started with a potentially sensitive detail', 'NestApplication');
+
+    expect(write).toHaveBeenCalledTimes(1);
+    const line = String(write.mock.calls[0][0]);
+    expect(JSON.parse(line)).toMatchObject({
+      level: 'info',
+      event: 'framework.log',
+      metadata: { operation: 'NestApplication' }
+    });
+    expect(line).not.toContain('potentially sensitive detail');
+    write.mockRestore();
+  });
 });
