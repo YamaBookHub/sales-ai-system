@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AiModule } from '../ai/ai.module';
+import { AuditModule } from '../audit/audit.module';
 import { CampfireScraperService } from '../scraper/campfire-scraper.service';
 import { BulkImportProjectsUseCase } from './application/bulk-import-projects.usecase';
 import { ImportProjectUseCase } from './application/import-project.usecase';
@@ -12,15 +13,17 @@ import { PrismaProjectImportRepository } from './infrastructure/prisma-project-i
 import { PrismaProjectSearchJobRepository } from './infrastructure/prisma-project-search-job.repository';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
+import { ProjectOperationsAuditService } from './application/project-operations-audit.service';
 
 @Module({
-  imports: [AiModule],
+  imports: [AiModule, AuditModule],
   controllers: [ProjectsController],
   providers: [
     ProjectsService,
     SearchProjectsUseCase,
     ImportProjectUseCase,
     BulkImportProjectsUseCase,
+    ProjectOperationsAuditService,
     ProjectSearchJobManager,
     CampfireScraperService,
     PrismaProjectImportRepository,

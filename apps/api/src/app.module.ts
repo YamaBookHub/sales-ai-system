@@ -14,6 +14,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { AuditModule } from './audit/audit.module';
 import { ObservabilityModule } from './common/logging/observability.module';
+import { OperationsModule } from './operations/operations.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { ObservabilityModule } from './common/logging/observability.module';
     AiModule,
     TrackingModule,
     PerformanceModule,
+    OperationsModule,
     UsersModule,
     AuditModule
   ]

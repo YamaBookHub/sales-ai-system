@@ -29,6 +29,7 @@ import {
 import { SearchCampfireProjectsDto } from '../projects.dto';
 import { PrismaProjectImportRepository } from '../infrastructure/prisma-project-import.repository';
 import { StructuredLogger } from '../../common/logging/structured-logger.service';
+import { ProjectOperationsAuditService } from './project-operations-audit.service';
 
 type SearchWithProvider = (
   provider: ProjectSourceProvider,
@@ -49,7 +50,8 @@ export class ProjectSearchJobManager {
   constructor(
     private readonly projectImportRepository: PrismaProjectImportRepository,
     private readonly searchJobRepository: ProjectSearchJobRepository,
-    private readonly logger: StructuredLogger
+    private readonly logger: StructuredLogger,
+    private readonly operationsAudit: ProjectOperationsAuditService
   ) {}
 
   async start(
@@ -110,6 +112,7 @@ export class ProjectSearchJobManager {
         expiresAt(now)
       );
       if (!job) throw searchJobNotFound();
+      await this.operationsAudit.recordSearchFinished(job);
     }
     return this.publicSearchJob(job);
   }
@@ -133,6 +136,7 @@ export class ProjectSearchJobManager {
     );
     if (!cancelled) throw searchJobNotFound();
     this.activeWorkers.get(id)?.controller.abort();
+    await this.operationsAudit.recordSearchFinished(cancelled);
     return this.publicSearchJob(cancelled);
   }
 
@@ -255,7 +259,7 @@ export class ProjectSearchJobManager {
       itemCount: job.itemCount,
       importableCount: job.importableCount
     });
-    await this.searchJobRepository.finish(
+    const finished = await this.searchJobRepository.finish(
       job.id,
       job.workerId,
       {
@@ -269,6 +273,7 @@ export class ProjectSearchJobManager {
       },
       expiresAt()
     );
+    if (finished) await this.operationsAudit.recordSearchFinished(job);
   }
 
   private monitorWorker(job: StoredProjectSearchJob, controller: AbortController) {

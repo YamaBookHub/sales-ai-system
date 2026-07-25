@@ -38,16 +38,18 @@ describe('ImportProjectUseCase', () => {
       import: jest.fn()
     };
 
-    return { repository, campfireProvider, makuakeProvider };
+    const operationsAudit = { recordDirectImportFailure: jest.fn().mockResolvedValue(undefined) };
+    return { repository, campfireProvider, makuakeProvider, operationsAudit };
   };
 
   it('imports active project through the selected provider and persists normalized result', async () => {
-    const { repository, campfireProvider, makuakeProvider } = createDeps();
+    const { repository, campfireProvider, makuakeProvider, operationsAudit } = createDeps();
     const useCase = new ImportProjectUseCase(
       repository as any,
       campfireProvider as any,
       makuakeProvider as any,
-      { errorEvent: jest.fn() } as any
+      { errorEvent: jest.fn() } as any,
+      operationsAudit as any
     );
 
     const result = await useCase.import(
@@ -72,7 +74,7 @@ describe('ImportProjectUseCase', () => {
   });
 
   it('does not persist inactive projects', async () => {
-    const { repository, campfireProvider, makuakeProvider } = createDeps();
+    const { repository, campfireProvider, makuakeProvider, operationsAudit } = createDeps();
     const logger = { errorEvent: jest.fn() };
     campfireProvider.import.mockResolvedValue({
       ...importedProject,
@@ -82,7 +84,8 @@ describe('ImportProjectUseCase', () => {
       repository as any,
       campfireProvider as any,
       makuakeProvider as any,
-      logger as any
+      logger as any,
+      operationsAudit as any
     );
 
     await expect(useCase.import(
@@ -91,13 +94,14 @@ describe('ImportProjectUseCase', () => {
     )).rejects.toThrow(BadRequestException);
     expect(repository.persistImportedProject).not.toHaveBeenCalled();
     expect(logger.errorEvent).not.toHaveBeenCalled();
+    expect(operationsAudit.recordDirectImportFailure).toHaveBeenCalledWith(actor, 'campfire');
   });
 
   it('records provider import failures as scraper failures', async () => {
-    const { repository, campfireProvider, makuakeProvider } = createDeps();
+    const { repository, campfireProvider, makuakeProvider, operationsAudit } = createDeps();
     const logger = { errorEvent: jest.fn() };
     campfireProvider.import.mockRejectedValue(new Error('provider failed test@example.com'));
-    const useCase = new ImportProjectUseCase(repository as any, campfireProvider as any, makuakeProvider as any, logger as any);
+    const useCase = new ImportProjectUseCase(repository as any, campfireProvider as any, makuakeProvider as any, logger as any, operationsAudit as any);
 
     await expect(useCase.import(
       { source: 'campfire', url: 'https://camp-fire.jp/projects/1/view' },
@@ -112,13 +116,14 @@ describe('ImportProjectUseCase', () => {
       source: 'campfire',
       error: expect.any(Error)
     });
+    expect(operationsAudit.recordDirectImportFailure).toHaveBeenCalledWith(actor, 'campfire');
   });
 
   it('does not misclassify persistence failures as scraper failures', async () => {
-    const { repository, campfireProvider, makuakeProvider } = createDeps();
+    const { repository, campfireProvider, makuakeProvider, operationsAudit } = createDeps();
     const logger = { errorEvent: jest.fn() };
     repository.persistImportedProject.mockRejectedValue(new Error('database unavailable'));
-    const useCase = new ImportProjectUseCase(repository as any, campfireProvider as any, makuakeProvider as any, logger as any);
+    const useCase = new ImportProjectUseCase(repository as any, campfireProvider as any, makuakeProvider as any, logger as any, operationsAudit as any);
 
     await expect(useCase.import(
       { source: 'campfire', url: 'https://camp-fire.jp/projects/1/view' },
@@ -126,5 +131,6 @@ describe('ImportProjectUseCase', () => {
     )).rejects.toThrow('database unavailable');
 
     expect(logger.errorEvent).not.toHaveBeenCalled();
+    expect(operationsAudit.recordDirectImportFailure).toHaveBeenCalledWith(actor, 'campfire');
   });
 });

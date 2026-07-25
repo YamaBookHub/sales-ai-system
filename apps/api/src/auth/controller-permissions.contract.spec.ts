@@ -15,6 +15,7 @@ import { ProjectsController } from '../projects/projects.controller';
 import { TrackingController } from '../tracking/tracking.controller';
 import { UsersController } from '../users/users.controller';
 import { AuditController } from '../audit/audit.controller';
+import { OperationsController } from '../operations/operations.controller';
 
 type ControllerClass = new (...args: any[]) => unknown;
 type Permission = string;
@@ -101,6 +102,10 @@ describe('controller permission metadata contract', () => {
       const handler = (controller as any).prototype[method];
       expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, handler)).toEqual([permission]);
     }
+  });
+
+  it('requires both report and AI cost permissions for operations reporting', () => {
+    expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, OperationsController)).toEqual(['reports.read', 'ai.cost.read']);
   });
 
 });

@@ -22,15 +22,18 @@ describe('ProjectSearchJobManager', () => {
 
   function createManager(repository = new InMemorySearchJobRepository(), existingUrls: string[] = []) {
     const logger = { errorEvent: jest.fn() };
+    const operationsAudit = { recordSearchFinished: jest.fn().mockResolvedValue(undefined) };
     const projectImportRepository = { existingProjectUrls: jest.fn().mockResolvedValue(new Set(existingUrls)) };
     return {
       manager: new ProjectSearchJobManager(
         projectImportRepository as any,
         repository,
-        logger as any
+        logger as any,
+        operationsAudit as any
       ),
       repository,
       logger,
+      operationsAudit,
       projectImportRepository
     };
   }
@@ -49,7 +52,7 @@ describe('ProjectSearchJobManager', () => {
   }
 
   it('persists a completed job when the desired count is reached', async () => {
-    const { manager, repository } = createManager();
+    const { manager, repository, operationsAudit } = createManager();
     const items = Array.from({ length: 10 }, (_, index) => ({ url: `https://camp-fire.jp/projects/${index}` }));
     const started = await startJob(manager, provider, { limit: 10 }, jest.fn().mockResolvedValue({ items, diagnostics }));
 
@@ -57,6 +60,9 @@ describe('ProjectSearchJobManager', () => {
 
     expect(job).toMatchObject({ status: 'completed', completionReason: 'desired_reached', importableCount: 10 });
     expect(repository.jobs.get(started.id)?.items).toHaveLength(10);
+    expect(operationsAudit.recordSearchFinished).toHaveBeenCalledWith(expect.objectContaining({
+      id: started.id, status: 'completed', completionReason: 'desired_reached', source: 'campfire'
+    }));
   });
 
   it('persists source and condition shortage completion reasons', async () => {
@@ -116,7 +122,7 @@ describe('ProjectSearchJobManager', () => {
   });
 
   it('aborts the local provider and prevents late writes after cancellation', async () => {
-    const { manager } = createManager();
+    const { manager, operationsAudit } = createManager();
     let emitItems!: (items: Array<{ url: string }>) => Promise<boolean>;
     let receivedSignal: AbortSignal | undefined;
     const search = jest.fn((_provider, _dto, options) => new Promise<never>((_, reject) => {
@@ -131,6 +137,9 @@ describe('ProjectSearchJobManager', () => {
 
     expect(receivedSignal?.aborted).toBe(true);
     expect(cancelled).toMatchObject({ status: 'cancelled', completionReason: 'cancelled' });
+    expect(operationsAudit.recordSearchFinished).toHaveBeenCalledWith(expect.objectContaining({
+      id: started.id, status: 'cancelled', completionReason: 'cancelled'
+    }));
     await expect(emitItems([{ url: 'https://camp-fire.jp/projects/late' }])).resolves.toBe(false);
     await expect(manager.get(started.id, organizationId, ownerUserId)).resolves.toMatchObject({ itemCount: 0 });
   });
@@ -224,15 +233,19 @@ describe('ProjectSearchJobManager', () => {
 
   it('turns a lease-expired running job into a stable failed result', async () => {
     const repository = new InMemorySearchJobRepository();
-    const { manager } = createManager(repository);
+    const { manager, operationsAudit } = createManager(repository);
     const started = await startJob(manager, provider, { limit: 10 }, jest.fn().mockReturnValue(new Promise(() => undefined)));
     const stored = repository.jobs.get(started.id)!;
     stored.leaseExpiresAt = new Date(Date.now() - 1);
 
-    const failed = await createManager(repository).manager.get(started.id, organizationId, ownerUserId);
+    const recovered = createManager(repository);
+    const failed = await recovered.manager.get(started.id, organizationId, ownerUserId);
 
     expect(failed).toMatchObject({ status: 'failed', completionReason: 'failed' });
     expect(failed.message).toContain('実行サーバーが停止');
+    expect(recovered.operationsAudit.recordSearchFinished).toHaveBeenCalledWith(expect.objectContaining({
+      id: started.id, status: 'failed', completionReason: 'failed'
+    }));
     manager.cancel(started.id, organizationId, ownerUserId).catch(() => undefined);
   });
 

@@ -6,6 +6,7 @@ import { MakuakeProjectSourceProvider } from '../infrastructure/makuake-project-
 import { PrismaProjectImportRepository } from '../infrastructure/prisma-project-import.repository';
 import { ImportCampfireProjectDto, ImportProjectDto, ProjectSource } from '../projects.dto';
 import { StructuredLogger } from '../../common/logging/structured-logger.service';
+import { ProjectOperationsAuditService } from './project-operations-audit.service';
 
 @Injectable()
 export class ImportProjectUseCase {
@@ -13,11 +14,18 @@ export class ImportProjectUseCase {
     private readonly projectImportRepository: PrismaProjectImportRepository,
     private readonly campfireProvider: CampfireProjectSourceProvider,
     private readonly makuakeProvider: MakuakeProjectSourceProvider,
-    private readonly logger: StructuredLogger
+    private readonly logger: StructuredLogger,
+    private readonly operationsAudit: ProjectOperationsAuditService
   ) {}
 
-  import(dto: ImportProjectDto, actor: AuditActor) {
-    return this.importWithProvider(this.providerFor(dto.source), dto.url, actor, { actor });
+  async import(dto: ImportProjectDto, actor: AuditActor) {
+    const provider = this.providerFor(dto.source);
+    try {
+      return await this.importWithProvider(provider, dto.url, actor, { actor });
+    } catch (error) {
+      await this.operationsAudit.recordDirectImportFailure(actor, provider.source);
+      throw error;
+    }
   }
 
   importCampfire(dto: ImportCampfireProjectDto, actor: AuditActor) {
