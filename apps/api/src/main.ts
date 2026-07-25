@@ -8,7 +8,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(StructuredLogger));
   app.setGlobalPrefix('api', {
-    exclude: ['/', '/login', '/leads-view', '/mail-workspace', '/today', '/sales-performance', '/replies', '/api/replies', '/health', '/t/open/:emailId.png', '/t/click/:token']
+    exclude: ['/', '/login', '/leads-view', '/mail-workspace', '/today', '/sales-performance', '/operations', '/replies', '/api/replies', '/health', '/t/open/:emailId.png', '/t/click/:token']
   });
   app.useGlobalPipes(
     new ValidationPipe({

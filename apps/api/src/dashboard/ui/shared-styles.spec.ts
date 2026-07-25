@@ -2,6 +2,7 @@ import { renderDashboardPage } from './dashboard-page';
 import { renderLeadsPage } from './leads-page';
 import { renderRepliesPage } from './replies-page';
 import { renderSalesPerformancePage } from './sales-performance-page';
+import { renderOperationsPage } from './operations-page';
 import { renderSharedStyles, type SharedStylePage } from './shared-styles';
 import { renderTodayPage } from './today-page';
 
@@ -11,6 +12,7 @@ describe('shared dashboard styles', () => {
     ['leads', renderLeadsPage, ['.lead-list-scroll', '.lead-detail-panel']],
     ['today', renderTodayPage, ['.today-stats', '.today-row']],
     ['sales-performance', renderSalesPerformancePage, ['.metric-grid', '.rate-grid']],
+    ['operations', renderOperationsPage, ['.operations-metric-grid', '.alert-list']],
     ['replies', renderRepliesPage, ['.reply-list', '.pagination']]
   ];
 

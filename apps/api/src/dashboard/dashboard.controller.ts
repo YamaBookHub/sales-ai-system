@@ -4,6 +4,7 @@ import { renderLeadsPage } from './ui/leads-page';
 import { renderSalesPerformancePage } from './ui/sales-performance-page';
 import { renderTodayPage } from './ui/today-page';
 import { renderRepliesPage } from './ui/replies-page';
+import { renderOperationsPage } from './ui/operations-page';
 import { RequirePermissions } from '../auth/require-permissions.decorator';
 
 @Controller()
@@ -37,6 +38,13 @@ export class DashboardController {
   @Header('Content-Type', 'text/html; charset=utf-8')
   replies() {
     return renderRepliesPage();
+  }
+
+  @Get('operations')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  @RequirePermissions('reports.read', 'ai.cost.read')
+  operations() {
+    return renderOperationsPage();
   }
 
   @Get()

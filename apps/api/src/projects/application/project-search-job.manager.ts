@@ -120,6 +120,7 @@ export class ProjectSearchJobManager {
   async cancel(id: string, organizationId: string, ownerUserId: string) {
     const current = await this.searchJobRepository.findOwned(id, organizationId, ownerUserId, new Date());
     if (!current) throw searchJobNotFound();
+    if (current.status !== 'running') return this.publicSearchJob(current);
     const message = projectSearchCompletionMessage({
       reason: 'cancelled',
       desiredLimit: current.desiredLimit,
@@ -136,7 +137,7 @@ export class ProjectSearchJobManager {
     );
     if (!cancelled) throw searchJobNotFound();
     this.activeWorkers.get(id)?.controller.abort();
-    await this.operationsAudit.recordSearchFinished(cancelled);
+    if (cancelled.status === 'cancelled') await this.operationsAudit.recordSearchFinished(cancelled);
     return this.publicSearchJob(cancelled);
   }
 

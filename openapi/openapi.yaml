@@ -68,6 +68,20 @@ paths:
           content:
             text/html:
               schema: { type: string }
+  /operations:
+    get:
+      summary: Aggregate operations monitoring dashboard HTML
+      x-permission:
+        - reports.read
+        - ai.cost.read
+      responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '200':
+          description: Operations dashboard HTML
+          content:
+            text/html:
+              schema: { type: string }
   /replies:
     get:
       summary: Reply inbox dashboard HTML
@@ -358,6 +372,40 @@ paths:
                     nullable: true
                     allOf:
                       - $ref: '#/components/schemas/ErrorResponse'
+  /api/reports/operations:
+    get:
+      summary: Aggregate operational health and cost metrics
+      description: Returns organization-scoped aggregate counts only. Project URLs, contact data, mail bodies, prompts, and raw error messages are never included.
+      x-permission:
+        - reports.read
+        - ai.cost.read
+      parameters:
+        - name: from
+          in: query
+          description: Inclusive date in Asia/Tokyo (YYYY-MM-DD). Defaults to 29 days before `to`.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Inclusive date in Asia/Tokyo (YYYY-MM-DD). Defaults to today.
+          schema: { type: string, format: date }
+      responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '200':
+          description: Aggregate operations metrics and known-code alerts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationsReportResponse' }
+        '400':
+          description: Invalid date or a period longer than 90 days
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HttpExceptionResponse' }
+        '503':
+          description: Metrics are temporarily unavailable. No database details are returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HttpExceptionResponse' }
   /api/companies:
     get:
       summary: List companies
@@ -2012,6 +2060,115 @@ components:
           nullable: true
           allOf:
             - $ref: '#/components/schemas/ErrorResponse'
+    OperationsReportResponse:
+      type: object
+      required: [data, meta, error]
+      properties:
+        data:
+          $ref: '#/components/schemas/OperationsReport'
+        meta:
+          nullable: true
+        error:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ErrorResponse'
+    OperationsReport:
+      type: object
+      description: Organization-scoped aggregate operational metrics. Contains no contact data, URLs, mail content, prompts, or raw errors.
+      required: [period, ai, searches, imports, replies, mails, alerts]
+      properties:
+        period:
+          type: object
+          required: [from, to, timezone, asOf]
+          properties:
+            from: { type: string, format: date }
+            to: { type: string, format: date }
+            timezone: { type: string, enum: [Asia/Tokyo] }
+            asOf: { type: string, format: date-time }
+        ai:
+          type: object
+          required: [costUsd, completed, failed, reserved, total]
+          properties:
+            costUsd: { type: number, minimum: 0 }
+            completed: { type: integer, minimum: 0 }
+            failed: { type: integer, minimum: 0 }
+            reserved: { type: integer, minimum: 0 }
+            total: { type: integer, minimum: 0 }
+        searches:
+          type: object
+          required: [total, completed, failed, cancelled, running, averageDurationMs, maxDurationMs, bySource]
+          properties:
+            total: { type: integer, minimum: 0 }
+            completed: { type: integer, minimum: 0 }
+            failed: { type: integer, minimum: 0 }
+            cancelled: { type: integer, minimum: 0 }
+            running: { type: integer, minimum: 0 }
+            averageDurationMs: { type: integer, minimum: 0 }
+            maxDurationMs: { type: integer, minimum: 0 }
+            bySource:
+              type: object
+              required: [campfire, makuake, green_funding, other]
+              properties:
+                campfire: { type: integer, minimum: 0 }
+                makuake: { type: integer, minimum: 0 }
+                green_funding: { type: integer, minimum: 0 }
+                other: { type: integer, minimum: 0 }
+        imports:
+          type: object
+          required: [runs, requested, imported, failed, analysisFailed]
+          properties:
+            runs: { type: integer, minimum: 0 }
+            requested: { type: integer, minimum: 0 }
+            imported: { type: integer, minimum: 0 }
+            failed: { type: integer, minimum: 0 }
+            analysisFailed: { type: integer, minimum: 0 }
+        replies:
+          type: object
+          required: [total, byCategory]
+          properties:
+            total: { type: integer, minimum: 0 }
+            byCategory:
+              type: object
+              required: [interested, need_info, meeting_request, not_interested, unsubscribe, auto_reply, complaint, unknown]
+              properties:
+                interested: { type: integer, minimum: 0 }
+                need_info: { type: integer, minimum: 0 }
+                meeting_request: { type: integer, minimum: 0 }
+                not_interested: { type: integer, minimum: 0 }
+                unsubscribe: { type: integer, minimum: 0 }
+                auto_reply: { type: integer, minimum: 0 }
+                complaint: { type: integer, minimum: 0 }
+                unknown: { type: integer, minimum: 0 }
+        mails:
+          type: object
+          required: [total, byStatus]
+          properties:
+            total: { type: integer, minimum: 0 }
+            byStatus:
+              type: object
+              required: [draft, in_review, rejected, approved, queued, sending, sent, failed, cancelled]
+              properties:
+                draft: { type: integer, minimum: 0 }
+                in_review: { type: integer, minimum: 0 }
+                rejected: { type: integer, minimum: 0 }
+                approved: { type: integer, minimum: 0 }
+                queued: { type: integer, minimum: 0 }
+                sending: { type: integer, minimum: 0 }
+                sent: { type: integer, minimum: 0 }
+                failed: { type: integer, minimum: 0 }
+                cancelled: { type: integer, minimum: 0 }
+        alerts:
+          type: array
+          items:
+            type: object
+            required: [code, severity, label, value]
+            properties:
+              code:
+                type: string
+                enum: [ai_failed, search_failed, import_failed, mail_failed, mail_sending_stuck, ai_reserved_stuck]
+              severity: { type: string, enum: [warning, critical] }
+              label: { type: string }
+              value: { type: integer, minimum: 1 }
     SalesPerformanceOwner:
       type: object
       required: [id, name, email, isActive]
@@ -2102,6 +2259,17 @@ components:
         details:
           type: object
           additionalProperties: true
+    HttpExceptionResponse:
+      type: object
+      required: [message, error, statusCode]
+      properties:
+        message:
+          oneOf:
+            - type: string
+            - type: array
+              items: { type: string }
+        error: { type: string }
+        statusCode: { type: integer }
     ProjectSource:
       type: string
       enum: [campfire, makuake, green_funding]

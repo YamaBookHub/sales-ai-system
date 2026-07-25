@@ -6,6 +6,8 @@ APIキー管理、個人情報、営業先情報、GitHub公開時の注意点�
 
 - `OPENAI_API_KEY`、`GEMINI_API_KEY`、Gmail OAuth情報は `.env` だけに置き、APIレスポンス・ログ・Gitへ出さない。
 - `GET /api/ai/usage-summary` は予算と概算費用だけを返し、APIキー、プロンプト、メール本文を返さない。
+- `GET /api/reports/operations` は組織別の集計値と既知の警告コードだけを返す。案件URL、連絡先、メール本文、AI入力、元のエラー文は取得・表示しない。
+- 運用状況画面とAPIは `reports.read` と `ai.cost.read` の両方を必要とし、AI費用を閲覧できないroleへ公開しない。
 - OpenAI予算判定はDB上の予約を含め、複数人の同時操作で上限をすり抜けないようにする。
 - `OPENAI_MONTHLY_BUDGET_USD` 未設定時は自動停止しないため、本番公開前に運用上限を設定する。
 - 画面と業務APIは推測不能なsession Cookieで保護し、認証済みの変更操作はOriginとCSRF tokenを検証する。

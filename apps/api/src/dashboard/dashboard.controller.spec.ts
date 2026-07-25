@@ -1,4 +1,5 @@
 import { PATH_METADATA } from '@nestjs/common/constants';
+import { REQUIRED_PERMISSIONS } from '../auth/require-permissions.decorator';
 import { DashboardController } from './dashboard.controller';
 
 describe('DashboardController HTML contracts', () => {
@@ -26,6 +27,7 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('class="top-nav" data-ui="top-nav"');
     expect(html).toContain("location.href='/today'");
     expect(html).toContain("location.href='/sales-performance'");
+    expect(html).toContain("location.href='/operations'");
     expect(html).toContain("location.href='/replies'");
     expect(html).toContain("location.href='/'");
     expect(html).toContain("location.href='/leads-view'");
@@ -38,7 +40,7 @@ describe('DashboardController HTML contracts', () => {
 
     const navStart = html.indexOf('<div class="top-nav" data-ui="top-nav">');
     const nav = html.slice(navStart, html.indexOf('</div>', navStart));
-    const navPaths = ['/today', '/sales-performance', '/replies', '/leads-view', '/mail-workspace', '/'];
+    const navPaths = ['/today', '/sales-performance', '/operations', '/replies', '/leads-view', '/mail-workspace', '/'];
     const positions = navPaths.map((path) => nav.indexOf(`location.href='${path}'`));
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
@@ -50,6 +52,7 @@ describe('DashboardController HTML contracts', () => {
     expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.mailWorkspace)).toBe('mail-workspace');
     expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.today)).toBe('today');
     expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.salesPerformance)).toBe('sales-performance');
+    expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.operations)).toBe('operations');
     expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.replies)).toBe('replies');
     expect(Reflect.getMetadata(PATH_METADATA, DashboardController.prototype.index)).toBe('/');
   });
@@ -113,6 +116,36 @@ describe('DashboardController HTML contracts', () => {
     expect(html).toContain('追客停止');
     expect(html).toContain('表示できる返信はありません');
     expect(html).toContain('function changePage(delta)');
+  });
+
+  it('returns operations HTML with aggregate-only monitoring states', () => {
+    const html = controller.operations();
+
+    expectHtmlResponse(html);
+    expectTopNavigation(html);
+    expect(html).toContain('<body data-ui-page="operations">');
+    expect(html).toContain('<h1>運用状況</h1>');
+    expect(html).toContain('data-ui="operations-filters"');
+    expect(html).toContain('data-ui="operations-alerts"');
+    expect(html).toContain('data-ui="operations-summary"');
+    expect(html).toContain('data-ui="operations-ai"');
+    expect(html).toContain('data-ui="operations-acquisition"');
+    expect(html).toContain('data-ui="operations-communication"');
+    expect(html).toContain("'/api/reports/operations?' + params.toString()");
+    expect(html).toContain("api('/api/ai/usage-summary'");
+    expect(html).toContain('期間内の失敗・現在の停滞');
+    expect(html).toContain('確認が必要な状態はありません。');
+    expect(html).toContain('function renderError()');
+    expect(html).not.toContain('failedReason');
+    expect(html).not.toContain('fromEmail');
+    expect(html).not.toContain('bodyText');
+    expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, DashboardController.prototype.operations))
+      .toEqual(['reports.read', 'ai.cost.read']);
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
+    expect(scripts).not.toHaveLength(0);
+    for (const script of scripts) {
+      expect(() => new Function(script)).not.toThrow();
+    }
   });
 
   it('returns URL search HTML with key DOM ids and navigation', () => {

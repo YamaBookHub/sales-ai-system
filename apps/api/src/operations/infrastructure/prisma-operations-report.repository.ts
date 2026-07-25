@@ -24,18 +24,44 @@ export class PrismaOperationsReportRepository implements OperationsReportReposit
   async summarize(organizationId: string, period: OperationsPeriod): Promise<OperationsReportData> {
     const createdWithinPeriod = { gte: period.startUtc, lt: period.endExclusiveUtc };
     const now = new Date(period.asOf);
-    const [aiRows, terminalSearchAudits, runningSearches, importAudits, replyRows, mailRows, stuckSendingCount, staleReservedAiCount] = await Promise.all([
+    const staleLeaseUpperBound = new Date(Math.min(period.endExclusiveUtc.getTime() - 1, now.getTime()));
+    const [
+      aiRows,
+      terminalSearchAudits,
+      runningSearches,
+      staleSearches,
+      importAudits,
+      replyRows,
+      mailRows,
+      stuckSendingCount,
+      staleReservedAiCount
+    ] = await Promise.all([
       this.prisma.aiUsageLedger.findMany({
         where: { organizationId, createdAt: createdWithinPeriod },
         select: { status: true, estimatedCostUsd: true, actualCostUsd: true }
       }),
       this.prisma.auditLog.findMany({
         where: { organizationId, action: SAFE_SEARCH_ACTION, createdAt: createdWithinPeriod },
-        select: { action: true, after: true }
+        orderBy: { createdAt: 'asc' },
+        select: { entityId: true, after: true }
       }),
       this.prisma.projectSearchJob.findMany({
-        where: { organizationId, status: ProjectSearchJobStatus.running, startedAt: createdWithinPeriod },
+        where: {
+          organizationId,
+          status: ProjectSearchJobStatus.running,
+          startedAt: createdWithinPeriod,
+          leaseExpiresAt: { gt: now },
+          expiresAt: { gt: now }
+        },
         select: { source: true }
+      }),
+      this.prisma.projectSearchJob.findMany({
+        where: {
+          organizationId,
+          status: ProjectSearchJobStatus.running,
+          leaseExpiresAt: { gte: period.startUtc, lte: staleLeaseUpperBound }
+        },
+        select: { id: true, source: true, startedAt: true, leaseExpiresAt: true }
       }),
       this.prisma.auditLog.findMany({
         where: { organizationId, action: { in: [...SAFE_IMPORT_ACTIONS] }, createdAt: createdWithinPeriod },
@@ -73,7 +99,20 @@ export class PrismaOperationsReportRepository implements OperationsReportReposit
         estimatedCostUsd: decimalToNumber(row.estimatedCostUsd),
         actualCostUsd: row.actualCostUsd === null ? null : decimalToNumber(row.actualCostUsd)
       })),
-      terminalSearches: terminalSearchAudits.flatMap((row) => parseSearchAudit(row.after)),
+      terminalSearches: uniqueTerminalSearches([
+        ...terminalSearchAudits.flatMap((row) => parseSearchAudit(row.entityId, row.after)),
+        ...staleSearches.flatMap((row) => {
+          const source = asSource(row.source);
+          return source
+            ? [{
+                jobId: row.id,
+                source,
+                status: 'failed' as const,
+                durationMs: Math.max(0, row.leaseExpiresAt.getTime() - row.startedAt.getTime())
+              }]
+            : [];
+        })
+      ]),
       runningSearches: runningSearches.flatMap((row) => {
         const source = asSource(row.source);
         return source ? [{ source }] : [];
@@ -93,13 +132,21 @@ export class PrismaOperationsReportRepository implements OperationsReportReposit
   }
 }
 
-function parseSearchAudit(value: Prisma.JsonValue | null) {
-  if (!isRecord(value)) return [];
+function uniqueTerminalSearches(rows: OperationsReportData['terminalSearches']) {
+  const byJobId = new Map<string, OperationsReportData['terminalSearches'][number]>();
+  for (const row of rows) {
+    byJobId.set(row.jobId, row);
+  }
+  return [...byJobId.values()];
+}
+
+function parseSearchAudit(entityId: string | null, value: Prisma.JsonValue | null) {
+  if (!entityId || !isRecord(value)) return [];
   const source = asSource(value.source);
   const status = asSearchStatus(value.status);
   const durationMs = asNonNegativeInteger(value.durationMs);
   if (!source || !status || durationMs === null) return [];
-  return [{ source, status, durationMs }];
+  return [{ jobId: entityId, source, status, durationMs }];
 }
 
 function parseImportAudit(action: string, value: Prisma.JsonValue | null): OperationsReportData['imports'] {

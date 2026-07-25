@@ -11,9 +11,23 @@ export function renderNavigationBadgesScript() {
     element.setAttribute('aria-label', value + '件');
   }
 
+  function applyPermissionVisibility(user) {
+    const granted = new Set(Array.isArray(user && user.permissions) ? user.permissions : []);
+    document.querySelectorAll('[data-required-permissions]').forEach((element) => {
+      const required = String(element.getAttribute('data-required-permissions') || '')
+        .split(/\\s+/)
+        .filter(Boolean);
+      element.hidden = !required.every((permission) => granted.has(permission));
+    });
+  }
+
   async function refresh() {
     try {
-      const summary = await global.SalesAiApi.request('/api/navigation-summary');
+      const [summary, current] = await Promise.all([
+        global.SalesAiApi.request('/api/navigation-summary'),
+        global.SalesAiApi.loadCurrentUser()
+      ]);
+      applyPermissionVisibility(current && current.user);
       badgeKeys.forEach((key) => setBadge(key, summary[key]));
     } catch (_error) {
       badgeKeys.forEach((key) => setBadge(key, 0));

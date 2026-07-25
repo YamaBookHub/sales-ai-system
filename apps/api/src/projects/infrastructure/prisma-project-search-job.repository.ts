@@ -56,7 +56,14 @@ export class PrismaProjectSearchJobRepository extends ProjectSearchJobRepository
           ownerUserId: input.ownerUserId,
           status: 'running'
         },
-        select: { expiresAt: true }
+        select: {
+          id: true,
+          source: true,
+          startedAt: true,
+          itemCount: true,
+          importableCount: true,
+          expiresAt: true
+        }
       });
       const extendedExpiresAt = runningJobs.reduce(
         (latest, job) => (job.expiresAt > latest ? job.expiresAt : latest),
@@ -78,6 +85,26 @@ export class PrismaProjectSearchJobRepository extends ProjectSearchJobRepository
           expiresAt: extendedExpiresAt
         }
       });
+      if (runningJobs.length) {
+        await tx.auditLog.createMany({
+          data: runningJobs.map((job) => ({
+            organizationId: input.organizationId,
+            userId: input.ownerUserId,
+            action: 'projects.search_finished',
+            entityType: 'ProjectSearchJob',
+            entityId: job.id,
+            createdAt: input.startedAt,
+            after: {
+              source: job.source,
+              status: 'cancelled',
+              durationMs: Math.max(0, input.startedAt.getTime() - job.startedAt.getTime()),
+              itemCount: Math.max(0, job.itemCount),
+              importableCount: Math.max(0, job.importableCount),
+              completionReason: 'cancelled'
+            }
+          }))
+        });
+      }
 
       const job = await tx.projectSearchJob.create({ data: toCreateData(input) });
       return toStoredProjectSearchJob(job);
@@ -216,8 +243,43 @@ export class PrismaProjectSearchJobRepository extends ProjectSearchJobRepository
   }
 
   async deleteExpired(now: Date): Promise<number> {
-    const deleted = await this.prisma.projectSearchJob.deleteMany({ where: { expiresAt: { lte: now } } });
-    return deleted.count;
+    return this.prisma.$transaction(async (tx) => {
+      const abandoned = await tx.projectSearchJob.findMany({
+        where: { status: 'running', expiresAt: { lte: now } },
+        select: {
+          id: true,
+          organizationId: true,
+          ownerUserId: true,
+          source: true,
+          startedAt: true,
+          leaseExpiresAt: true,
+          itemCount: true,
+          importableCount: true
+        }
+      });
+      if (abandoned.length) {
+        await tx.auditLog.createMany({
+          data: abandoned.map((job) => ({
+            organizationId: job.organizationId,
+            userId: job.ownerUserId,
+            action: 'projects.search_finished',
+            entityType: 'ProjectSearchJob',
+            entityId: job.id,
+            createdAt: job.leaseExpiresAt,
+            after: {
+              source: job.source,
+              status: 'failed',
+              durationMs: Math.max(0, job.leaseExpiresAt.getTime() - job.startedAt.getTime()),
+              itemCount: Math.max(0, job.itemCount),
+              importableCount: Math.max(0, job.importableCount),
+              completionReason: 'failed'
+            }
+          }))
+        });
+      }
+      const deleted = await tx.projectSearchJob.deleteMany({ where: { expiresAt: { lte: now } } });
+      return deleted.count;
+    });
   }
 }
 

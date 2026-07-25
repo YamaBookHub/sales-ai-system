@@ -5,7 +5,7 @@
 ### 共通
 
 - NestJS REST API。global prefix は `api`。
-- ただし `GET /`、`GET /leads-view`、`GET /mail-workspace`、`GET /today`、`GET /sales-performance`、`GET /replies`、`GET /health`、`GET /t/open/{emailId}.png`、`GET /t/click/{token}` は `/api` 外。
+- ただし `GET /`、`GET /leads-view`、`GET /mail-workspace`、`GET /today`、`GET /sales-performance`、`GET /operations`、`GET /replies`、`GET /health`、`GET /t/open/{emailId}.png`、`GET /t/click/{token}` は `/api` 外。
 - JSONレスポンスは原則 `{ data, meta, error }`。成功時は `error: null`、`meta` は原則 `null`。
 - 全responseは `X-Request-Id` を返す。requestの同headerがUUIDなら引き継ぎ、それ以外はサーバーでUUIDを生成する。request IDは障害照合用であり、認証や冪等性判定には使わない。
 - HTML画面と開封計測画像、クリックリダイレクトはこのwrapperの対象外。
@@ -53,6 +53,7 @@ local loginは `APP_ENV=local`、`AUTH_MODE=local`、loopback origin、`AUTH_DEV
 | GET | `/mail-workspace` | - | - | メール画面HTML |
 | GET | `/today` | - | - | 今日の対応画面HTML |
 | GET | `/sales-performance` | - | - | 営業成績画面HTML |
+| GET | `/operations` | - | - | 運用状況画面HTML |
 | GET | `/replies` | - | - | 返信一覧画面HTML |
 | GET | `/health` | - | - | `{ data: { status: "ok" }, meta, error }` |
 
@@ -131,6 +132,16 @@ Opportunityは、SalesLeadの候補・メール作業状態とは分離した商
 集計は期間内に実送信日時`OutreachEmail.sentAt`を持ち、送信済みイベントで裏付けられた非削除Leadを母集団とする。イベント登録日は集計日付に使わない。`sentMessages`は送信メール・サイトDM・問い合わせフォーム文面の件数、`contactedLeads`は重複を除いた営業対象数である。返信率、商談率、受注率はすべて`contactedLeads`を分母とし、実送信後に返信・商談・受注へ到達したかを集計する。返信は`EmailReply`、商談・受注到達は`OpportunityStageHistory`、現在の失注理由は`stage=lost`の`Opportunity`を正本とする。0件時の率は`0`で、画面表示中のページ件数は使用しない。
 
 担当者候補APIは現在Opportunityを持つ利用者を返す。過去成績を確認できるよう、無効化済み利用者も`isActive: false`として含める。
+
+### 運用状況API
+
+| Method | Path | Query | Body |
+|---|---|---|---|
+| GET | `/api/reports/operations` | `from`, `to` | - |
+
+`from`と`to`は`Asia/Tokyo`の日付を`YYYY-MM-DD`で指定し、両端を含む。省略時は当日を含む直近30暦日、最大90日である。現在の組織について、AI利用費・AI処理状態、検索件数と所要時間、取り込み結果、返信分類、メール状態、既知の警告コードだけを返す。
+
+このAPIは集計専用で、案件URL、会社・担当者の連絡先、メール件名・本文、AIプロンプト、元のエラー文を返さない。DB障害時は内部情報を隠した503を返す。
 
 ### 次回対応Task API
 

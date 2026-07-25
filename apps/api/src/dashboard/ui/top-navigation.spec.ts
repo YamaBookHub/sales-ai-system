@@ -13,8 +13,11 @@ describe('top navigation', () => {
 
     expect(html).toContain("location.href='/sales-performance'");
     expect(html).toContain('営業成績');
+    expect(html).toContain("location.href='/operations'");
+    expect(html).toContain('運用状況');
+    expect(html).toContain('data-required-permissions="reports.read ai.cost.read"');
 
-    const paths = ['/today', '/sales-performance', '/replies', '/leads-view', '/mail-workspace', '/'];
+    const paths = ['/today', '/sales-performance', '/operations', '/replies', '/leads-view', '/mail-workspace', '/'];
     const positions = paths.map((path) => html.indexOf(`location.href='${path}'`));
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
   });

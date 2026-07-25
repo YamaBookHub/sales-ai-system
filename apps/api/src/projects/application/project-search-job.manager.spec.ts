@@ -144,6 +144,21 @@ describe('ProjectSearchJobManager', () => {
     await expect(manager.get(started.id, organizationId, ownerUserId)).resolves.toMatchObject({ itemCount: 0 });
   });
 
+  it('does not record a second terminal event when cancel is retried after completion', async () => {
+    const { manager, operationsAudit } = createManager();
+    const started = await startJob(manager, provider, { limit: 1 }, jest.fn().mockResolvedValue({
+      items: [{ url: 'https://camp-fire.jp/projects/completed' }],
+      diagnostics
+    }));
+    await waitForTerminal(manager, started.id);
+    operationsAudit.recordSearchFinished.mockClear();
+
+    await expect(manager.cancel(started.id, organizationId, ownerUserId))
+      .resolves.toMatchObject({ status: 'completed' });
+
+    expect(operationsAudit.recordSearchFinished).not.toHaveBeenCalled();
+  });
+
   it('adds progressive candidates, removes existing URLs, and preserves normalized order', async () => {
     const { manager } = createManager(undefined, ['https://camp-fire.jp/projects/existing']);
     let finish!: (value: any) => void;

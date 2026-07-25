@@ -45,6 +45,7 @@ export type OperationsReportData = {
     actualCostUsd: number | null;
   }>;
   terminalSearches: Array<{
+    jobId: string;
     source: OperationsSource;
     status: OperationsSearchStatus;
     durationMs: number;

@@ -45,10 +45,19 @@ describe('PrismaProjectSearchJobRepository', () => {
 
   it('cancels an older running job and creates a replacement under the same owner lock', async () => {
     const oldExpiry = new Date('2026-07-21T00:45:00.000Z');
+    const superseded = {
+      id: 'old-job',
+      source: 'campfire',
+      startedAt: new Date('2026-07-20T23:59:00.000Z'),
+      itemCount: 4,
+      importableCount: 3,
+      expiresAt: oldExpiry
+    };
     const tx = {
+      auditLog: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
       $executeRawUnsafe: jest.fn(),
       projectSearchJob: {
-        findMany: jest.fn().mockResolvedValue([{ expiresAt: oldExpiry }]),
+        findMany: jest.fn().mockResolvedValue([superseded]),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         create: jest.fn().mockResolvedValue(jobRow())
       }
@@ -65,7 +74,14 @@ describe('PrismaProjectSearchJobRepository', () => {
     );
     expect(tx.projectSearchJob.findMany).toHaveBeenCalledWith({
       where: { organizationId: 'organization-1', ownerUserId: 'user-1', status: 'running' },
-      select: { expiresAt: true }
+      select: {
+        id: true,
+        source: true,
+        startedAt: true,
+        itemCount: true,
+        importableCount: true,
+        expiresAt: true
+      }
     });
     expect(tx.projectSearchJob.updateMany).toHaveBeenCalledWith({
       where: { organizationId: 'organization-1', ownerUserId: 'user-1', status: 'running' },
@@ -86,6 +102,24 @@ describe('PrismaProjectSearchJobRepository', () => {
         source: 'campfire',
         items: [{ title: '商品', url: 'https://example.test/projects/1' }]
       })
+    });
+    expect(tx.auditLog.createMany).toHaveBeenCalledWith({
+      data: [{
+        organizationId: 'organization-1',
+        userId: 'user-1',
+        action: 'projects.search_finished',
+        entityType: 'ProjectSearchJob',
+        entityId: 'old-job',
+        createdAt: now,
+        after: {
+          source: 'campfire',
+          status: 'cancelled',
+          durationMs: 60_000,
+          itemCount: 4,
+          importableCount: 3,
+          completionReason: 'cancelled'
+        }
+      }]
     });
   });
 
@@ -239,15 +273,15 @@ describe('PrismaProjectSearchJobRepository', () => {
   it('fails only an un-cancelled job whose lease expired, then deletes expired TTL rows', async () => {
     const failed = jobRow({ status: 'failed', completionReason: 'failed', message: 'workerが停止しました' });
     const tx = {
+      auditLog: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
       projectSearchJob: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-        findFirst: jest.fn().mockResolvedValue(failed)
+        findFirst: jest.fn().mockResolvedValue(failed),
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn().mockResolvedValue({ count: 3 })
       }
     };
-    const prisma = {
-      $transaction: jest.fn(async (callback) => callback(tx)),
-      projectSearchJob: { deleteMany: jest.fn().mockResolvedValue({ count: 3 }) }
-    };
+    const prisma = { $transaction: jest.fn(async (callback) => callback(tx)) };
     const repository = new PrismaProjectSearchJobRepository(prisma as any);
 
     await expect(repository.failExpiredLease('job-1', 'organization-1', 'user-1', now, 'workerが停止しました', expiresAt))
@@ -260,6 +294,50 @@ describe('PrismaProjectSearchJobRepository', () => {
       }),
       data: expect.objectContaining({ status: 'failed', completionReason: 'failed', message: 'workerが停止しました' })
     }));
-    expect(prisma.projectSearchJob.deleteMany).toHaveBeenCalledWith({ where: { expiresAt: { lte: now } } });
+    expect(tx.projectSearchJob.deleteMany).toHaveBeenCalledWith({ where: { expiresAt: { lte: now } } });
+  });
+
+  it('records an abandoned running job before deleting its expired row', async () => {
+    const abandoned = {
+      id: 'job-abandoned',
+      organizationId: 'organization-1',
+      ownerUserId: 'user-1',
+      source: 'makuake',
+      startedAt: new Date('2026-07-20T23:59:00.000Z'),
+      leaseExpiresAt: now,
+      itemCount: 2,
+      importableCount: 1
+    };
+    const tx = {
+      auditLog: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      projectSearchJob: {
+        findMany: jest.fn().mockResolvedValue([abandoned]),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 })
+      }
+    };
+    const repository = new PrismaProjectSearchJobRepository({
+      $transaction: jest.fn(async (callback) => callback(tx))
+    } as any);
+
+    await expect(repository.deleteExpired(now)).resolves.toBe(1);
+
+    expect(tx.auditLog.createMany).toHaveBeenCalledWith({
+      data: [{
+        organizationId: 'organization-1',
+        userId: 'user-1',
+        action: 'projects.search_finished',
+        entityType: 'ProjectSearchJob',
+        entityId: 'job-abandoned',
+        createdAt: now,
+        after: {
+          source: 'makuake',
+          status: 'failed',
+          durationMs: 60_000,
+          itemCount: 2,
+          importableCount: 1,
+          completionReason: 'failed'
+        }
+      }]
+    });
   });
 });

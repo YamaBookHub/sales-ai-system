@@ -35,12 +35,26 @@ describe('PrismaOperationsReportRepository', () => {
       select: { status: true, estimatedCostUsd: true, actualCostUsd: true }
     }));
     expect(prisma.projectSearchJob.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ organizationId, status: 'running' }),
+      where: expect.objectContaining({
+        organizationId,
+        status: 'running',
+        leaseExpiresAt: { gt: expect.any(Date) },
+        expiresAt: { gt: expect.any(Date) }
+      }),
       select: { source: true }
+    }));
+    expect(prisma.projectSearchJob.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        organizationId,
+        status: 'running',
+        leaseExpiresAt: { gte: expect.any(Date), lte: expect.any(Date) }
+      }),
+      select: { id: true, source: true, startedAt: true, leaseExpiresAt: true }
     }));
     expect(prisma.auditLog.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ organizationId, action: 'projects.search_finished' }),
-      select: { action: true, after: true }
+      orderBy: { createdAt: 'asc' },
+      select: { entityId: true, after: true }
     }));
     expect(prisma.auditLog.findMany.mock.calls[1][0]).toEqual(expect.objectContaining({
       where: expect.objectContaining({ organizationId, action: { in: ['projects.import', 'projects.import_failed', 'projects.bulk_import'] } }),
@@ -60,7 +74,7 @@ describe('PrismaOperationsReportRepository', () => {
   it('parses only allowlisted safe audit fields into aggregates', async () => {
     const prisma = createPrisma();
     prisma.auditLog.findMany
-      .mockResolvedValueOnce([{ action: 'projects.search_finished', after: {
+      .mockResolvedValueOnce([{ entityId: 'job_1', after: {
         source: 'campfire', status: 'completed', durationMs: 120, itemCount: 3, importableCount: 2, completionReason: 'desired_reached', message: 'ignore', url: 'https://private.test'
       } }])
       .mockResolvedValueOnce([
@@ -75,7 +89,7 @@ describe('PrismaOperationsReportRepository', () => {
     const data = await repository.summarize(organizationId, resolveOperationsPeriod({}, new Date('2026-07-25T00:00:00.000Z')));
 
     expect(data).toEqual(expect.objectContaining({
-      terminalSearches: [{ source: 'campfire', status: 'completed', durationMs: 120 }],
+      terminalSearches: [{ jobId: 'job_1', source: 'campfire', status: 'completed', durationMs: 120 }],
       imports: [
         { action: 'projects.import', source: 'campfire', requested: 1, imported: 1, failed: 0, analysisFailed: 0 },
         { action: 'projects.import_failed', source: 'makuake', requested: 1, imported: 0, failed: 1, analysisFailed: 0 },
@@ -86,5 +100,48 @@ describe('PrismaOperationsReportRepository', () => {
     }));
     expect(JSON.stringify(data)).not.toContain('private');
     expect(JSON.stringify(data)).not.toContain('https://');
+  });
+
+  it('counts a terminal search job once when a retry produced duplicate audit rows', async () => {
+    const prisma = createPrisma();
+    prisma.auditLog.findMany
+      .mockResolvedValueOnce([
+        { entityId: 'job_1', after: { source: 'campfire', status: 'completed', durationMs: 120 } },
+        { entityId: 'job_1', after: { source: 'campfire', status: 'completed', durationMs: 120 } }
+      ])
+      .mockResolvedValueOnce([]);
+    const repository = new PrismaOperationsReportRepository(prisma as any);
+
+    const data = await repository.summarize(
+      organizationId,
+      resolveOperationsPeriod({}, new Date('2026-07-25T00:00:00.000Z'))
+    );
+
+    expect(data.terminalSearches).toEqual([
+      { jobId: 'job_1', source: 'campfire', status: 'completed', durationMs: 120 }
+    ]);
+  });
+
+  it('treats a lease-expired job as failed instead of currently running', async () => {
+    const prisma = createPrisma();
+    prisma.projectSearchJob.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{
+        id: 'job_stale',
+        source: 'makuake',
+        startedAt: new Date('2026-07-25T00:00:00.000Z'),
+        leaseExpiresAt: new Date('2026-07-25T00:00:15.000Z')
+      }]);
+    const repository = new PrismaOperationsReportRepository(prisma as any);
+
+    const data = await repository.summarize(
+      organizationId,
+      resolveOperationsPeriod({}, new Date('2026-07-25T01:00:00.000Z'))
+    );
+
+    expect(data.runningSearches).toEqual([]);
+    expect(data.terminalSearches).toEqual([
+      { jobId: 'job_stale', source: 'makuake', status: 'failed', durationMs: 15_000 }
+    ]);
   });
 });

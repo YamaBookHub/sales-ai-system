@@ -7,14 +7,18 @@ describe('operations report domain', () => {
     expect(resolveOperationsPeriod({}, now)).toMatchObject({
       from: '2026-06-26',
       to: '2026-07-25',
-      timezone: 'Asia/Tokyo'
+      timezone: 'Asia/Tokyo',
+      startUtc: new Date('2026-06-25T15:00:00.000Z'),
+      endExclusiveUtc: new Date('2026-07-25T15:00:00.000Z')
     });
   });
 
   it('accepts exactly 90 inclusive calendar days and rejects a longer period', () => {
     expect(resolveOperationsPeriod({ from: '2026-04-27', to: '2026-07-25' }, now)).toMatchObject({
       from: '2026-04-27',
-      to: '2026-07-25'
+      to: '2026-07-25',
+      startUtc: new Date('2026-04-26T15:00:00.000Z'),
+      endExclusiveUtc: new Date('2026-07-25T15:00:00.000Z')
     });
     expect(() => resolveOperationsPeriod({ from: '2026-04-26', to: '2026-07-25' }, now))
       .toThrow(new OperationsPeriodError('range_too_long'));
@@ -52,9 +56,9 @@ describe('operations report domain', () => {
         { status: 'reserved', estimatedCostUsd: 0.03, actualCostUsd: null }
       ],
       terminalSearches: [
-        { source: 'campfire', status: 'completed', durationMs: 100 },
-        { source: 'makuake', status: 'failed', durationMs: 300 },
-        { source: 'campfire', status: 'cancelled', durationMs: 200 }
+        { jobId: 'job_1', source: 'campfire', status: 'completed', durationMs: 100 },
+        { jobId: 'job_2', source: 'makuake', status: 'failed', durationMs: 300 },
+        { jobId: 'job_3', source: 'campfire', status: 'cancelled', durationMs: 200 }
       ],
       runningSearches: [{ source: 'makuake' }],
       imports: [

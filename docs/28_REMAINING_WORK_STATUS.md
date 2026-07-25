@@ -58,7 +58,7 @@ Baseline:
 | 33 | LO-001 | 公開前 | complete | Terra T3 + read-only audit | LA-003 | 2026-07-22 / JSON構造化ログ・UUID request ID・actor context・5xx/AI/scraper/mail失敗契約、128 suites 522 tests・型・build成功 | 構造化ログ |
 | 34 | LO-002 | 公開前 | complete | Terra T3 + read-only audits | LR-003, LA-004, LA-007 | 2026-07-23 / secretなしCI・migration/runtime multi-stage・空DB16 migrations・drift 0・Docker smoke・128 suites 522 tests・実DB11 suites 41 tests成功 | CI・本番artifact |
 | 35 | LA-006 | 公開前 | complete | Sol T4 -> Terra + Sol audit | LA-003, LO-002 | 2026-07-25 / AES-256-GCM暗号化、同一exported snapshot、平文fileなしstream復元、restore専用DB marker、UUID、認証済み保持削除planを実装。database-ops imageから隔離DBへ全26 table・16 migrations・349 columns・88 constraints・138 indexes・107 enumsを復元し、relation 0違反・schema drift 0。129 suites 531 tests、verify・Docker build成功 | バックアップ・復元確認 |
-| 36 | LO-003 | P1 | pending | Terra T3 | LM-005, LO-001 | - | 監視・費用表示 |
+| 36 | LO-003 | P1 | complete | Terra T3 + Sol/Luna audit + main | LM-005, LO-001 | 2026-07-25 / 組織・JST期間単位のAI費用、検索時間、取込失敗、返信、mail状態、停滞警告を集計するAPIと権限制御付き運用画面を実装。検索完了・中止・失敗・期限切れの安全な監査記録と重複排除を補強。OpenAPI 97 operations、136 suites 556 tests・Prisma・build成功 | 監視・費用表示 |
 | 37 | LP-001 | 販売後 | deferred | Sol T4 | LA-007, SM-001 | - | 課金・契約 |
 
 ## Deferred backlog
@@ -131,3 +131,5 @@ Baseline:
 | 2026-07-23 | LO-002 | Terra implementation + read-only audit agents + main | complete | migration/runtime targetを分離し、非root API、Playwright Chromium、healthcheck、migration provider lock、artifact契約を実装。migration imageから空DBへ全16 migrationを適用し、未適用・schema drift 0、runtime metadata・Prisma/Chromium・secret不在smokeを確認。128 suites 522 tests、実DB11 suites 41 tests、verify・両Docker build成功。CIはimage push・本番deployなし、ブラウザとport 3000は未使用 |
 | 2026-07-25 | LA-006 | Sol design + Terra implementation + main | start | 暗号化backup、保持削除、誤復元防止、隔離DBへの実restore、月次演習の固定を開始 |
 | 2026-07-25 | LA-006 | Sol audit + main | complete | auditで検出した時点ずれ・平文一時dump・復元先自己申告・並行名衝突・schema偽陽性・mtime削除・外部schema混入・SSL設定欠落・破損世代保持を補強。同一snapshot、public限定backup、stream復元、DB marker、空public schemaの非CASCADE再作成、UUID、schema定義一致、認証済み削除planを実装し、専用DBとdatabase-ops imageの両方で復元成功。129 suites 531 tests、OpenAPI・Prisma・build・Docker build成功。ブラウザとport 3000は未使用 |
+| 2026-07-25 | LO-003 | Terra design audit + main | start | AI費用、失敗、検索時間、取り込み失敗、返信、mail状態を組織・期間単位で集計する運用画面とAPIの実装を開始 |
+| 2026-07-25 | LO-003 | Terra implementation + Sol/Luna audit + main | complete | `/operations`と`GET /api/reports/operations`を追加し、AI費用・検索・取込・返信・mailの期間集計と停滞警告を実装。組織境界、権限、個人情報非表示、JST境界、検索jobの完了・中止・失敗・期限切れ監査、再試行時の重複排除を固定。OpenAPI 86 paths・97 operations、136 suites 556 tests、Prisma・build・diff check成功。ブラウザとport 3000はユーザー指示により未使用 |
