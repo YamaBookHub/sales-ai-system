@@ -56,7 +56,7 @@ Baseline:
 | 31 | LA-007 | 公開前 | complete | Sol T4 -> Terra | LA-004 | 2026-07-22 / Organization・Membership・全業務read/write scope・組織別session/RBAC・越境拒否を実装。実PostgreSQL integrationを含む11 suites 41 tests、全unit 126 suites 506 tests、型・Prisma・OpenAPI・build成功 | 組織ごとのデータ分離 |
 | 32 | LA-005 | 公開前 | complete | Sol T4 -> Terra | LA-003, LS-006 | 2026-07-22 / PostgreSQL共有store・owner/organization隔離・TTL・lease・複数instance cancel・同時開始排他・restart後の期限切れ状態確定を実装。実DB integration成功 | job所有者・永続化 |
 | 33 | LO-001 | 公開前 | complete | Terra T3 + read-only audit | LA-003 | 2026-07-22 / JSON構造化ログ・UUID request ID・actor context・5xx/AI/scraper/mail失敗契約、128 suites 522 tests・型・build成功 | 構造化ログ |
-| 34 | LO-002 | 公開前 | pending | Terra T3 | LR-003, LA-004, LA-007 | - | CI・本番artifact |
+| 34 | LO-002 | 公開前 | complete | Terra T3 + read-only audits | LR-003, LA-004, LA-007 | 2026-07-23 / secretなしCI・migration/runtime multi-stage・空DB16 migrations・drift 0・Docker smoke・128 suites 522 tests・実DB11 suites 41 tests成功 | CI・本番artifact |
 | 35 | LA-006 | 公開前 | pending | Sol T4 -> Terra | LA-003, LO-002 | - | バックアップ・復元確認 |
 | 36 | LO-003 | P1 | pending | Terra T3 | LM-005, LO-001 | - | 監視・費用表示 |
 | 37 | LP-001 | 販売後 | deferred | Sol T4 | LA-007, SM-001 | - | 課金・契約 |
@@ -127,3 +127,5 @@ Baseline:
 | 2026-07-22 | LA-005 | Terra implementation + Sol audit + main | complete | ProjectSearchJobをPostgreSQL共有storeへ移行。owner/organization境界、TTL、lease heartbeat、stale write拒否、複数instance cancel、同一owner同時開始の排他、restart後の期限切れfailed確定を実装し、専用実DBintegrationを含む全11 suites 41 testsが成功 |
 | 2026-07-22 | LO-001 | Terra implementation + read-only audit + main | start | request ID、actor context、5xx・AI・scraper・mail失敗の構造化ログ契約と個人情報非出力の実装を開始 |
 | 2026-07-22 | LO-001 | Terra implementation + read-only audit + main | complete | 全responseのUUID request ID、JSON event、認証actor連携を実装。本文・平文email・IP・query・token・error message/stackを除外し、Gmail失敗理由も安全なstatus/codeへ正規化。scraper失敗とDB/業務失敗を分離し、128 suites 522 tests、型検査、build、diff check成功。ブラウザとport 3000は未使用 |
+| 2026-07-23 | LO-002 | Terra implementation + read-only audit agents + main | start | secretなしCI、production multi-stage Docker artifact、migration適用・drift確認の固定を開始 |
+| 2026-07-23 | LO-002 | Terra implementation + read-only audit agents + main | complete | migration/runtime targetを分離し、非root API、Playwright Chromium、healthcheck、migration provider lock、artifact契約を実装。migration imageから空DBへ全16 migrationを適用し、未適用・schema drift 0、runtime metadata・Prisma/Chromium・secret不在smokeを確認。128 suites 522 tests、実DB11 suites 41 tests、verify・両Docker build成功。CIはimage push・本番deployなし、ブラウザとport 3000は未使用 |

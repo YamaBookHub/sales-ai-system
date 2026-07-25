@@ -4,9 +4,12 @@
 
 - APIはNestJSの `apps/api` を `nest build api` でbuildする。
 - DBはPostgreSQL、ORMはPrismaである。
-- 現行package scriptsにはAPIのstart、test、Prisma validate/generate/migrate/seedがある。
-- worker、scheduler、Redis、DLQ、production用Dockerfile、`npm run lint`、`npm run start:worker`、`npm run start:scheduler` は未実装である。デプロイ手順に実装済みのscriptとして記載しない。
-- 認証と単一組織内のRBAC・監査は `37_AUTHENTICATION_CONTRACT.md` と `38_RBAC_AUDIT_CONTRACT.md` に従って実装済みである。組織分離が完了するまでは複数顧客向けに公開しない。
+- 現行package scriptsにはAPIのstart、test、Prisma validate/generate/migrate/seed、production migration、Docker buildがある。
+- production artifactはmulti-stage `Dockerfile` の `migration` targetと `runtime` targetに分離する。
+- `runtime` はPlaywright Chromiumを含み、Prisma CLIや開発依存を含めず、非root userでAPIだけを起動する。
+- `migration` はPrisma CLIとmigration SQLだけを持ち、APIを起動しない。
+- worker、scheduler、Redis、DLQ、`npm run lint`、`npm run start:worker`、`npm run start:scheduler` は未実装である。デプロイ手順に実装済みのscriptとして記載しない。
+- 認証、RBAC・監査、組織分離は `37_AUTHENTICATION_CONTRACT.md`、`38_RBAC_AUDIT_CONTRACT.md`、`39_ORGANIZATION_ISOLATION_CONTRACT.md` に従って実装済みである。
 
 ## 2. 環境変数
 
@@ -108,7 +111,42 @@ npm run prisma:generate
 AUTH_BOOTSTRAP_ADMIN_ENABLED=true npm run auth:bootstrap-admin
 ```
 
-seedを明示的に実行する場合は `npm run prisma:seed` を使う。production向け `prisma migrate deploy` 専用scriptはまだないため、production手順は運用環境でmigration適用方法を確定してから追加する。
+seedを明示的に実行する場合は `npm run prisma:seed` を使う。staging/productionでは開発用の `prisma migrate dev` を使わず、次だけを使う。
+
+```bash
+npm run prisma:migrate:deploy
+npm run prisma:migrate:status
+```
+
+### production artifact
+
+同じGit revisionからmigration用とAPI用の2つをbuildする。build時に `.env` やcredentialを渡さない。
+
+```bash
+npm run docker:build:migration
+npm run docker:build
+```
+
+release時は必ずmigrationを先に一度実行する。`/secure/path/production.env` はリポジトリ外で管理し、少なくとも `DATABASE_URL` を含める。
+
+```bash
+docker run --rm \
+  --env-file /secure/path/production.env \
+  sales-ai-system-migration:local
+
+docker run -d \
+  --name sales-ai-system \
+  --env-file /secure/path/production.env \
+  --ipc=host \
+  -p 3000:3000 \
+  sales-ai-system:local
+```
+
+`runtime` imageは起動時にmigrationを自動適用しない。migration失敗時はAPIを新revisionへ切り替えず、DB backupとmigration SQLを確認する。migration成功後にAPI起動が失敗した場合は、schema互換性を確認したうえで直前のAPI imageへ戻す。
+
+Dockerの `HEALTHCHECK` と `/health` はAPI processのliveness確認であり、DB readinessやmigration完了を保証しない。traffic切替前のreadinessは `migration` image成功、`npm run prisma:migrate:status` 成功、API health成功の3点で判定する。
+
+Playwright Chromiumの安定動作には十分な共有メモリが必要なため、上の例では `--ipc=host` を使う。外部URLを取得するproduction環境では、実行基盤に合わせてPlaywright公式の推奨seccomp profileも適用し、Chromium sandboxを無効化しない。
 
 ### integration test
 
@@ -123,17 +161,32 @@ npm run test:integration
 
 ## 4. デプロイ前の安全確認
 
-- `npm run prisma:validate` と `npm run build` が成功する。
+- `npm run verify` が成功する。
+- 空のPostgreSQLへ `npm run prisma:migrate:deploy` を実行し、続く `npm run prisma:migrate:status` が未適用なしで成功する。
+- `migration` と `runtime` のDocker buildが成功する。
 - migration差分を確認し、本番データに対する破壊的変更を行わない。
+- LA-006が完了するまでは本番相当データを扱う外部公開を行わない。
 - `MAIL_SEND_ENABLED` は明示的に必要な環境だけ `true` にする。
-- Gmailの実送信を有効化する前に、承認、checklist、送信対象、配信停止、blockの運用確認を行う。現行コードではblock/配信停止をclaim前に共通拒否するguardが未実装である。
+- Gmailの実送信を有効化する前に、承認、checklist、送信対象、配信停止、blockの運用確認を行う。
 - Gemini/OpenAI API key、Gmail secret、refresh tokenをリポジトリへ保存しない。
 - 実Gemini、実OpenAI、実Gmail、外部サイトへの書き込みは、明示的な運用手順とテスト対象を定めてから行う。
 
-## 5. 未実装の運用基盤
+## 5. CI
+
+`.github/workflows/verify.yml` はPull Requestとmain pushで次を行う。
+
+1. browserをdownloadせず `npm ci`
+2. OpenAPI、artifact契約、Prisma schema、unit test、Nest buildを `npm run verify` で確認
+3. `migration` targetをbuildし、そのimageからCI専用の空PostgreSQLへ全migrationを適用
+4. 未適用migrationと `schema.prisma` からのdriftがないことを確認
+5. `runtime` targetをbuild
+
+CIはsecretを必要とせず、image registryへのpushやstaging/production deployを行わない。
+
+## 6. 未実装の運用基盤
 
 - Redisを使う共有queue/worker/scheduler/DLQ
-- production用Dockerfile、CI verify script、監視、alert webhook
+- backup・restore演習、監視、alert webhook
 - Gmail providerの外部API retryと真の冪等送信
 
 利用者認証credentialとGmail送信用OAuth credentialは共用しない。

@@ -10,3 +10,6 @@
 - migration適用前の起動では `UserSession` tableがないためログインできない。先にmigrationを適用する。
 - LA-004のRBAC・全操作監査、LA-007の組織分離、LA-005のjob所有者・永続化は完了済み。ただしLA-006のバックアップ復元確認と本番運用基盤が終わるまでは複数顧客向けに外部公開しない。
 - LA-004の追加DB変更はAuditLogのsessionIdと検索indexのみで、既存監査行を削除するdown migrationは行わない。問題時は旧アプリrevisionへ戻し、実送信は無効のまま復旧する。
+- production artifactはリポジトリ直下の `Dockerfile` で作る。`migration` targetを先に一度実行し、成功後に同じrevisionの `runtime` targetを起動する。
+- GitHub Actionsはverify、空DBへの全migration適用確認、両Docker targetのbuildだけを行う。image pushや本番deployは自動実行しない。
+- 詳細なbuild、migration、起動、rollback手順は `docs/14_DEPLOY.md` を正とする。

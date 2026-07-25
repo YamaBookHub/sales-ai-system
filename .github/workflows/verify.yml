@@ -5,17 +5,62 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    env:
+      MAIL_SEND_ENABLED: 'false'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sales_ai_system_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sales_ai_system_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - name: Install dependencies without browser download
+        run: npm ci
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
-      - run: npm run verify
+      - name: Verify source, contracts, tests, and build
+        run: npm run verify
+      - name: Build migration artifact
+        run: docker build --target migration --tag sales-ai-system-migration:ci .
+      - name: Apply all migrations through the release artifact
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sales_ai_system_ci
+        run: >-
+          docker run --rm --network host
+          --env DATABASE_URL
+          sales-ai-system-migration:ci
+      - name: Verify migration status and schema drift
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sales_ai_system_ci
+        run: |
+          npm run prisma:migrate:status
+          npx --no-install prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code
+      - name: Build production API artifact
+        run: docker build --target runtime --tag sales-ai-system:ci .

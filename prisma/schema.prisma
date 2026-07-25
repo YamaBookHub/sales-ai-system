@@ -408,7 +408,7 @@ model ProjectSearchJob {
 
   @@unique([organizationId, id])
   @@index([organizationId, ownerUserId, updatedAt])
-  @@index([status, workerId, cancelRequestedAt, leaseExpiresAt])
+  @@index([status, workerId, cancelRequestedAt, leaseExpiresAt], map: "ProjectSearchJob_status_workerId_cancelRequestedAt_leaseExp_idx")
   @@index([expiresAt])
 }
 
