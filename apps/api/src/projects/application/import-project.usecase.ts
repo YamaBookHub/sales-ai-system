@@ -1,10 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ProjectSourceProvider } from '../domain/project-source-provider';
 import type { AuditActor } from '../../audit/audit-actor';
-import { CampfireProjectSourceProvider } from '../infrastructure/campfire-project-source.provider';
-import { MakuakeProjectSourceProvider } from '../infrastructure/makuake-project-source.provider';
+import { ProjectSourceRegistry } from '../domain/project-source-registry';
 import { PrismaProjectImportRepository } from '../infrastructure/prisma-project-import.repository';
-import { ImportCampfireProjectDto, ImportProjectDto, ProjectSource } from '../projects.dto';
+import { ImportCampfireProjectDto, ImportProjectDto } from '../projects.dto';
 import { StructuredLogger } from '../../common/logging/structured-logger.service';
 import { ProjectOperationsAuditService } from './project-operations-audit.service';
 
@@ -12,14 +11,13 @@ import { ProjectOperationsAuditService } from './project-operations-audit.servic
 export class ImportProjectUseCase {
   constructor(
     private readonly projectImportRepository: PrismaProjectImportRepository,
-    private readonly campfireProvider: CampfireProjectSourceProvider,
-    private readonly makuakeProvider: MakuakeProjectSourceProvider,
+    private readonly sourceRegistry: ProjectSourceRegistry,
     private readonly logger: StructuredLogger,
     private readonly operationsAudit: ProjectOperationsAuditService
   ) {}
 
   async import(dto: ImportProjectDto, actor: AuditActor) {
-    const provider = this.providerFor(dto.source);
+    const provider = this.sourceRegistry.get(dto.source);
     try {
       return await this.importWithProvider(provider, dto.url, actor, { actor });
     } catch (error) {
@@ -60,35 +58,9 @@ export class ImportProjectUseCase {
     };
   }
 
-  private providerFor(source?: string): ProjectSourceProvider {
-    const normalizedSource = normalizeProjectSource(source);
-    if (normalizedSource === 'campfire') return this.campfireProvider;
-    if (normalizedSource === 'makuake') return this.makuakeProvider;
-    throw unsupportedProjectSource(normalizedSource);
-  }
 }
 
 type ImportOptions = {
   bulk?: boolean;
   actor?: AuditActor | null;
 };
-
-function normalizeProjectSource(source?: string): ProjectSource {
-  const normalized = (source || 'campfire').trim().toLowerCase().replace('-', '_');
-  if (normalized === 'campfire' || normalized === 'makuake' || normalized === 'green_funding') {
-    return normalized;
-  }
-  throw new BadRequestException(`未対応の取得元です: ${source || '未指定'}`);
-}
-
-function unsupportedProjectSource(source: ProjectSource) {
-  return new BadRequestException(`${sourceLabel(source)}は準備中です。現在はCAMPFIREのみ検索・取り込みできます。`);
-}
-
-function sourceLabel(source: ProjectSource) {
-  return ({
-    campfire: 'CAMPFIRE',
-    makuake: 'Makuake',
-    green_funding: 'GREEN FUNDING'
-  })[source];
-}

@@ -10,10 +10,9 @@ import {
   uniqueNormalizedUrlInputs
 } from '../domain/project-import-policy';
 import { ProjectSourceProvider } from '../domain/project-source-provider';
-import { CampfireProjectSourceProvider } from '../infrastructure/campfire-project-source.provider';
-import { MakuakeProjectSourceProvider } from '../infrastructure/makuake-project-source.provider';
+import { ProjectSourceRegistry } from '../domain/project-source-registry';
 import { PrismaProjectImportRepository } from '../infrastructure/prisma-project-import.repository';
-import { BulkImportProjectsDto, ProjectSource } from '../projects.dto';
+import { BulkImportProjectsDto } from '../projects.dto';
 import { StructuredLogger } from '../../common/logging/structured-logger.service';
 
 @Injectable()
@@ -21,13 +20,12 @@ export class BulkImportProjectsUseCase {
   constructor(
     private readonly ai: AiService,
     private readonly projectImportRepository: PrismaProjectImportRepository,
-    private readonly campfireProvider: CampfireProjectSourceProvider,
-    private readonly makuakeProvider: MakuakeProjectSourceProvider,
+    private readonly sourceRegistry: ProjectSourceRegistry,
     private readonly logger: StructuredLogger
   ) {}
 
   async execute(dto: BulkImportProjectsDto, actor: AuditActor) {
-    const provider = this.providerFor(dto.source);
+    const provider = this.sourceRegistry.get(dto.source);
     const urlInputs = uniqueNormalizedUrlInputs(dto.urls, (url) => provider.normalizeUrl(url));
     const importConcurrency = clampConcurrency(dto.importConcurrency, 1, 4, 4);
     const analysisConcurrency = clampConcurrency(dto.analysisConcurrency, 1, 4, 3);
@@ -100,35 +98,9 @@ export class BulkImportProjectsUseCase {
     };
   }
 
-  private providerFor(source?: string): ProjectSourceProvider {
-    const normalizedSource = normalizeProjectSource(source);
-    if (normalizedSource === 'campfire') return this.campfireProvider;
-    if (normalizedSource === 'makuake') return this.makuakeProvider;
-    throw unsupportedProjectSource(normalizedSource);
-  }
 }
 
 type ImportOptions = {
   bulk?: boolean;
   actor?: AuditActor | null;
 };
-
-function normalizeProjectSource(source?: string): ProjectSource {
-  const normalized = (source || 'campfire').trim().toLowerCase().replace('-', '_');
-  if (normalized === 'campfire' || normalized === 'makuake' || normalized === 'green_funding') {
-    return normalized;
-  }
-  throw new BadRequestException(`未対応の取得元です: ${source || '未指定'}`);
-}
-
-function unsupportedProjectSource(source: ProjectSource) {
-  return new BadRequestException(`${sourceLabel(source)}は準備中です。現在はCAMPFIREのみ検索・取り込みできます。`);
-}
-
-function sourceLabel(source: ProjectSource) {
-  return ({
-    campfire: 'CAMPFIRE',
-    makuake: 'Makuake',
-    green_funding: 'GREEN FUNDING'
-  })[source];
-}

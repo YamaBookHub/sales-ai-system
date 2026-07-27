@@ -1,35 +1,15 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ProjectStatus } from '@prisma/client';
-import { AiService } from '../ai/ai.service';
 import type { AuditActor } from '../audit/audit-actor';
-import { runWithConcurrency } from '../common/concurrency';
 import { PrismaService } from '../prisma/prisma.service';
-import { ProjectSearchJobManager } from './application/project-search-job.manager';
-import {
-  buildBulkImportSummary,
-  BulkImportAnalysisResult,
-  BulkImportItemResult,
-  clampConcurrency,
-  normalizeEndingSoonDays,
-  normalizeResultLimit,
-  sortEndingSoon,
-  uniqueNormalizedUrlInputs
-} from './domain/project-import-policy';
-import { ProjectSearchOptions, ProjectSourceProvider } from './domain/project-source-provider';
-import { CampfireProjectSourceProvider } from './infrastructure/campfire-project-source.provider';
-import { MakuakeProjectSourceProvider } from './infrastructure/makuake-project-source.provider';
-import { PrismaProjectImportRepository } from './infrastructure/prisma-project-import.repository';
-import { BulkImportProjectsDto, CreateProjectDto, ImportCampfireProjectDto, ImportProjectDto, ProjectSource, SearchCampfireProjectsDto, SearchProjectsDto } from './projects.dto';
+import { ProjectSourceRegistry } from './domain/project-source-registry';
+import { CreateProjectDto } from './projects.dto';
 
 @Injectable()
 export class ProjectsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly ai: AiService,
-    private readonly projectSearchJobManager: ProjectSearchJobManager,
-    private readonly projectImportRepository: PrismaProjectImportRepository,
-    private readonly campfireProvider: CampfireProjectSourceProvider,
-    private readonly makuakeProvider: MakuakeProjectSourceProvider
+    private readonly sourceRegistry: ProjectSourceRegistry
   ) {}
 
   async list(organizationId: string, page = 1, limit = 20, status?: ProjectStatus) {
@@ -87,148 +67,15 @@ export class ProjectsService {
     });
   }
 
-  searchProjects(dto: SearchProjectsDto) {
-    const provider = this.providerFor(dto.source);
-    return this.searchWithProvider(provider, dto);
-  }
-
-  async searchCampfire(dto: SearchCampfireProjectsDto) {
-    return this.searchWithProvider(this.providerFor('campfire'), dto);
-  }
-
-  async searchWithProvider(provider: ProjectSourceProvider, dto: SearchCampfireProjectsDto, options?: ProjectSearchOptions) {
-    const result = await provider.search({ ...dto, excludeUrls: dto.excludeUrls || [] }, options);
-    if (dto.status === 'endingSoon') {
-      return {
-        items: sortEndingSoon(result.items, normalizeEndingSoonDays(dto.endingSoonDays)).slice(0, normalizeResultLimit(dto.limit)),
-        diagnostics: result.diagnostics
-      };
-    }
-    return result;
-  }
-
-  startSearchJob(dto: SearchProjectsDto, organizationId: string, ownerUserId: string) {
-    const provider = this.providerFor(dto.source);
-    return this.projectSearchJobManager.start(organizationId, ownerUserId, provider, dto, (searchProvider, searchDto, options) =>
-      this.searchWithProvider(searchProvider, searchDto, options)
-    );
-  }
-
-  getSearchJob(id: string, organizationId: string, ownerUserId: string) {
-    return this.projectSearchJobManager.get(id, organizationId, ownerUserId);
-  }
-
-  cancelSearchJob(id: string, organizationId: string, ownerUserId: string) {
-    return this.projectSearchJobManager.cancel(id, organizationId, ownerUserId);
-  }
-
   campfireCategories() {
-    return this.providerFor('campfire').categories();
+    return this.sourceRegistry.get('campfire').categories();
   }
 
   categories(source = 'campfire') {
-    return this.providerFor(source).categories();
+    return this.sourceRegistry.get(source).categories();
   }
 
-  importProject(dto: ImportProjectDto, actor: AuditActor) {
-    return this.importWithProvider(this.providerFor(dto.source), dto.url, { actor });
+  sources() {
+    return { items: this.sourceRegistry.list() };
   }
-
-  async importCampfire(dto: ImportCampfireProjectDto, actor: AuditActor) {
-    return this.importProject({ source: 'campfire', url: dto.url }, actor);
-  }
-
-  async bulkImport(dto: BulkImportProjectsDto, actor: AuditActor) {
-    const provider = this.providerFor(dto.source);
-    const urlInputs = uniqueNormalizedUrlInputs(dto.urls, (url) => provider.normalizeUrl(url));
-    const importConcurrency = clampConcurrency(dto.importConcurrency, 1, 4, 4);
-    const analysisConcurrency = clampConcurrency(dto.analysisConcurrency, 1, 4, 3);
-    const imported: Array<{ originalUrl: string; url: string; leadId: string; projectId: string; companyId: string }> = [];
-    const items: BulkImportItemResult[] = [];
-
-    await runWithConcurrency(urlInputs, importConcurrency, async (item) => {
-      try {
-        const result = await this.importWithProvider(provider, item.url, { bulk: true, actor });
-        imported.push({
-          originalUrl: item.originalUrl,
-          url: item.url,
-          leadId: result.lead.id,
-          projectId: result.project.id,
-          companyId: result.company.id
-        });
-        items.push({ originalUrl: item.originalUrl, url: item.url, status: 'imported', leadId: result.lead.id });
-      } catch (error) {
-        items.push({ originalUrl: item.originalUrl, url: item.url, status: 'failed', message: error instanceof Error ? error.message : '取り込みに失敗しました' });
-      }
-    });
-
-    const analysisItems: BulkImportAnalysisResult[] = [];
-    if (dto.analyze !== false && imported.length) {
-      await runWithConcurrency(imported, analysisConcurrency, async (item) => {
-        try {
-          await this.ai.analyzeLead(item.leadId, actor);
-          analysisItems.push({ leadId: item.leadId, status: 'analyzed' });
-        } catch (error) {
-          analysisItems.push({ leadId: item.leadId, status: 'failed', message: error instanceof Error ? error.message : 'AI分析に失敗しました' });
-        }
-      });
-    }
-
-    const summary = buildBulkImportSummary({
-      source: provider.source,
-      total: urlInputs.length,
-      items,
-      analysisItems
-    });
-    await this.projectImportRepository.recordBulkImportAudit(actor.organizationId, actor, summary);
-
-    return summary;
-  }
-
-  private async importWithProvider(provider: ProjectSourceProvider, url: string, options: ImportOptions = {}) {
-    const normalizedUrl = provider.normalizeUrl(url);
-    const imported = await provider.import(normalizedUrl);
-    if (imported.project.status !== 'active') {
-      throw new BadRequestException('現在公開中・募集中のプロジェクトだけ取り込めます。終了済み・公開前のURLは対象外です。');
-    }
-    if (!options.actor) throw new BadRequestException('組織情報が必要です。');
-    const result = await this.projectImportRepository.persistImportedProject(options.actor.organizationId, imported, options);
-
-    return {
-      ...result,
-      scraped: imported.raw
-    };
-  }
-
-  private providerFor(source?: string): ProjectSourceProvider {
-    const normalizedSource = normalizeProjectSource(source);
-    if (normalizedSource === 'campfire') return this.campfireProvider;
-    if (normalizedSource === 'makuake') return this.makuakeProvider;
-    throw unsupportedProjectSource(normalizedSource);
-  }
-}
-
-type ImportOptions = {
-  bulk?: boolean;
-  actor?: AuditActor | null;
-};
-
-function normalizeProjectSource(source?: string): ProjectSource {
-  const normalized = (source || 'campfire').trim().toLowerCase().replace('-', '_');
-  if (normalized === 'campfire' || normalized === 'makuake' || normalized === 'green_funding') {
-    return normalized;
-  }
-  throw new BadRequestException(`未対応の取得元です: ${source || '未指定'}`);
-}
-
-function unsupportedProjectSource(source: ProjectSource) {
-  return new BadRequestException(`${sourceLabel(source)}は準備中です。現在はCAMPFIREのみ検索・取り込みできます。`);
-}
-
-function sourceLabel(source: ProjectSource) {
-  return ({
-    campfire: 'CAMPFIRE',
-    makuake: 'Makuake',
-    green_funding: 'GREEN FUNDING'
-  })[source];
 }

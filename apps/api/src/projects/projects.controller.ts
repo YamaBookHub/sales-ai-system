@@ -65,6 +65,11 @@ export class ProjectsController {
     return ok(await this.projects.categories(source));
   }
 
+  @Get('sources')
+  sources() {
+    return ok(this.projects.sources());
+  }
+
   @Post('search/campfire')
   @RequirePermissions('prospecting.execute')
   async searchCampfire(@Body() dto: SearchCampfireProjectsDto, @CurrentUser() principal: AuthenticatedPrincipal) {

@@ -1,9 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { normalizeEndingSoonDays, normalizeResultLimit, sortEndingSoon } from '../domain/project-import-policy';
-import { ProjectSearchOptions, ProjectSourceProvider, ProjectSourceSearchError } from '../domain/project-source-provider';
-import { CampfireProjectSourceProvider } from '../infrastructure/campfire-project-source.provider';
-import { MakuakeProjectSourceProvider } from '../infrastructure/makuake-project-source.provider';
-import { ProjectSource, SearchCampfireProjectsDto, SearchProjectsDto } from '../projects.dto';
+import { ProjectSearchCriteria, ProjectSearchOptions, ProjectSourceProvider, ProjectSourceSearchError } from '../domain/project-source-provider';
+import { ProjectSourceRegistry } from '../domain/project-source-registry';
+import { SearchCampfireProjectsDto, SearchProjectsDto } from '../projects.dto';
 import { ProjectSearchJobManager } from './project-search-job.manager';
 import { StructuredLogger } from '../../common/logging/structured-logger.service';
 
@@ -11,21 +10,20 @@ import { StructuredLogger } from '../../common/logging/structured-logger.service
 export class SearchProjectsUseCase {
   constructor(
     private readonly projectSearchJobManager: ProjectSearchJobManager,
-    private readonly campfireProvider: CampfireProjectSourceProvider,
-    private readonly makuakeProvider: MakuakeProjectSourceProvider,
+    private readonly sourceRegistry: ProjectSourceRegistry,
     private readonly logger: StructuredLogger
   ) {}
 
   search(dto: SearchProjectsDto, organizationId: string) {
-    return this.searchWithProvider(this.providerFor(dto.source), dto, organizationId);
+    return this.searchWithProvider(this.sourceRegistry.get(dto.source), dto, organizationId);
   }
 
   searchCampfire(dto: SearchCampfireProjectsDto, organizationId: string) {
-    return this.searchWithProvider(this.providerFor('campfire'), dto, organizationId);
+    return this.searchWithProvider(this.sourceRegistry.get('campfire'), dto, organizationId);
   }
 
   startJob(dto: SearchProjectsDto, organizationId: string, ownerUserId: string) {
-    const provider = this.providerFor(dto.source);
+    const provider = this.sourceRegistry.get(dto.source);
     return this.projectSearchJobManager.start(organizationId, ownerUserId, provider, dto, (searchProvider, searchDto, options) =>
       this.searchWithProvider(searchProvider, searchDto, organizationId, options, false)
     );
@@ -41,7 +39,7 @@ export class SearchProjectsUseCase {
 
   private async searchWithProvider(
     provider: ProjectSourceProvider,
-    dto: SearchCampfireProjectsDto,
+    dto: ProjectSearchCriteria,
     organizationId: string,
     options?: ProjectSearchOptions,
     logFailure = true
@@ -71,30 +69,4 @@ export class SearchProjectsUseCase {
     return result;
   }
 
-  private providerFor(source?: string): ProjectSourceProvider {
-    const normalizedSource = normalizeProjectSource(source);
-    if (normalizedSource === 'campfire') return this.campfireProvider;
-    if (normalizedSource === 'makuake') return this.makuakeProvider;
-    throw unsupportedProjectSource(normalizedSource);
-  }
-}
-
-function normalizeProjectSource(source?: string): ProjectSource {
-  const normalized = (source || 'campfire').trim().toLowerCase().replace('-', '_');
-  if (normalized === 'campfire' || normalized === 'makuake' || normalized === 'green_funding') {
-    return normalized;
-  }
-  throw new BadRequestException(`未対応の取得元です: ${source || '未指定'}`);
-}
-
-function unsupportedProjectSource(source: ProjectSource) {
-  return new BadRequestException(`${sourceLabel(source)}は準備中です。現在はCAMPFIREのみ検索・取り込みできます。`);
-}
-
-function sourceLabel(source: ProjectSource) {
-  return ({
-    campfire: 'CAMPFIRE',
-    makuake: 'Makuake',
-    green_funding: 'GREEN FUNDING'
-  })[source];
 }

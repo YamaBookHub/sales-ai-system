@@ -71,6 +71,7 @@ local loginは `APP_ENV=local`、`AUTH_MODE=local`、loopback origin、`AUTH_DEV
 | POST | `/api/projects/bulk-import` | - | `BulkImportProjectsDto` |
 | GET | `/api/projects/categories/campfire` | - | - |
 | GET | `/api/projects/categories` | `source`（既定 `campfire`） | - |
+| GET | `/api/projects/sources` | - | - |
 | POST | `/api/projects/search/campfire` | - | `SearchCampfireProjectsDto` |
 | POST | `/api/projects/search` | - | `SearchProjectsDto` |
 | POST | `/api/projects/search-jobs` | - | `SearchProjectsDto` |
@@ -79,7 +80,9 @@ local loginは `APP_ENV=local`、`AUTH_MODE=local`、loopback origin、`AUTH_DEV
 
 `ImportProjectDto.source` と `BulkImportProjectsDto.source` は `campfire`、`makuake`、`green_funding` のいずれか。現行providerの検索・取り込み対象外sourceはcontrollerでは受け取るが、serviceで準備中エラーになる。
 
-`SearchCampfireProjectsDto` は `keyword`、`category`、`amountMin`、`amountMax`、`supporterMin`、`supporterMax`、`profileProjectMin`、`profileProjectMax`、`limit`、`status`、`endingSoonDays`、`excludeUrls` を任意で受け取る。`SearchProjectsDto` はこれらに任意の `source` を加える。
+`GET /api/projects/sources` は登録済み取得元と、キーワード検索・カテゴリ・終了間近・金額・支援者数・過去プロジェクト数・途中経過通知・検索停止への対応状況を返す。画面は取得元名で条件を決め打ちせず、このcapabilitiesを使って利用可能な検索条件を判断する。
+
+`SearchProjectSourceDto` が取得元共通の検索条件を定義する。互換用の `SearchCampfireProjectsDto` はこれを継承し、`SearchProjectsDto` は共通条件に任意の `source` を加える。共通条件は `keyword`、`category`、`amountMin`、`amountMax`、`supporterMin`、`supporterMax`、`profileProjectMin`、`profileProjectMax`、`limit`、`status`、`endingSoonDays`、`excludeUrls`。
 
 検索ジョブはPostgreSQLへ30分間保存する。同じ組織かつ同じ利用者のジョブだけを取得・停止でき、存在しない・期限切れ・別所有者のIDはいずれも404を返す。同じ利用者が新しい検索を開始すると、実行中の旧ジョブは停止される。別APIインスタンスからの停止も共有状態へ反映され、停止後の遅延結果は保存しない。
 

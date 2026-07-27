@@ -30,4 +30,21 @@ describe('ProjectsController audit actor propagation', () => {
     expect(imports.import).toHaveBeenCalledWith({ source: 'makuake', url: 'https://www.makuake.com/project/example/' }, actor);
     expect(bulkImports.execute).toHaveBeenCalledWith({ source: 'campfire', urls: ['https://camp-fire.jp/projects/1/view'] }, actor);
   });
+
+  it('returns registered project source capabilities', () => {
+    const projects = {
+      sources: jest.fn().mockReturnValue({
+        items: [{ source: 'campfire', name: 'CAMPFIRE', capabilities: { categoryFilter: true } }]
+      })
+    };
+    const controller = new ProjectsController(projects as any, {} as any, {} as any, {} as any);
+
+    expect(controller.sources()).toEqual({
+      data: {
+        items: [{ source: 'campfire', name: 'CAMPFIRE', capabilities: { categoryFilter: true } }]
+      },
+      meta: null,
+      error: null
+    });
+  });
 });

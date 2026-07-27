@@ -41,16 +41,18 @@ describe('BulkImportProjectsUseCase', () => {
       import: jest.fn()
     };
 
-    return { ai, repository, campfireProvider, makuakeProvider };
+    const sourceRegistry = {
+      get: jest.fn((source?: string) => source === 'makuake' ? makuakeProvider : campfireProvider)
+    };
+    return { ai, repository, campfireProvider, sourceRegistry };
   };
 
   it('imports unique URLs, analyzes imported leads, and records audit summary', async () => {
-    const { ai, repository, campfireProvider, makuakeProvider } = createDeps();
+    const { ai, repository, campfireProvider, sourceRegistry } = createDeps();
     const useCase = new BulkImportProjectsUseCase(
       ai as any,
       repository as any,
-      campfireProvider as any,
-      makuakeProvider as any,
+      sourceRegistry as any,
       { errorEvent: jest.fn() } as any
     );
 
@@ -82,12 +84,11 @@ describe('BulkImportProjectsUseCase', () => {
   });
 
   it('can import without AI analysis', async () => {
-    const { ai, repository, campfireProvider, makuakeProvider } = createDeps();
+    const { ai, repository, sourceRegistry } = createDeps();
     const useCase = new BulkImportProjectsUseCase(
       ai as any,
       repository as any,
-      campfireProvider as any,
-      makuakeProvider as any,
+      sourceRegistry as any,
       { errorEvent: jest.fn() } as any
     );
 
@@ -105,14 +106,13 @@ describe('BulkImportProjectsUseCase', () => {
   });
 
   it('records only provider failures as scraper failures during bulk import', async () => {
-    const { ai, repository, campfireProvider, makuakeProvider } = createDeps();
+    const { ai, repository, campfireProvider, sourceRegistry } = createDeps();
     const logger = { errorEvent: jest.fn() };
     campfireProvider.import.mockRejectedValue(new Error('provider failed'));
     const useCase = new BulkImportProjectsUseCase(
       ai as any,
       repository as any,
-      campfireProvider as any,
-      makuakeProvider as any,
+      sourceRegistry as any,
       logger as any
     );
 
@@ -133,14 +133,13 @@ describe('BulkImportProjectsUseCase', () => {
   });
 
   it('does not misclassify persistence failures as scraper failures during bulk import', async () => {
-    const { ai, repository, campfireProvider, makuakeProvider } = createDeps();
+    const { ai, repository, sourceRegistry } = createDeps();
     const logger = { errorEvent: jest.fn() };
     repository.persistImportedProject.mockRejectedValue(new Error('database unavailable'));
     const useCase = new BulkImportProjectsUseCase(
       ai as any,
       repository as any,
-      campfireProvider as any,
-      makuakeProvider as any,
+      sourceRegistry as any,
       logger as any
     );
 

@@ -1,7 +1,8 @@
 import { ProjectStatus } from '@prisma/client';
 import { IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import type { ProjectSource as DomainProjectSource } from './domain/project-source';
 
-export type ProjectSource = 'campfire' | 'makuake' | 'green_funding';
+export type ProjectSource = DomainProjectSource;
 
 export class CreateProjectDto {
   @IsUUID()
@@ -70,7 +71,7 @@ export class BulkImportProjectsDto {
   analyze?: boolean;
 }
 
-export class SearchCampfireProjectsDto {
+export class SearchProjectSourceDto {
   @IsOptional()
   @IsString()
   keyword?: string;
@@ -121,7 +122,9 @@ export class SearchCampfireProjectsDto {
   excludeUrls?: string[];
 }
 
-export class SearchProjectsDto extends SearchCampfireProjectsDto {
+export class SearchCampfireProjectsDto extends SearchProjectSourceDto {}
+
+export class SearchProjectsDto extends SearchProjectSourceDto {
   @IsOptional()
   @IsString()
   source?: ProjectSource;

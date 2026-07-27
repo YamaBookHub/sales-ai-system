@@ -1,4 +1,37 @@
-import { ProjectSource, SearchCampfireProjectsDto } from '../projects.dto';
+import type { ProjectSource } from './project-source';
+
+export type ProjectSearchCriteria = {
+  keyword?: string;
+  category?: string;
+  amountMin?: number;
+  amountMax?: number;
+  supporterMin?: number;
+  supporterMax?: number;
+  profileProjectMin?: number;
+  profileProjectMax?: number;
+  limit?: number;
+  status?: string;
+  endingSoonDays?: number;
+  excludeUrls?: string[];
+};
+
+export type ProjectSourceCapabilities = {
+  keywordSearch: boolean;
+  categoryFilter: boolean;
+  endingSoonFilter: boolean;
+  amountFilter: boolean;
+  supporterFilter: boolean;
+  profileProjectCountFilter: boolean;
+  progressiveResults: boolean;
+  cancellation: boolean;
+};
+
+export type ProjectSourceDescriptor = {
+  source: ProjectSource;
+  name: string;
+  baseUrl: string;
+  capabilities: ProjectSourceCapabilities;
+};
 
 export type ProjectSourceCategory = {
   label: string;
@@ -49,7 +82,7 @@ export class ProjectSourceSearchError extends Error {
 export type NormalizedImportedProject = {
   source: ProjectSource;
   platform: {
-    type: 'campfire' | 'makuake' | 'green_funding' | 'other';
+    type: ProjectSource | 'other';
     name: string;
     baseUrl: string;
   };
@@ -94,8 +127,9 @@ export type ProjectSourceProvider = {
   readonly source: ProjectSource;
   readonly name: string;
   readonly baseUrl: string;
+  readonly capabilities: ProjectSourceCapabilities;
   categories(): Promise<{ items: ProjectSourceCategory[] }>;
-  search(input: SearchCampfireProjectsDto, options?: ProjectSearchOptions): Promise<ProjectSourceSearchResult>;
+  search(input: ProjectSearchCriteria, options?: ProjectSearchOptions): Promise<ProjectSourceSearchResult>;
   import(url: string): Promise<NormalizedImportedProject>;
   normalizeUrl(url: string): string;
 };

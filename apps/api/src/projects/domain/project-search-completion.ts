@@ -1,5 +1,4 @@
-import { ProjectSearchDiagnostics } from './project-source-provider';
-import { SearchCampfireProjectsDto } from '../projects.dto';
+import { ProjectSearchCriteria, ProjectSearchDiagnostics } from './project-source-provider';
 
 export type ProjectSearchCompletionReason =
   | 'desired_reached'
@@ -12,7 +11,7 @@ export type ProjectSearchCompletionReason =
 export function decideProjectSearchCompletion(input: {
   desiredLimit: number;
   importableCount: number;
-  dto: SearchCampfireProjectsDto;
+  dto: ProjectSearchCriteria;
   diagnostics?: ProjectSearchDiagnostics;
 }): ProjectSearchCompletionReason {
   if (input.importableCount >= input.desiredLimit) return 'desired_reached';
@@ -53,7 +52,7 @@ export function projectSearchCompletionMessage(input: {
   }
 }
 
-function hasRestrictiveSearchCondition(dto: SearchCampfireProjectsDto) {
+function hasRestrictiveSearchCondition(dto: ProjectSearchCriteria) {
   return Boolean(
     dto.keyword?.trim() ||
       dto.category?.trim() ||

@@ -17,7 +17,7 @@ describe('ProjectsService', () => {
       auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit_1' }) }
     };
     const prisma = { $transaction: jest.fn((callback) => callback(tx)) };
-    const service = new ProjectsService(prisma as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+    const service = new ProjectsService(prisma as any, {} as any);
 
     await service.create({
       platformId: project.platformId,

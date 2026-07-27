@@ -2,8 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import { bindAbortToResource, OperationAbortedError } from '../../common/abortable-resource';
 import { runWithConcurrency } from '../../common/concurrency';
-import { NormalizedImportedProject, ProjectSearchOptions, ProjectSourceProvider, ProjectSourceSearchResult } from '../domain/project-source-provider';
-import { SearchCampfireProjectsDto } from '../projects.dto';
+import { NormalizedImportedProject, ProjectSearchCriteria, ProjectSearchOptions, ProjectSourceProvider, ProjectSourceSearchResult } from '../domain/project-source-provider';
 import { parseMakuakeDetail } from './parsers/makuake/makuake-detail.parser';
 import { isActiveMakuakeListing, parseMakuakeListing } from './parsers/makuake/makuake-listing.parser';
 import { parseMakuakeProfile } from './parsers/makuake/makuake-profile.parser';
@@ -17,12 +16,22 @@ export class MakuakeProjectSourceProvider implements ProjectSourceProvider {
   readonly source = 'makuake' as const;
   readonly name = 'Makuake';
   readonly baseUrl = MAKUAKE_ORIGIN;
+  readonly capabilities = {
+    keywordSearch: true,
+    categoryFilter: false,
+    endingSoonFilter: true,
+    amountFilter: true,
+    supporterFilter: true,
+    profileProjectCountFilter: false,
+    progressiveResults: true,
+    cancellation: true
+  } as const;
 
   async categories() {
     return { items: [] };
   }
 
-  async search(input: SearchCampfireProjectsDto, options: ProjectSearchOptions = {}) {
+  async search(input: ProjectSearchCriteria, options: ProjectSearchOptions = {}) {
     if (options.signal?.aborted) throw new OperationAbortedError();
     const browser = await chromium.launch({ headless: true });
     let context: BrowserContext | null = null;
@@ -202,7 +211,7 @@ type MakuakeMemberStats = {
   description: string;
 };
 
-function buildMakuakeSearchUrls(input: SearchCampfireProjectsDto) {
+function buildMakuakeSearchUrls(input: ProjectSearchCriteria) {
   const keyword = (input.keyword || '').trim();
   const urls: string[] = [];
   if (keyword) {
@@ -383,7 +392,7 @@ function buildAutoUrlMemo(scraped: ScrapedMakuakeProject) {
   return urls.length ? `Makuakeページから自動取得したURL: ${urls.slice(0, 8).join(' / ')}` : undefined;
 }
 
-function matchesNumericFilters(item: MakuakeSearchResult, input: SearchCampfireProjectsDto) {
+function matchesNumericFilters(item: MakuakeSearchResult, input: ProjectSearchCriteria) {
   if (typeof input.amountMin === 'number' && item.amount < input.amountMin) return false;
   if (typeof input.amountMax === 'number' && item.amount > input.amountMax) return false;
   if (typeof input.supporterMin === 'number' && item.supporterCount < input.supporterMin) return false;
@@ -402,7 +411,7 @@ function matchesKeyword(item: MakuakeSearchResult, keyword?: string) {
     .every((word) => haystack.includes(word));
 }
 
-function sortSearchResults(items: MakuakeSearchResult[], input: SearchCampfireProjectsDto) {
+function sortSearchResults(items: MakuakeSearchResult[], input: ProjectSearchCriteria) {
   if (input.status !== 'endingSoon') return items;
   const maxDays = normalizeEndingSoonDays(input.endingSoonDays);
   return [...items]
@@ -415,7 +424,7 @@ function normalizeEndingSoonDays(value?: number) {
   return [7, 14, 20, 30].includes(number) ? number : 14;
 }
 
-function searchCandidatePoolSize(input: SearchCampfireProjectsDto) {
+function searchCandidatePoolSize(input: ProjectSearchCriteria) {
   const limit = normalizeLimit(input.limit);
   if (input.status === 'endingSoon') return Math.min(200, Math.max(limit * 8, 80));
   return Math.min(200, Math.max(limit * 4, 40));

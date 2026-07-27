@@ -16,6 +16,7 @@ import {
 } from '../domain/project-search-job';
 import {
   ProjectSearchDiagnostics,
+  ProjectSearchCriteria,
   ProjectSearchOptions,
   ProjectSearchResult,
   ProjectSourceProvider,
@@ -26,14 +27,13 @@ import {
   ProjectSearchCompletionReason,
   projectSearchCompletionMessage
 } from '../domain/project-search-completion';
-import { SearchCampfireProjectsDto } from '../projects.dto';
 import { PrismaProjectImportRepository } from '../infrastructure/prisma-project-import.repository';
 import { StructuredLogger } from '../../common/logging/structured-logger.service';
 import { ProjectOperationsAuditService } from './project-operations-audit.service';
 
 type SearchWithProvider = (
   provider: ProjectSourceProvider,
-  dto: SearchCampfireProjectsDto,
+  dto: ProjectSearchCriteria,
   options?: ProjectSearchOptions
 ) => Promise<Awaited<ReturnType<ProjectSourceProvider['search']>>>;
 
@@ -58,7 +58,7 @@ export class ProjectSearchJobManager {
     organizationId: string,
     ownerUserId: string,
     provider: ProjectSourceProvider,
-    dto: SearchCampfireProjectsDto,
+    dto: ProjectSearchCriteria,
     searchWithProvider: SearchWithProvider
   ) {
     const desiredLimit = normalizeResultLimit(dto.limit);
@@ -144,7 +144,7 @@ export class ProjectSearchJobManager {
   private async runSearchJob(
     job: StoredProjectSearchJob,
     provider: ProjectSourceProvider,
-    dto: SearchCampfireProjectsDto,
+    dto: ProjectSearchCriteria,
     searchWithProvider: SearchWithProvider,
     controller: AbortController
   ) {

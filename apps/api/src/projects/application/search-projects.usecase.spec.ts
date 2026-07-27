@@ -32,13 +32,16 @@ describe('SearchProjectsUseCase', () => {
       search: jest.fn().mockResolvedValue({ items: [{ url: 'https://www.makuake.com/project/1' }] })
     };
     const logger = { errorEvent: jest.fn() };
+    const sourceRegistry = {
+      get: jest.fn((source?: string) => source === 'makuake' ? makuakeProvider : campfireProvider)
+    };
 
-    return { jobManager, campfireProvider, makuakeProvider, logger };
+    return { jobManager, campfireProvider, makuakeProvider, sourceRegistry, logger };
   };
 
   it('searches with selected provider and default excludeUrls', async () => {
-    const { jobManager, campfireProvider, makuakeProvider, logger } = createDeps();
-    const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any, logger as any);
+    const { jobManager, makuakeProvider, sourceRegistry, logger } = createDeps();
+    const useCase = new SearchProjectsUseCase(jobManager as any, sourceRegistry as any, logger as any);
 
     const result = await useCase.search({ source: 'makuake', keyword: '食品' }, organizationId);
 
@@ -50,8 +53,8 @@ describe('SearchProjectsUseCase', () => {
   });
 
   it('sorts and limits ending soon projects', async () => {
-    const { jobManager, campfireProvider, makuakeProvider, logger } = createDeps();
-    const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any, logger as any);
+    const { jobManager, campfireProvider, sourceRegistry, logger } = createDeps();
+    const useCase = new SearchProjectsUseCase(jobManager as any, sourceRegistry as any, logger as any);
 
     const result = await useCase.searchCampfire({ status: 'endingSoon', endingSoonDays: 14, limit: 10 }, organizationId);
 
@@ -68,8 +71,8 @@ describe('SearchProjectsUseCase', () => {
   });
 
   it('starts search job and forwards its abort signal to the provider', async () => {
-    const { jobManager, campfireProvider, makuakeProvider, logger } = createDeps();
-    const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any, logger as any);
+    const { jobManager, campfireProvider, sourceRegistry, logger } = createDeps();
+    const useCase = new SearchProjectsUseCase(jobManager as any, sourceRegistry as any, logger as any);
 
     const job = useCase.startJob({ source: 'campfire', limit: 50 }, organizationId, ownerUserId);
 
@@ -91,9 +94,9 @@ describe('SearchProjectsUseCase', () => {
   });
 
   it('records a synchronous scraper failure without logging input data', async () => {
-    const { jobManager, campfireProvider, makuakeProvider, logger } = createDeps();
+    const { jobManager, campfireProvider, sourceRegistry, logger } = createDeps();
     campfireProvider.search.mockRejectedValue(new Error('secret@example.com 192.168.1.1'));
-    const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any, logger as any);
+    const useCase = new SearchProjectsUseCase(jobManager as any, sourceRegistry as any, logger as any);
 
     await expect(useCase.search({ source: 'campfire', keyword: 'secret keyword' }, organizationId)).rejects.toThrow();
 
@@ -108,9 +111,9 @@ describe('SearchProjectsUseCase', () => {
   });
 
   it('leaves asynchronous job failure logging to the job manager', async () => {
-    const { jobManager, campfireProvider, makuakeProvider, logger } = createDeps();
+    const { jobManager, campfireProvider, sourceRegistry, logger } = createDeps();
     campfireProvider.search.mockRejectedValue(new Error('provider failed'));
-    const useCase = new SearchProjectsUseCase(jobManager as any, campfireProvider as any, makuakeProvider as any, logger as any);
+    const useCase = new SearchProjectsUseCase(jobManager as any, sourceRegistry as any, logger as any);
 
     useCase.startJob({ source: 'campfire', limit: 50 }, organizationId, ownerUserId);
     const callback = jobManager.start.mock.calls[0][4];

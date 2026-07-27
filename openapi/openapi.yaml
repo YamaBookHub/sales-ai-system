@@ -710,6 +710,29 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
+  /api/projects/sources:
+    get:
+      summary: List registered project sources and supported capabilities
+      x-permission: workspace.read
+      responses:
+        '403':
+          $ref: '#/components/responses/AuthorizationDenied'
+        '200':
+          description: Registered project source response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items]
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: '#/components/schemas/ProjectSourceDescriptor' }
   /api/projects/search/campfire:
     post:
       summary: Search CAMPFIRE project candidates
@@ -2335,6 +2358,34 @@ components:
     ProjectSource:
       type: string
       enum: [campfire, makuake, green_funding]
+    ProjectSourceCapabilities:
+      type: object
+      required:
+        - keywordSearch
+        - categoryFilter
+        - endingSoonFilter
+        - amountFilter
+        - supporterFilter
+        - profileProjectCountFilter
+        - progressiveResults
+        - cancellation
+      properties:
+        keywordSearch: { type: boolean }
+        categoryFilter: { type: boolean }
+        endingSoonFilter: { type: boolean }
+        amountFilter: { type: boolean }
+        supporterFilter: { type: boolean }
+        profileProjectCountFilter: { type: boolean }
+        progressiveResults: { type: boolean }
+        cancellation: { type: boolean }
+    ProjectSourceDescriptor:
+      type: object
+      required: [source, name, baseUrl, capabilities]
+      properties:
+        source: { $ref: '#/components/schemas/ProjectSource' }
+        name: { type: string }
+        baseUrl: { type: string, format: uri }
+        capabilities: { $ref: '#/components/schemas/ProjectSourceCapabilities' }
     PlatformType:
       type: string
       enum: [campfire, makuake, green_funding, other]

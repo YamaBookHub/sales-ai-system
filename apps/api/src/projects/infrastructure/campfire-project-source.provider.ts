@@ -1,13 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { CampfireScraperService, ScrapedCampfireProject } from '../../scraper/campfire-scraper.service';
-import { NormalizedImportedProject, ProjectSearchOptions, ProjectSourceProvider } from '../domain/project-source-provider';
-import { SearchCampfireProjectsDto } from '../projects.dto';
+import { NormalizedImportedProject, ProjectSearchCriteria, ProjectSearchOptions, ProjectSourceProvider } from '../domain/project-source-provider';
 
 @Injectable()
 export class CampfireProjectSourceProvider implements ProjectSourceProvider {
   readonly source = 'campfire' as const;
   readonly name = 'CAMPFIRE';
   readonly baseUrl = 'https://camp-fire.jp';
+  readonly capabilities = {
+    keywordSearch: true,
+    categoryFilter: true,
+    endingSoonFilter: true,
+    amountFilter: true,
+    supporterFilter: true,
+    profileProjectCountFilter: true,
+    progressiveResults: true,
+    cancellation: true
+  } as const;
 
   constructor(private readonly scraper: CampfireScraperService) {}
 
@@ -15,7 +24,7 @@ export class CampfireProjectSourceProvider implements ProjectSourceProvider {
     return this.scraper.categories();
   }
 
-  search(input: SearchCampfireProjectsDto, options?: ProjectSearchOptions) {
+  search(input: ProjectSearchCriteria, options?: ProjectSearchOptions) {
     return this.scraper.search(input, options);
   }
 
