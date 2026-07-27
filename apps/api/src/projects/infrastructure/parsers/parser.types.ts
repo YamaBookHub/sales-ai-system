@@ -1,4 +1,4 @@
-export type ProjectSourceType = 'campfire' | 'makuake';
+export type ProjectSourceType = 'campfire' | 'makuake' | 'green_funding';
 
 export type ProjectPageKind = 'listing' | 'detail' | 'profile';
 

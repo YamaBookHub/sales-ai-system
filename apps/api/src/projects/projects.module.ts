@@ -9,6 +9,7 @@ import { ProjectSearchJobRepository } from './domain/project-search-job';
 import { SearchProjectsUseCase } from './application/search-projects.usecase';
 import { CampfireProjectSourceProvider } from './infrastructure/campfire-project-source.provider';
 import { MakuakeProjectSourceProvider } from './infrastructure/makuake-project-source.provider';
+import { GreenFundingProjectSourceProvider } from './infrastructure/green-funding-project-source.provider';
 import { PrismaProjectImportRepository } from './infrastructure/prisma-project-import.repository';
 import { PrismaProjectSearchJobRepository } from './infrastructure/prisma-project-search-job.repository';
 import { ProjectsController } from './projects.controller';
@@ -19,7 +20,8 @@ import type { ProjectSourceProvider } from './domain/project-source-provider';
 
 const PROJECT_SOURCE_PROVIDER_TYPES = [
   CampfireProjectSourceProvider,
-  MakuakeProjectSourceProvider
+  MakuakeProjectSourceProvider,
+  GreenFundingProjectSourceProvider
 ] as const;
 
 @Module({

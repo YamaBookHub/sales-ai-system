@@ -90,6 +90,7 @@ ${renderNavigationBadgesScript()}
       selectedLeadId: null,
       selectedMailId: null,
       selectedTemplateKey: '',
+      projectSources: [],
       mailEngagement: null,
       mailEngagementLoadingId: null,
       campfireCategories: [],
@@ -102,6 +103,7 @@ ${renderNavigationBadgesScript()}
       campfireSearchStartedAt: null,
       campfireSearchJobId: null,
       campfireSearchSequence: 0,
+      projectSourcesRequestGeneration: 0,
       currentSourcePlatform: null,
       leadSort: { key: '', direction: 'asc' },
       candidateSort: { key: '', direction: 'asc' },
@@ -165,57 +167,128 @@ ${renderNavigationBadgesScript()}
     }
 
     function selectedSourcePlatform() {
-      return document.getElementById('sourcePlatform')?.value || 'campfire';
+      return document.getElementById('sourcePlatform')?.value || state.projectSources[0]?.source || '';
+    }
+
+    function currentSourceDescriptor() {
+      const source = selectedSourcePlatform();
+      return state.projectSources.find((item) => item.source === source) || null;
+    }
+
+    function sourceSupports(capability) {
+      return Boolean(currentSourceDescriptor()?.capabilities?.[capability]);
     }
 
     function sourcePlatformLabel(value = selectedSourcePlatform()) {
-      const labels = {
-        campfire: 'CAMPFIRE',
-        makuake: 'Makuake',
-        green_funding: 'GREEN FUNDING'
-      };
-      return labels[value] || value;
+      return state.projectSources.find((item) => item.source === value)?.name || value || '取得元未選択';
+    }
+
+    function sourceCapabilitySummary(descriptor) {
+      if (!descriptor) return '取得元を選択してください';
+      const capabilities = descriptor.capabilities || {};
+      const labels = [
+        ['keywordSearch', 'キーワード'],
+        ['categoryFilter', 'カテゴリ'],
+        ['endingSoonFilter', '終了間近'],
+        ['amountFilter', '支援額'],
+        ['supporterFilter', '支援者数'],
+        ['profileProjectCountFilter', '過去PJ件数']
+      ].filter(([key]) => capabilities[key]).map(([, label]) => label);
+      return descriptor.name + '：' + (labels.length ? labels.join('、') + '条件に対応' : '検索・取り込みに対応');
+    }
+
+    async function loadProjectSources() {
+      const select = document.getElementById('sourcePlatform');
+      if (!select) return;
+      const requestGeneration = ++state.projectSourcesRequestGeneration;
+      try {
+        const result = await api('/api/projects/sources');
+        if (requestGeneration !== state.projectSourcesRequestGeneration) return;
+        const selectedBeforeApply = select.value || state.currentSourcePlatform || '';
+        state.projectSources = (Array.isArray(result) ? result : (result?.items || []))
+          .filter((item) => item && item.source && item.name && item.capabilities);
+        select.innerHTML = state.projectSources.map((item) =>
+          '<option value="' + escapeAttr(item.source) + '">' + escapeHtml(item.name) + '</option>'
+        ).join('');
+        select.disabled = state.projectSources.length === 0;
+        if (state.projectSources.some((item) => item.source === selectedBeforeApply)) {
+          select.value = selectedBeforeApply;
+        } else if (state.projectSources[0]) {
+          select.value = state.projectSources[0].source;
+        }
+        if (!state.projectSources.length) {
+          select.innerHTML = '<option value="">利用できる取得元がありません</option>';
+          setStatus('sourcePlatformStatus', '利用できる取得元が登録されていません', 'warn');
+        }
+      } catch (error) {
+        if (requestGeneration !== state.projectSourcesRequestGeneration) return;
+        state.projectSources = [];
+        select.innerHTML = '<option value="">取得元の読み込みに失敗</option>';
+        select.disabled = true;
+        setStatus('sourcePlatformStatus', '取得元情報の読み込みに失敗しました: ' + error.message, 'error');
+      }
     }
 
     function onSourcePlatformChange() {
       const platform = selectedSourcePlatform();
+      const descriptor = currentSourceDescriptor();
+      const capabilities = descriptor?.capabilities || {};
       const sourceChanged = state.currentSourcePlatform && state.currentSourcePlatform !== platform;
       const urlInput = document.getElementById('campfireUrl');
+      const keywordSearch = document.getElementById('campfireSearchKeyword');
       const categorySearch = document.getElementById('campfireSearchCategory');
       const searchStatus = document.getElementById('campfireSearchStatus');
       const profileSearch = document.getElementById('campfireSearchProfileProjectRange');
+      const displayStatus = document.getElementById('campfireDisplayStatus');
+      const amountDisplay = document.getElementById('campfireDisplayAmountRange');
+      const supporterDisplay = document.getElementById('campfireDisplaySupporterRange');
       const profileDisplay = document.getElementById('campfireDisplayProfileProjectRange');
+      const stopSearchButton = document.getElementById('stopSearchButton');
       if (urlInput) {
-        urlInput.placeholder = ({
-          campfire: 'https://camp-fire.jp/projects/.../view',
-          makuake: 'https://www.makuake.com/project/.../'
-        })[platform] || sourcePlatformLabel(platform) + 'のプロジェクトURL（準備中）';
+        urlInput.placeholder = descriptor?.baseUrl
+          ? descriptor.baseUrl.replace(/\\/$/, '') + '/...'
+          : 'プロジェクトURL';
       }
-      toggleSourceField(categorySearch, platform === 'campfire');
-      toggleSourceField(profileSearch, platform === 'campfire');
-      if (searchStatus) {
-        searchStatus.disabled = !['campfire', 'makuake'].includes(platform);
-        searchStatus.style.display = ['campfire', 'makuake'].includes(platform) ? '' : 'none';
-        if (!['campfire', 'makuake'].includes(platform)) searchStatus.value = 'active';
+      toggleSourceField(keywordSearch, Boolean(capabilities.keywordSearch));
+      toggleSourceField(categorySearch, Boolean(capabilities.categoryFilter));
+      toggleSourceField(profileSearch, Boolean(capabilities.profileProjectCountFilter));
+      toggleSourceField(searchStatus, Boolean(capabilities.endingSoonFilter));
+      toggleSourceField(displayStatus, Boolean(capabilities.endingSoonFilter));
+      toggleSourceField(amountDisplay, Boolean(capabilities.amountFilter));
+      toggleSourceField(supporterDisplay, Boolean(capabilities.supporterFilter));
+      toggleSourceField(profileDisplay, Boolean(capabilities.profileProjectCountFilter));
+      if (stopSearchButton) {
+        stopSearchButton.style.display = capabilities.cancellation ? '' : 'none';
+        stopSearchButton.disabled = !capabilities.cancellation || !state.campfireSearchJobId;
       }
       syncCampfireSearchEndingSoonFilter();
       syncCampfireDisplayEndingSoonFilter();
-      toggleSourceField(profileDisplay, platform === 'campfire');
       void loadCampfireCategories();
       if (sourceChanged) {
+        invalidateCampfireSearchForSourceChange();
         state.campfireCandidates = [];
         state.candidateImportStatus = {};
         renderCampfireCandidates();
       }
       state.currentSourcePlatform = platform;
-      if (platform === 'campfire' || platform === 'makuake') {
-        const note = platform === 'campfire'
-          ? '募集中プロジェクト、カテゴリ、過去PJ条件に対応'
-          : '募集中プロジェクト、キーワード検索に対応（カテゴリ・過去PJ条件は対象外）';
-        setStatus('sourcePlatformStatus', sourcePlatformLabel(platform) + 'の' + note, 'muted');
+      if (descriptor) {
+        setStatus('sourcePlatformStatus', sourceCapabilitySummary(descriptor), 'muted');
         return;
       }
-      setStatus('sourcePlatformStatus', sourcePlatformLabel(platform) + 'は取得元として準備中です', 'warn');
+      setStatus('sourcePlatformStatus', '利用できる取得元を選択してください', 'warn');
+    }
+
+    function invalidateCampfireSearchForSourceChange() {
+      const activeJobId = state.campfireSearchJobId;
+      state.campfireSearchSequence += 1;
+      state.campfireSearchJobId = null;
+      stopCampfireSearchTimer();
+      stopCampfireSearchPoll();
+      if (activeJobId) {
+        void api('/api/projects/search-jobs/' + activeJobId + '/cancel', { method: 'POST' }).catch(() => undefined);
+      }
+      const stopSearchButton = document.getElementById('stopSearchButton');
+      if (stopSearchButton) stopSearchButton.disabled = true;
     }
 
     function toggleSourceField(element, enabled) {
@@ -229,7 +302,9 @@ ${renderNavigationBadgesScript()}
       const status = document.getElementById('campfireSearchStatus');
       const days = document.getElementById('campfireEndingSoonDays');
       if (!days) return;
-      const enabled = status?.value === 'endingSoon';
+      const supported = sourceSupports('endingSoonFilter');
+      days.style.display = supported ? '' : 'none';
+      const enabled = supported && status?.value === 'endingSoon';
       days.disabled = !enabled;
       days.title = enabled ? '終了間近順の対象日数' : '募集中のみでは終了日数の条件は使いません';
     }
@@ -238,14 +313,16 @@ ${renderNavigationBadgesScript()}
       const status = document.getElementById('campfireDisplayStatus');
       const days = document.getElementById('campfireDisplayEndingSoonDays');
       if (!days) return;
-      const enabled = status?.value === 'endingSoon';
+      const supported = sourceSupports('endingSoonFilter');
+      days.style.display = supported ? '' : 'none';
+      const enabled = supported && status?.value === 'endingSoon';
       days.disabled = !enabled;
       days.title = enabled ? '終了間近の表示対象日数' : '募集中のみでは終了日数の条件は使いません';
     }
 
     function ensureSupportedSourcePlatform(statusId) {
-      if (['campfire', 'makuake'].includes(selectedSourcePlatform())) return true;
-      setStatus(statusId, sourcePlatformLabel() + 'は準備中です。現在はCAMPFIRE/Makuakeのみ検索・取り込みできます。', 'warn');
+      if (currentSourceDescriptor()) return true;
+      setStatus(statusId, '利用できる取得元を選択してください', 'warn');
       return false;
     }
 
@@ -285,7 +362,8 @@ ${renderNavigationBadgesScript()}
       try {
         const [leads, mails] = await Promise.all([
           api('/api/leads?limit=100'),
-          api('/api/mails?limit=200')
+          api('/api/mails?limit=200'),
+          loadProjectSources()
         ]);
         state.leads = leads.items || [];
         state.mails = mails.items || [];
@@ -303,7 +381,6 @@ ${renderNavigationBadgesScript()}
           void loadAiAnalysis();
           void loadStructuredAnalysis();
         }
-        if (!state.campfireCategories.length) void loadCampfireCategories();
         onSourcePlatformChange();
         void loadTemplates();
         setStatus('apiStatus', 'API接続OK', 'ok');
@@ -472,14 +549,16 @@ ${renderNavigationBadgesScript()}
 
     async function loadCampfireCategories() {
       const select = document.getElementById('campfireSearchCategory');
-      if (selectedSourcePlatform() !== 'campfire') {
+      if (!sourceSupports('categoryFilter')) {
         state.campfireCategories = [];
         select.innerHTML = '<option value="">カテゴリなし</option>';
         select.value = '';
         return;
       }
+      const source = selectedSourcePlatform();
       try {
-        const result = await api('/api/projects/categories?source=' + encodeURIComponent(selectedSourcePlatform()));
+        const result = await api('/api/projects/categories?source=' + encodeURIComponent(source));
+        if (selectedSourcePlatform() !== source) return;
         state.campfireCategories = result.items || [];
         select.innerHTML = '<option value="">すべてのカテゴリ</option>' +
           state.campfireCategories.map((item) => {
@@ -488,6 +567,7 @@ ${renderNavigationBadgesScript()}
             return '<option value="' + escapeHtml(value) + '">' + escapeHtml(label) + '</option>';
           }).join('');
       } catch (error) {
+        if (selectedSourcePlatform() !== source) return;
         select.innerHTML = '<option value="">カテゴリ取得失敗</option>';
       }
     }
@@ -514,7 +594,10 @@ ${renderNavigationBadgesScript()}
     async function searchCampfireCandidates() {
       if (!ensureSupportedSourcePlatform('campfireSearchStatusText')) return;
       const source = selectedSourcePlatform();
-      const profileProjectRange = source === 'campfire' ? rangeFieldValue('campfireSearchProfileProjectRange') : { min: null, max: null };
+      const capabilities = currentSourceDescriptor()?.capabilities || {};
+      const profileProjectRange = capabilities.profileProjectCountFilter
+        ? rangeFieldValue('campfireSearchProfileProjectRange')
+        : { min: null, max: null };
       const hasProfileProjectSearch = profileProjectRange.min !== null || profileProjectRange.max !== null;
       const desiredLimit = numberFieldValue('campfireFetchLimit') || 10;
       const searchSequence = ++state.campfireSearchSequence;
@@ -526,22 +609,26 @@ ${renderNavigationBadgesScript()}
       state.campfireSearchJobId = null;
       state.campfireCandidates = [];
       startCampfireSearchTimer(hasProfileProjectSearch);
-      document.getElementById('stopSearchButton').disabled = false;
+      const stopSearchButton = document.getElementById('stopSearchButton');
+      stopSearchButton.style.display = capabilities.cancellation ? '' : 'none';
+      stopSearchButton.disabled = !capabilities.cancellation;
       document.getElementById('campfireCandidateCount').textContent = '検索中';
       renderCampfireCandidates();
       try {
-        const searchStatus = fieldValue('campfireSearchStatus') || 'active';
+        const searchStatus = capabilities.endingSoonFilter ? (fieldValue('campfireSearchStatus') || 'active') : 'active';
         const job = await api('/api/projects/search-jobs', {
           method: 'POST',
           body: JSON.stringify(compactPayload({
             source,
-            keyword: fieldValue('campfireSearchKeyword'),
-            category: source === 'campfire' ? fieldValue('campfireSearchCategory') : '',
+            keyword: capabilities.keywordSearch ? fieldValue('campfireSearchKeyword') : '',
+            category: capabilities.categoryFilter ? fieldValue('campfireSearchCategory') : '',
             profileProjectMin: profileProjectRange.min,
             profileProjectMax: profileProjectRange.max,
             limit: desiredLimit,
-            status: ['campfire', 'makuake'].includes(source) ? searchStatus : 'active',
-            endingSoonDays: searchStatus === 'endingSoon' ? (numberFieldValue('campfireEndingSoonDays') || 14) : undefined
+            status: searchStatus,
+            endingSoonDays: capabilities.endingSoonFilter && searchStatus === 'endingSoon'
+              ? (numberFieldValue('campfireEndingSoonDays') || 14)
+              : undefined
           }))
         });
         if (searchSequence !== state.campfireSearchSequence) {
@@ -588,7 +675,11 @@ ${renderNavigationBadgesScript()}
 
     function applySearchJob(job, expectedJobId = job.id) {
       if (expectedJobId && state.campfireSearchJobId !== expectedJobId) return;
-      state.campfireCandidates = mergeCandidates(state.campfireCandidates, job.items || []);
+      const sourcedItems = (job.items || []).map((item) => ({
+        ...item,
+        source: item.source || job.source
+      }));
+      state.campfireCandidates = mergeCandidates(state.campfireCandidates, sourcedItems);
       if (job.status !== 'running' && state.campfireSearchJobId === expectedJobId) state.campfireSearchJobId = null;
       syncCandidateImportStatuses();
       renderCampfireCandidates();
@@ -682,6 +773,12 @@ ${renderNavigationBadgesScript()}
     async function importCampfireCandidate(index) {
       const candidate = state.campfireCandidates[index];
       if (!candidate?.url) return;
+      const source = candidateSource(candidate);
+      if (!source) {
+        setCandidateImportStatus(candidate, 'failed', '候補の取得元を確認できませんでした');
+        renderCampfireCandidates();
+        return setStatus('importStatus', '候補の取得元を確認できませんでした。もう一度検索してください。', 'error');
+      }
       const importState = getCandidateImportState(candidate);
       if (importState.status === 'existing' || importState.status === 'imported' || importState.status === 'importing') return;
       document.getElementById('campfireUrl').value = candidate.url;
@@ -691,7 +788,7 @@ ${renderNavigationBadgesScript()}
       try {
         const result = await api('/api/projects/import', {
           method: 'POST',
-          body: JSON.stringify({ source: selectedSourcePlatform(), url: candidate.url })
+          body: JSON.stringify({ source, url: candidate.url })
         });
         state.selectedLeadId = result.lead.id;
         setCandidateImportStatus(candidate, 'imported', '取り込み済み', result.lead.id);
@@ -714,44 +811,78 @@ ${renderNavigationBadgesScript()}
       }
       const ok = window.confirm('表示中の未取込候補 ' + importableEntries.length + '件を取り込みます。登録済み・取込済みは取り込みません。よろしいですか？');
       if (!ok) return;
-      importableEntries.forEach(({ item }) => setCandidateImportStatus(item, 'importing', 'サーバー側で取り込み中'));
+      const entriesBySource = new Map();
+      importableEntries.forEach((entry) => {
+        const source = candidateSource(entry.item);
+        if (!source) {
+          setCandidateImportStatus(entry.item, 'failed', '候補の取得元を確認できませんでした');
+          return;
+        }
+        const sourceEntries = entriesBySource.get(source) || [];
+        sourceEntries.push(entry);
+        entriesBySource.set(source, sourceEntries);
+        setCandidateImportStatus(entry.item, 'importing', 'サーバー側で取り込み中');
+      });
+      if (!entriesBySource.size) {
+        renderCampfireCandidates();
+        return setStatus('bulkImportStatus', '候補の取得元を確認できませんでした。もう一度検索してください。', 'error');
+      }
       renderCampfireCandidates();
       setStatus('bulkImportStatus', 'サーバー側で一括取り込み・AI分析中', 'warn');
       try {
-        const result = await api('/api/projects/bulk-import', {
-          method: 'POST',
-          body: JSON.stringify({
-            source: selectedSourcePlatform(),
-            urls: importableEntries.map(({ item }) => item.url),
-            analyze: true,
-            importConcurrency: 4,
-            analysisConcurrency: 3
-          })
-        });
-        const resultByUrl = {};
-        (result.items || []).forEach((row) => {
-          if (row.originalUrl) resultByUrl[row.originalUrl] = row;
-          if (row.url) resultByUrl[row.url] = row;
-        });
-        const analysisByLeadId = Object.fromEntries((result.analysisItems || []).map((item) => [item.leadId, item]));
-        importableEntries.forEach(({ item }) => {
-          const row = resultByUrl[item.url];
-          if (!row) return setCandidateImportStatus(item, 'failed', '結果を確認できませんでした');
-          if (row.status === 'imported') {
-            const analysis = row.leadId ? analysisByLeadId[row.leadId] : null;
-            const message = analysis?.status === 'failed'
-              ? '取り込み済み / AI分析失敗: ' + (analysis.message || '')
-              : '取り込み・AI分析済み';
-            setCandidateImportStatus(item, 'imported', message, row.leadId);
-            state.selectedLeadId = row.leadId || state.selectedLeadId;
-          } else {
-            setCandidateImportStatus(item, 'failed', row.message || '取り込みに失敗しました');
+        const groupedResults = await Promise.all(Array.from(entriesBySource.entries()).map(async ([source, sourceEntries]) => {
+          try {
+            const result = await api('/api/projects/bulk-import', {
+              method: 'POST',
+              body: JSON.stringify({
+                source,
+                urls: sourceEntries.map(({ item }) => item.url),
+                analyze: true,
+                importConcurrency: 4,
+                analysisConcurrency: 3
+              })
+            });
+            return { sourceEntries, result, error: null };
+          } catch (error) {
+            return { sourceEntries, result: null, error };
           }
+        }));
+        const totals = { imported: 0, failed: 0, analyzed: 0, analysisFailed: 0 };
+        groupedResults.forEach(({ sourceEntries, result, error }) => {
+          if (error) {
+            sourceEntries.forEach(({ item }) => setCandidateImportStatus(item, 'failed', error.message));
+            totals.failed += sourceEntries.length;
+            return;
+          }
+          totals.imported += result.imported || 0;
+          totals.failed += result.failed || 0;
+          totals.analyzed += result.analyzed || 0;
+          totals.analysisFailed += result.analysisFailed || 0;
+          const resultByUrl = {};
+          (result.items || []).forEach((row) => {
+            if (row.originalUrl) resultByUrl[row.originalUrl] = row;
+            if (row.url) resultByUrl[row.url] = row;
+          });
+          const analysisByLeadId = Object.fromEntries((result.analysisItems || []).map((item) => [item.leadId, item]));
+          sourceEntries.forEach(({ item }) => {
+            const row = resultByUrl[item.url];
+            if (!row) return setCandidateImportStatus(item, 'failed', '結果を確認できませんでした');
+            if (row.status === 'imported') {
+              const analysis = row.leadId ? analysisByLeadId[row.leadId] : null;
+              const message = analysis?.status === 'failed'
+                ? '取り込み済み / AI分析失敗: ' + (analysis.message || '')
+                : '取り込み・AI分析済み';
+              setCandidateImportStatus(item, 'imported', message, row.leadId);
+              state.selectedLeadId = row.leadId || state.selectedLeadId;
+            } else {
+              setCandidateImportStatus(item, 'failed', row.message || '取り込みに失敗しました');
+            }
+          });
         });
         setStatus(
           'bulkImportStatus',
-          '一括取り込み完了: 取込 ' + result.imported + '件 / 取込失敗 ' + result.failed + '件 / AI分析 ' + result.analyzed + '件' + (result.analysisFailed ? ' / AI分析失敗 ' + result.analysisFailed + '件' : ''),
-          result.failed || result.analysisFailed ? 'warn' : 'ok'
+          '一括取り込み完了: 取込 ' + totals.imported + '件 / 取込失敗 ' + totals.failed + '件 / AI分析 ' + totals.analyzed + '件' + (totals.analysisFailed ? ' / AI分析失敗 ' + totals.analysisFailed + '件' : ''),
+          totals.failed || totals.analysisFailed ? 'warn' : 'ok'
         );
         await loadAll();
         renderCampfireCandidates();
@@ -1424,8 +1555,13 @@ ${renderNavigationBadgesScript()}
       return campfireProjectId(candidate?.url) || normalizeComparableUrl(candidate?.url);
     }
 
+    function candidateSource(candidate) {
+      return typeof candidate?.source === 'string' ? candidate.source.trim() : '';
+    }
+
     function stableCandidateKey(candidate, fallbackIndex) {
-      return candidateImportKey(candidate) || candidate?.url || candidate?.title || 'candidate-' + fallbackIndex;
+      const sourcePrefix = candidate?.source ? candidate.source + ':' : '';
+      return sourcePrefix + (candidateImportKey(candidate) || candidate?.url || candidate?.title || 'candidate-' + fallbackIndex);
     }
 
     function campfireProjectId(value) {

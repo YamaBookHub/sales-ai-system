@@ -24,17 +24,38 @@ describe('ProjectSourceRegistry', () => {
     progressiveResults: true,
     cancellation: true
   } as const;
+  const greenFundingCapabilities = {
+    keywordSearch: true,
+    categoryFilter: true,
+    endingSoonFilter: true,
+    amountFilter: true,
+    supporterFilter: true,
+    profileProjectCountFilter: false,
+    progressiveResults: true,
+    cancellation: true
+  } as const;
 
   const campfireProvider = createProvider('campfire', 'CAMPFIRE', 'https://camp-fire.jp', campfireCapabilities);
   const makuakeProvider = createProvider('makuake', 'Makuake', 'https://www.makuake.com', makuakeCapabilities);
+  const greenFundingProvider = createProvider(
+    'green_funding',
+    'GREEN FUNDING',
+    'https://greenfunding.jp',
+    greenFundingCapabilities
+  );
 
-  const createRegistry = () => new ProjectSourceRegistry([campfireProvider, makuakeProvider]);
+  const createRegistry = () => new ProjectSourceRegistry([
+    campfireProvider,
+    makuakeProvider,
+    greenFundingProvider
+  ]);
 
-  it('resolves registered CAMPFIRE and Makuake providers', () => {
+  it('resolves all registered source providers', () => {
     const registry = createRegistry();
 
     expect(registry.get('campfire')).toBe(campfireProvider);
     expect(registry.get('makuake')).toBe(makuakeProvider);
+    expect(registry.get('green_funding')).toBe(greenFundingProvider);
   });
 
   it('normalizes source name case and hyphens before resolving', () => {
@@ -42,6 +63,7 @@ describe('ProjectSourceRegistry', () => {
 
     expect(registry.get('CAMP-FIRE')).toBe(campfireProvider);
     expect(registry.get('MaKu-AkE')).toBe(makuakeProvider);
+    expect(registry.get('GREEN-FUNDING')).toBe(greenFundingProvider);
   });
 
   it('defaults an absent source to CAMPFIRE', () => {
@@ -61,6 +83,12 @@ describe('ProjectSourceRegistry', () => {
         name: 'Makuake',
         baseUrl: 'https://www.makuake.com',
         capabilities: makuakeCapabilities
+      },
+      {
+        source: 'green_funding',
+        name: 'GREEN FUNDING',
+        baseUrl: 'https://greenfunding.jp',
+        capabilities: greenFundingCapabilities
       }
     ]);
   });
@@ -68,7 +96,6 @@ describe('ProjectSourceRegistry', () => {
   it('rejects unknown or unregistered sources', () => {
     const registry = createRegistry();
 
-    expect(() => registry.get('green_funding')).toThrow(BadRequestException);
     expect(() => registry.get('not-a-source')).toThrow(BadRequestException);
   });
 

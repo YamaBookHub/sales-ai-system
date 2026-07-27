@@ -1,7 +1,7 @@
 # projects module
 
 ## 役割
-CAMPFIRE、Makuakeなどの外部プロジェクト取得元から案件を検索・取り込み、会社・プロジェクト・営業リードを作る。
+CAMPFIRE、Makuake、GREEN FUNDINGなどの外部プロジェクト取得元から案件を検索・取り込み、会社・プロジェクト・営業リードを作る。
 
 ## 触ってよい場所
 - API変更: `projects.controller.ts` / `projects.dto.ts`
@@ -18,7 +18,7 @@ CAMPFIRE、Makuakeなどの外部プロジェクト取得元から案件を検�
 - `projects.controller.ts`: HTTP入力を受け取り、usecase/serviceへ渡す。レスポンス形は変えない。
 - `application/`: 検索・単体取り込み・一括取り込みなど、APIから呼ばれる操作名を置く。検索ジョブの進捗管理もここに置く。検索の主処理は `search-projects.usecase.ts`、単体取り込みの主処理は `import-project.usecase.ts`、一括取り込みの主処理は `bulk-import-projects.usecase.ts` に置く。
 - `domain/`: provider契約、正規化済み取り込み型、操作主体など、外部サイトやDBに依存しない型を置く。
-- `infrastructure/`: CAMPFIRE、Makuakeなど外部サイトに向き合う実装を置く。
+- `infrastructure/`: CAMPFIRE、Makuake、GREEN FUNDINGなど外部サイトに向き合う実装を置く。
 - `infrastructure/prisma-project-import.repository.ts`: 正規化済み取り込み結果を会社・プロジェクト・リード・監査ログとして保存する。
 - `projects.service.ts`: 案件一覧、手動登録、カテゴリ、登録済み取得元のメタ情報を扱う。検索・取り込みの流れは `application/search-projects.usecase.ts` / `application/import-project.usecase.ts` / `application/bulk-import-projects.usecase.ts` を見る。
 
@@ -32,7 +32,7 @@ CAMPFIRE、Makuakeなどの外部プロジェクト取得元から案件を検�
 
 ## 取得元を増やすための構造
 
-CAMPFIRE / Makuakeで行っている処理を次の境界で揃え、新しい取得元も同じ流れへ追加できる構造を目標とする。
+CAMPFIRE / Makuake / GREEN FUNDINGで行っている処理を次の境界で揃え、新しい取得元も同じ流れへ追加できる構造を目標とする。
 
 1. controllerは取得元と検索条件を受け取り、共通usecaseへ渡す。
 2. applicationはproviderを選び、検索ジョブ、途中経過、停止、重複除外、単体・一括取り込みを共通処理として進める。

@@ -19,12 +19,10 @@ export function renderCandidateSearchSection(pageMode: DashboardPageMode): strin
             <div class="search-block">
               <div class="search-block-title">取得元</div>
               <div class="source-selector">
-                <select id="sourcePlatform" onchange="onSourcePlatformChange()">
-                  <option value="campfire">CAMPFIRE</option>
-                  <option value="makuake">Makuake</option>
-                  <option value="green_funding" disabled>GREEN FUNDING（準備中）</option>
+                <select id="sourcePlatform" onchange="onSourcePlatformChange()" disabled>
+                  <option value="">取得元を読み込み中</option>
                 </select>
-                <span id="sourcePlatformStatus" class="status muted">CAMPFIREの募集中プロジェクトに対応</span>
+                <span id="sourcePlatformStatus" class="status muted">取得元情報を読み込み中</span>
               </div>
             </div>
             <div class="search-block">
